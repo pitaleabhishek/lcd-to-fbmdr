@@ -3,7 +3,7 @@
 **Prototype for a 7-day assignment.** Reuse labour documentation in a Facility-Based Maternal Death Review (Form 4) with full provenance. Nothing re-keyed; nothing claimed that wasn't recorded.
 
 Status: design, not implemented.
-Supersedes v2 after the Codex review of 3 November 2026. §21 lists what was accepted, amended and rejected; §22 records the consistency pass that followed.
+Supersedes v2 after the Codex review of 3 November 2026. Section 21 lists what was accepted, amended and rejected; Section 22 records the consistency pass that followed.
 Date: 3 November 2026.
 
 ---
@@ -34,8 +34,10 @@ Date: 3 November 2026.
 - **[D]** `Pregnancy` — one pregnancy from conception to its outcome (delivery, abortion, ectopic, or death undelivered).
 - **[D]** `Admission` — one stay at one facility, with its own inpatient number, admission and discharge times.
 - **[D]** `Review` — the Form 4 investigation. It is attached to a `Pregnancy`, a **reporting facility**, and an **optional reporting admission or presentation**. The admission is optional because a woman may be brought in dead, with no admission record.
-- **[D] Source fact** — something recorded about the woman or the pregnancy: an observation, a delivery, a death, an admission detail. Stored in domain tables. Recorded events (observations, documents, deliveries, deaths, contacts) are append-only; person and encounter attributes (patient, pregnancy, admission) are editable but audited — see §4. Either way, a source fact is not a review answer.
+- **[D] Source fact** — something recorded about the woman or the pregnancy: an observation, a delivery, a death, an admission detail. Stored in domain tables. Recorded events (observations, documents, deliveries, deaths, contacts) are append-only; person and encounter attributes (patient, pregnancy, admission) are editable but audited — see Section 4. Either way, a source fact is not a review answer.
 - **[D] Review answer** — what the clinician asserts Form 4 says. Stored only in `ReviewItem`, and only ever rendered from a `ReviewVersion`.
+- **[D] Field** — one answer position on the printed Form 4, declared once in the registry. A single-valued field is one `ReviewItem`. A field inside a repeating block is a **block field**, addressed `field_key#row_index`; it is one row in the block's `value_json`, never a separate `ReviewItem`.
+- **[D] Entry** — one instance of a block field, i.e. one row. **Answer slot** — the single place a field's answer lives: its own `ReviewItem`, or its row inside a block item.
 - **[D]** The WHO 42-day window is a **classification rule** computed from `Pregnancy.outcome_at`, not a database constraint, and it applies to abortion and ectopic outcomes as well as delivery. Falling inside 42 days does not by itself establish a maternal-death classification.
 
 **The spine of this design:** domain tables hold what was recorded; the review holds what the clinician asserts; a proposal is the bridge; a version is what gets printed. A Form 4 answer is never read live from a domain table.
@@ -94,7 +96,7 @@ IcuStay(id, admission, from_at nullable, from_precision,
 Transfusion(id, admission, at, component, units, reaction, note)
   -- one row per component (PRBC / FFP / platelets), never one shared "units"
 
-Intervention(id, admission, phase, kind, at, note)   -- Form 4 §5 matrix rows
+Intervention(id, admission, phase, kind, at, note)   -- Form 4 Section 5 matrix rows
 
 Death(id, pregnancy, admission nullable, died_at nullable, time_precision,
       place, brought_dead, certified_by, supersedes_id)
@@ -116,7 +118,7 @@ ReviewItem(id, review, field_key, answer_state, value_json, origin, reason,
            applicability_state, decided_by, decided_at,
            accepted_proposal_id nullable, needs_reconsideration)
   UNIQUE(review, field_key)
-  answer_state: unanswered | answered | not_known | not_applicable
+  answer_state: unanswered | answered | not_known
   applicability_state: applicable | not_applicable | undetermined
   origin: reused | derived | entered | corrected | none
 
@@ -134,9 +136,11 @@ Amendment(id, review, base_version_id, payload_json, reason,
 AuditEvent(id, at, actor, action, entity_type, entity_id, review, payload jsonb)
 ```
 
-**Answers versus sources.** Every printed Form 4 leaf has exactly one answer slot. A scalar leaf is one `ReviewItem`. A repeating block (referral places, interventions, neonatal outcomes) is itself **one** `ReviewItem` whose `value_json` is a list of schema-validated rows; block leaves are addressed as `field_key#row_index` and never become separate `ReviewItem` rows. Domain tables above are *source facts* that feed proposals; they are never the rendered answer. A clinician who types something with no source document creates an attributed review answer, not a fabricated observation.
+**Answers versus sources.** Every field on the printed Form 4 has exactly one answer slot. A single-valued field is one `ReviewItem`. A repeating block (referral places, interventions, neonatal outcomes) is itself **one** `ReviewItem` whose `value_json` is a list of schema-validated rows; a block field is addressed as `field_key#row_index` and never becomes a separate `ReviewItem` row. Each row carries its own `origin`, `reason` and `accepted_proposal_id`; the block item's `origin` is a roll-up, `mixed` when its rows differ. Accept and reject apply to the whole block, so a proposal for a block always carries the complete list. Domain tables above are *source facts* that feed proposals; they are never the rendered answer. A clinician who types something with no source document creates an attributed review answer, not a fabricated observation.
 
 **Answer state versus proposal state.** `ReviewItem.answer_state` is the answer; `Proposal.status` is the candidate. Two cases must not be confused: rejecting a proposal on an **unanswered** field records a `ProposalDecision` and leaves the field `unanswered`; rejecting one candidate on an **already answered** field records the decision and leaves the answer untouched. "Rejected" never masquerades as complete, and rejection never clears an answer. `accepted_proposal_id` points at exactly what was shown when accepted — the link survives the proposal being superseded.
+
+**N/A has one decider.** `applicability_state` decides whether a field applies; `answer_state` only records the answer to an applicable field. There is no `answer_state = not_applicable`. A proposed N/A sets `applicability_state` and still requires clinician confirmation (Section 6).
 
 **Server-assigned fields.** `entered_at` is set by the server at write time and cannot be supplied or backdated by a client. `author` is the person who wrote the source; `entered_by` is the user who typed it. Transcription by another user never transfers authorship, and an external document typed after the death may still have been written before it.
 
@@ -155,7 +159,8 @@ AuditEvent(id, at, actor, action, entity_type, entity_id, review, payload jsonb)
 | `Observation`, `SourceDocument`, `Delivery`, `Death`, `CareContact` | recorded facts, append-only; Postgres `BEFORE UPDATE OR DELETE` trigger raises |
 | Corrections to a recorded fact | new row with `supersedes_id`; prior row retained. Supersession stays within one logical fact and one pregnancy, cannot cycle or branch, and the current row is selected explicitly |
 | `ReviewVersion`, `ProposalDecision`, `AuditEvent` | append-only, and never corrected. A later version, decision or event supersedes by existing, not by editing |
-| `Patient`, `Pregnancy`, `Admission`, `Neonate`, `IcuStay`, `Transfusion`, `Intervention` | editable attributes; every change writes `AuditEvent`; **[L]** audited, not immutable |
+| `Patient`, `Pregnancy`, `Admission`, `AdmissionDiagnosis`, `Neonate`, `IcuStay`, `Transfusion`, `Intervention` | editable attributes; every change writes `AuditEvent`; **[L]** audited, not immutable |
+| `Proposal`, `Amendment` | payload immutable after creation; only `status` advances, and only with a `ProposalDecision` (proposal) or an approval (amendment) |
 | `ReviewItem` | editable only when `review.status ∈ {draft, returned}` |
 | Submit | immutable `ReviewVersion(kind=submission)` capturing the full payload + hash + `registry_version` + `output_template_version` |
 | Approve | `ReviewVersion(kind=approval, submission_version_id=…)` referencing the exact submission; no payload regeneration from live rows |
@@ -174,24 +179,24 @@ AuditEvent(id, at, actor, action, entity_type, entity_id, review, payload jsonb)
 
 | Key | Form 4 section | Primary source facts | Answer |
 |---|---|---|---|
-| `bg` | Background (facility, FBMDR no., identifiers, patient) | `Facility`, `Patient`, `Admission.uin` | `ReviewItem` per leaf |
-| `timing` | 1.a–1.g (admission, death, stay, ICU, intervals) | `Admission`, `Death`, `IcuStay`, `Delivery` | `ReviewItem` per leaf; intervals derived |
-| `adm` | 2. On admission (complaints, G/P/A/L, gestation) | `Observation`, `Admission.complaints` | `ReviewItem` per leaf |
-| `cond` | 3. Condition on admission + referral block | `CareContact`, `AdmissionDiagnosis` | `ReviewItem`; referral block = validated list of 13-attribute rows |
-| `dx` | 4. Diagnosis at admission | `AdmissionDiagnosis` | `ReviewItem` |
+| `background` | Background (facility, FBMDR no., identifiers, patient) | `Facility`, `Patient`, `Admission.uin` | `ReviewItem` per field |
+| `timing` | 1.a–1.g (admission, death, stay, ICU, intervals) | `Admission`, `Death`, `IcuStay`, `Delivery` | `ReviewItem` per field; intervals derived |
+| `admission` | 2. On admission (complaints, G/P/A/L, gestation) | `Observation`, `Admission.complaints` | `ReviewItem` per field |
+| `condition` | 3. Condition on admission + referral block | `CareContact`, `AdmissionDiagnosis` | `ReviewItem`; referral block = validated list of 13-attribute rows |
+| `diagnosis` | 4. Diagnosis at admission | `AdmissionDiagnosis` | `ReviewItem` |
 | `abortion` | 2. Abortion | `Pregnancy.abortion_detail` | `ReviewItem` |
-| `anc` | 3. ANC | `Pregnancy.anc_*` | `ReviewItem` |
-| `del` | 4. Delivery, puerperium, neonatal | `Delivery`, `Neonate`(n), `Pregnancy.postnatal_*` | `ReviewItem` per leaf; neonatal block = list |
-| `int` | 5. Interventions (incl. anaesthesia, complications) | `Intervention`, `Transfusion`(n) | `ReviewItem` matrix + list |
-| `pdx` | 6. Primary diagnosis | none | `ReviewItem` (judgement) |
-| `cod` | 7. Cause of death | none | `ReviewItem` (judgement) |
-| `fac` | 8. Factors present | none | `ReviewItem` per row (judgement) |
-| `aut` | 9. Autopsy | `Observation` | `ReviewItem` |
-| `sum` | 10. Case summary | none | `ReviewItem` |
+| `antenatal_care` | 3. ANC | `Pregnancy.anc_*` | `ReviewItem` |
+| `delivery` | 4. Delivery, puerperium, neonatal | `Delivery`, `Neonate`(n), `Pregnancy.postnatal_*` | `ReviewItem` per field; neonatal block = list |
+| `interventions` | 5. Interventions (incl. anaesthesia, complications) | `Intervention`, `Transfusion`(n) | `ReviewItem` matrix + list |
+| `primary_diagnosis` | 6. Primary diagnosis | none | `ReviewItem` (judgement) |
+| `cause_of_death` | 7. Cause of death | none | `ReviewItem` (judgement) |
+| `factors` | 8. Factors present | none | `ReviewItem` per row (judgement) |
+| `autopsy` | 9. Autopsy | `Observation` | `ReviewItem` |
+| `summary` | 10. Case summary | none | `ReviewItem` |
 
-**[D]** The leaf-level inventory (≈150 items) is **generated from the registry**, not hand-written, and reconciled page-by-page against the supplied PDF as the first day-one task. The count is an output, not a claim. It must include: facility name/type/address and nodal contact, FBMDR number/month/year, MCTS and inpatient identifiers, all referral rows and places, every admission diagnosis with underlying cause, every delivery/anaesthesia/complication option, autopsy findings, and the MO/FNO name/designation/date/signature placeholders. No claim of full coverage until that reconciliation passes.
+**[D]** The field inventory (≈150 single-valued fields, plus the declared block schemas) is **generated from the registry**, not hand-written, and reconciled page-by-page against the supplied PDF as the first day-one task. The count is an output, not a claim. It must include: facility name/type/address and nodal contact, FBMDR number/month/year, MCTS and inpatient identifiers, all referral rows and places, every admission diagnosis with underlying cause, every delivery/anaesthesia/complication option, autopsy findings, and the MO/FNO name/designation/date/signature placeholders. No claim of full coverage until that reconciliation passes.
 
-**[D]** Printed labels preserved; internal keys stable. The supplied form repeats section numbers (1–4, then 2–10), so numbers alone are not unique keys. The repetition is the known artefact of the 2017 consolidation of the 2010 form's sections I–III into an unnumbered block — confirmed by comparison with the 2010 Annexure 1, and relevant here only because it forces stable keys.
+**[D]** Printed labels preserved; internal keys stable. The supplied form repeats section numbers (1–4, then 2–10), so numbers alone are not unique keys. The repetition is the known artefact of the 2017 consolidation of the 2010 form's sections I–III into an unnumbered block — confirmed by comparison with the 2010 Annexure 1, and relevant here only because it forces stable keys. **[D] Key grammar:** `f4.<section_key>.<label>` — `f4.timing.e`, `f4.abortion.a`, `f4.background.facility_name`. The section key, never the printed number, appears in the key: printed 2, 3 and 4 are each split across two registry sections (`admission`/`abortion`, `condition`/`antenatal_care`, `diagnosis`/`delivery`), so a numeric prefix cannot identify a field. `label_printed` keeps the printed numbering for output. Rule keys derive from field keys, so the grammar is fixed before the inventory is generated.
 
 **[D] Field constructs:** single- versus multiple-selection semantics are declared per field, never inferred from checkbox shape. Unknown/N/A exist only where meaningful. "Tick all that apply" → child list; "other, specify" → enum + companion text; signatures → text placeholders, **[L]** not wet or cryptographic signatures.
 
@@ -200,14 +205,14 @@ AuditEvent(id, at, actor, action, entity_type, entity_id, review, payload jsonb)
 ## 6. Reuse engine
 
 ```python
-Field(key="f4.1e", section="timing",
+Field(key="f4.timing.e", section="timing",
       label_printed="e. Admission – delivery interval",
       type="duration", required=False, required_when=None,
       handling="derive",             # propose | derive | prompt | manual | evidence
-      overlap=None,                  # provisional; see §6.3
+      overlap=None,                  # provisional; see Section 6.3
       false_friend_edges=[],         # invalid source→target pairs only
       applicability="delivered",
-      rule="f4.1e.admission_delivery_interval")
+      rule="f4.timing.e.admission_delivery_interval")
 ```
 
 **Proposals freeze their inputs.** Each `Proposal.frozen_inputs` entry carries `{kind, ref, label, value, author, entered_by, observed_at, documented_at, entered_at, precision, hash}`. A proposal remains intelligible after the source changes or is superseded.
@@ -215,7 +220,7 @@ Field(key="f4.1e", section="timing",
 **Rules** are versioned code returning a value plus inputs, or an explicit refusal:
 
 ```python
-@rule("f4.1e.admission_delivery_interval", version=1, field="f4.1e")
+@rule("f4.timing.e.admission_delivery_interval", version=1, field="f4.timing.e")
 def admission_delivery(p):
     d, a = p.delivery, p.reporting_admission
     if d is None:
@@ -233,18 +238,18 @@ def admission_delivery(p):
 
 **6.3 Overlap categories [R, ?]** — the brief's four categories are in a document not supplied. Two axes are stored: `overlap` (relationship) and `handling` (what the system does). Assignments are **provisional**; if the official definitions differ, assignments may change, not merely their labels.
 
-**[R]** The brief asks for a **reason** per item and an account of terminology and precision differences, not just a category. Every inventory entry therefore carries four fields, and the generated overlap document is one row per Form 4 leaf with four columns:
+**[R]** The brief asks for a **reason** per item and an account of terminology and precision differences, not just a category. Every inventory entry therefore carries four fields, and the generated overlap document is one row per field with four columns:
 
 | Field | Content |
 |---|---|
 | `category` | provisional overlap classification |
-| `rationale` | why this leaf falls in that category, in one sentence, referencing the LCG section or the fact that no source exists |
+| `rationale` | why this field falls in that category, in one sentence, referencing the LCG section or the fact that no source exists |
 | `terminology_note` | where the source label and the Form 4 label differ (e.g. "lag alert" vs "prolonged labour"), or `same` |
 | `precision_note` | where source precision differs from what Form 4 asks (e.g. charted to the hour vs date-only), or `same` |
 
 An entry with an empty rationale fails the registry test and the build is incomplete.
 
-**6.4 False friends** — the prohibition attaches to the **edge**, not the field. A documented clinician diagnosis may be offered with attribution; an alert crossing may only be evidence *for* that diagnosis. Parity may populate the `Para` leaf but not Gravida, Abortions or Living children. Each edge carries its own caveat shown beside the source.
+**6.4 False friends** — the prohibition attaches to the **edge**, not the field. A documented clinician diagnosis may be offered with attribution; an alert crossing may only be evidence *for* that diagnosis. Parity may populate the `Para` field but not Gravida, Abortions or Living children. Each edge carries its own caveat shown beside the source.
 
 Edges barred from `handling=propose`: active-labour diagnosis→admission · "partograph used"→LCG exists · lag alert→prolonged labour · BP/P++→eclampsia · oxytocin/IV fluids→interventions matrix · plan text→case summary · fetal monitoring→neonatal outcome · LCG risk factors→"told antenatally" · no birth recorded→undelivered · last observation→time of death · condition on admission→first observation · LCG duration→hospital stay · onset of labour→active-labour diagnosis · position OP→abnormal presentation.
 
@@ -311,13 +316,13 @@ Amendment states are deliberately minimal — `draft → proposed → returned |
 
 ## 10. Output
 
-Printable HTML at Form 4 layout with printed labels, each value marked (`R3` reused, `D1` derived, `E` entered, `—` none) and a **provenance appendix**: marker, value, origin, source document, observed time, documented time, entered time, original author, entering user, accepted by, decided at, rule and version.
+Printable HTML at Form 4 layout with printed labels, each value marked (`R3` reused, `D1` derived, `E` entered, `C` corrected, `—` none) and a **provenance appendix**: marker, value, origin, source document, observed time, documented time, entered time, original author, entering user, accepted by, decided at, rule and version.
 
 ```json
 {"form":"FBMDR-2017","review_version":2,"registry_version":"r7","template":"f4-2017@3",
  "generated_at":"...","clinical_time":"...",
- "fields":{"f4.1e":{"value":{"hours":15,"minutes":45},"origin":"derived",
-   "rule":"f4.1e.admission_delivery_interval@1",
+ "fields":{"f4.timing.e":{"value":{"hours":15,"minutes":45},"origin":"derived",
+   "rule":"f4.timing.e.admission_delivery_interval@1",
    "inputs":[{"ref":"delivery:9","observed_at":"...","precision":"exact","author":"..."}],
    "accepted_by":"..."}}}
 ```
@@ -391,7 +396,7 @@ Fixed clinical dates, never `now()`. Audit events and user actions use real serv
 Tests are written with each unit, not at the end.
 
 - Model invariants and triggers; approved reviews and published versions reject writes
-- Registry: independently reconciled inventory-versus-PDF test — every leaf resolves to exactly one category and exactly one answer slot, either its own item or a row inside a block item; no entry has an empty rationale
+- Registry: independently reconciled inventory-versus-PDF test — every field resolves to exactly one category and exactly one answer slot, either its own item or a row inside a block item; no entry has an empty rationale
 - Reuse: prohibited edges cannot generate proposals; legitimate Para and diagnosis reuse still works
 - Derivation: interval and lag rules; every `NotComputable` state, including date-only and estimated time
 - Validation: each rule fires on a fixture, stays silent on a clean case, and never edits a historical observation
@@ -422,8 +427,8 @@ Source-to-answer links, state guards, revisions and snapshot shape are built wit
 | 3 | Rules, proposals, workspace accept/reject/correct, provenance drawer, reconsideration |
 | 4 | Remaining sections and blocks (referral, neonatal, transfusion, interventions, ICU); applicability; autosave and resume |
 | 5 | Return/approve, lock, amendment workspace, history, reproducible historical output |
-| 6 | **Cases B, C, D**; staleness, conflict and discrepancy demo; Form 4 print + JSON |
-| 7 | Form 4 print + JSON; generated overlap document with per-item rationale plus terminology and precision notes; dependency register; security note; cross-cutting tests; demo script |
+| 6 | **Cases B, C, D**; staleness, conflict and discrepancy demo; Form 4 print + JSON for all four cases |
+| 7 | Print and JSON regression across all cases; generated overlap document with per-item rationale plus terminology and precision notes; dependency register; security note; cross-cutting tests; demo script |
 All four cases must complete the full workflow before any stretch item is touched.
 
 ---
@@ -455,20 +460,20 @@ Two-hospital tenancy · partograph adapter (seam designed, not shipped) · Form 
 
 ## 20. What changed from v2
 
-- Answers are explicitly `ReviewItem` only; domain tables are demoted to source facts (§2, §3, §5).
-- `Review` gains a reporting facility, an optional reporting admission, `assigned_to`, `edit_revision` and a `voided` state (§3).
-- `ReviewVersion` records `submission_version_id`, `registry_version` and `output_template_version` (§3, §10).
-- Amendment becomes a payload against a base version with its own approval; approved rows are never edited (§3, §4, §9).
-- Supersession extended to `SourceDocument` and `CareContact`, with anti-cycle rules (§4).
-- `NotComputable` split into missing / unknown / not applicable; precision includes date-only (§6).
-- False friends attach to edges, not whole fields (§6).
-- Staleness covers patient/admission changes and adds a discrepancy path for already-submitted content (§7).
-- BP validation applies to typed values, never to historical observations (§8).
-- Deadline is conditional on exact death time (§9).
-- Autosave, applicability recomputation and branch-aware requiredness specified (§8, §11).
-- Multiple ICU stays, per-component transfusion, neonatal time context added (§3).
-- Security: non-owner DB role, state-changing GET rejection, minimal audit payloads, local-versus-production settings (§13).
-- Build order restructured so case A is vertical on day 1; cases B–D on day 6; inventory reconciliation independent of the registry (§17).
+- Answers are explicitly `ReviewItem` only; domain tables are demoted to source facts (Section 2, Section 3, Section 5).
+- `Review` gains a reporting facility, an optional reporting admission, `assigned_to`, `edit_revision` and a `voided` state (Section 3).
+- `ReviewVersion` records `submission_version_id`, `registry_version` and `output_template_version` (Section 3, Section 10).
+- Amendment becomes a payload against a base version with its own approval; approved rows are never edited (Section 3, Section 4, Section 9).
+- Supersession extended to `SourceDocument` and `CareContact`, with anti-cycle rules (Section 4).
+- `NotComputable` split into missing / unknown / not applicable; precision includes date-only (Section 6).
+- False friends attach to edges, not whole fields (Section 6).
+- Staleness covers patient/admission changes and adds a discrepancy path for already-submitted content (Section 7).
+- BP validation applies to typed values, never to historical observations (Section 8).
+- Deadline is conditional on exact death time (Section 9).
+- Autosave, applicability recomputation and branch-aware requiredness specified (Section 8, Section 11).
+- Multiple ICU stays, per-component transfusion, neonatal time context added (Section 3).
+- Security: non-owner DB role, state-changing GET rejection, minimal audit payloads, local-versus-production settings (Section 13).
+- Build order restructured so case A is vertical on day 1; cases B–D on day 6; inventory reconciliation independent of the registry (Section 17).
 
 ---
 
@@ -476,47 +481,47 @@ Two-hospital tenancy · partograph adapter (seam designed, not shipped) · Form 
 
 | Codex point | Verdict | Action |
 |---|---|---|
-| 21.1 Answers, not source rows, are the Form 4 | **Accepted — the most important item.** It removed a real contradiction in §5 | Restructured §2, §3, §5 |
-| 21.1 Snapshot needs registry/template versions, not just a hash | **Accepted** | Added to `ReviewVersion` and §10 |
+| 21.1 Answers, not source rows, are the Form 4 | **Accepted — the most important item.** It removed a real contradiction in Section 5 | Restructured Section 2, Section 3, Section 5 |
+| 21.1 Snapshot needs registry/template versions, not just a hash | **Accepted** | Added to `ReviewVersion` and Section 10 |
 | 21.1 One representation per repeating block | **Accepted** | `value_json` schema per block; no parallel editable copy |
 | 21.2 Obstetric formula as-of admission; no invented precision | **Accepted** | G/P/A/L proposals read the admission-time observation, frozen with as-of context |
-| 21.2 `entered_at` server-assigned; authorship not transferred | **Accepted** | Rule stated in §3; §10 prints author and entering user separately |
+| 21.2 `entered_at` server-assigned; authorship not transferred | **Accepted** | Rule stated in Section 3; Section 10 prints author and entering user separately |
 | 21.2 Indeterminate, not contemporaneous | **Accepted** | Case D now demonstrates it |
-| 21.3 Autosave, stale tabs, branch-aware requiredness | **Accepted** | §8, §11 |
-| 21.4 Inventory must include identifiers, contacts, signatures | **Accepted** | Named explicitly in §5 |
+| 21.3 Autosave, stale tabs, branch-aware requiredness | **Accepted** | Section 8, Section 11 |
+| 21.4 Inventory must include identifiers, contacts, signatures | **Accepted** | Named explicitly in Section 5 |
 | 21.4 ICU list, component transfusion, neonatal time context | **Accepted** | New `IcuStay`, `Transfusion` per component, `Neonate.assessed_at` |
-| 21.5 Non-owner DB role, no state-changing GET, minimal audit payloads | **Accepted** | §13 |
-| 21.7 Guards and snapshots built with case A | **Accepted** | §17 rewritten |
+| 21.5 Non-owner DB role, no state-changing GET, minimal audit payloads | **Accepted** | Section 13 |
+| 21.7 Guards and snapshots built with case A | **Accepted** | Section 17 rewritten |
 | Amendment as a full second state machine | **Partially accepted** | Kept the payload-against-base-version model; reduced to `draft → proposed → returned \| approved`, one return then a fresh proposal |
-| §5 "historical explanations are unnecessary" | **Disagreed** | The 2010 numbering artefact was verified against the 2010 Annexure 1 and is load-bearing for stable keys; retained with its provenance |
+| Section 5 "historical explanations are unnecessary" | **Disagreed** | The 2010 numbering artefact was verified against the 2010 Annexure 1 and is load-bearing for stable keys; retained with its provenance |
 | "Current LTS" as sufficient dependency declaration | **Agreed it is not** | Exact versions pinned and listed in the dependency register |
-| Broader review apparatus in §21 | **Folded into the body** | A document that says two different things is worse than a shorter one |
+| Broader review apparatus in Section 21 | **Folded into the body** | A document that says two different things is worse than a shorter one |
 
-The claims match the mechanisms. Where they do not, §4 and §13 say so.
+The claims match the mechanisms. Where they do not, Section 4 and Section 13 say so.
 
 ---
 
 ## 22. Consistency pass (3 November 2026)
 
-A cold-read checklist review returned sixteen findings. All sixteen were valid. None changed the architecture; fourteen were contradictions or dangling references introduced when §21 was folded into the body, and two were missing assignment deliverables.
+A cold-read checklist review returned sixteen findings. All sixteen were valid. None changed the architecture; fourteen were contradictions or dangling references introduced when Section 21 was folded into the body, and two were missing assignment deliverables.
 
 | # | Finding | Fix |
 |---|---|---|
-| 1 | Source facts described as both append-only and editable | §2 now separates recorded events from editable attributes, matching §4 |
-| 2 | Rejecting a proposal both clears and preserves an answer | §3 now distinguishes rejection on an unanswered field from rejection of a competing candidate |
-| 3 | Block answers specified both per-row and per-block | §3: one `ReviewItem` per block, leaves addressed as `field_key#row_index` |
-| 4 | `supersedes_id` required of tables that lack it | §4 limits supersession to recorded facts; versions, decisions and audit events never correct |
-| 5 | Pending amendment had no renderable version | §10: pending amendments render from `Amendment.payload_json` against the base version's template, stamped DRAFT |
-| 6 | §9 and §21 gave different amendment transitions | §21 aligned to §9 |
-| 7 | Discrepancy resolution attached to the wrong submission | §7: the discrepancy belongs to the review and blocks any approval until disposed |
-| 8 | Referenced `code` column did not exist | §14 names `Observation.value_code` |
-| 9 | `entered_at` rule claimed but never stated | §3 now states it |
+| 1 | Source facts described as both append-only and editable | Section 2 now separates recorded events from editable attributes, matching Section 4 |
+| 2 | Rejecting a proposal both clears and preserves an answer | Section 3 now distinguishes rejection on an unanswered field from rejection of a competing candidate |
+| 3 | Block answers specified both per-row and per-block | Section 3: one `ReviewItem` per block, block fields addressed as `field_key#row_index`, each row carrying its own origin |
+| 4 | `supersedes_id` required of tables that lack it | Section 4 limits supersession to recorded facts; versions, decisions and audit events never correct |
+| 5 | Pending amendment had no renderable version | Section 10: pending amendments render from `Amendment.payload_json` against the base version's template, stamped DRAFT |
+| 6 | Section 9 and Section 21 gave different amendment transitions | Section 21 aligned to Section 9 |
+| 7 | Discrepancy resolution attached to the wrong submission | Section 7: the discrepancy belongs to the review and blocks any approval until disposed |
+| 8 | Referenced `code` column did not exist | Section 14 names `Observation.value_code` |
+| 9 | `entered_at` rule claimed but never stated | Section 3 now states it |
 | 10 | Frozen inputs omitted the entering user | `entered_by` added to `frozen_inputs` |
-| 11 | Threshold direction asserted without a guideline | §6.5 binds cutoffs to a cited, versioned rule set and states the consequence rather than the numbers |
-| 12 | FHIR claims uncited | §14 cites FHIR R4 v4.0.1 with the `Observation.issued` definition |
-| 13 | Abbreviations undefined | §0 abbreviation list |
-| 14 | Overlap deliverable lacked per-item rationale and terminology/precision analysis | §6.3 adds `rationale`, `terminology_note`, `precision_note` to every inventory entry |
-| 15 | Fixture safety checks unstated | §12 fixture rules |
-| 16 | Dependency register omitted why each component was chosen | §16 |
+| 11 | Threshold direction asserted without a guideline | Section 6.5 binds cutoffs to a cited, versioned rule set and states the consequence rather than the numbers |
+| 12 | FHIR claims uncited | Section 14 cites FHIR R4 v4.0.1 with the `Observation.issued` definition |
+| 13 | Abbreviations undefined | Section 0 abbreviation list |
+| 14 | Overlap deliverable lacked per-item rationale and terminology/precision analysis | Section 6.3 adds `rationale`, `terminology_note`, `precision_note` to every inventory entry |
+| 15 | Fixture safety checks unstated | Section 12 fixture rules |
+| 16 | Dependency register omitted why each component was chosen | Section 16 |
 
-Two consequences worth naming rather than discovering later. The generated overlap document is now four columns per Form 4 leaf, not a bare category list — more work on day 7, and testable. And the pending-amendment render path is a second output path, not a variant of the first, which is why it is scheduled on day 5 rather than day 7.
+Two consequences worth naming rather than discovering later. The generated overlap document is now four columns per field, not a bare category list — more work on day 7, and testable. And the pending-amendment render path is a second output path, not a variant of the first, which is why it is scheduled on day 5 rather than day 7.
