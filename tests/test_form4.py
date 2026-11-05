@@ -229,3 +229,18 @@ def test_month_picker_sets_month_and_year(client, case_a, django_user_model):
     assert resp.status_code == 200
     assert case_a.items.get(field_key="f4.background.fbmdr_month").value_json == 10
     assert case_a.items.get(field_key="f4.background.fbmdr_year").value_json == 2026
+
+
+def test_duration_accepts_a_friendly_value(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.timing.f", "value": "7h 30m"},
+    )
+    assert resp.status_code == 200
+    assert case_a.items.get(field_key="f4.timing.f").value_json == {"minutes": 450}
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "7h 30m" in page
+    assert "{&#x27;minutes&#x27;: 450}" not in page

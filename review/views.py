@@ -237,10 +237,7 @@ def workspace(request, pk: int):
                     "display": fmt(item.value_json) if item else "—",
                     "widget": f.widget,
                     "period": _period(items),
-                    "current": ""
-                    if not item or item.value_json is None
-                    else (item.value_json if isinstance(item.value_json, str)
-                          else str(item.value_json)),
+                    "current": _current(item, f),
                     "mark": chip(item.origin) if item else "—",
                     "proposals": [
                         {"p": p, "display": fmt(p.value_json), "mark": mark} for p in proposals
@@ -406,6 +403,15 @@ def _handle_action(request, review: Review):
     raise ValidationError(f"unknown action {action!r}")
 
 
+def _current(item, field):
+    if not item or item.value_json is None:
+        return ""
+    value = item.value_json
+    if field.type == "duration" and isinstance(value, dict) and "minutes" in value:
+        return fmt(value)
+    return value if isinstance(value, str) else str(value)
+
+
 def _period(items):
     month = items.get("f4.background.fbmdr_month")
     year = items.get("f4.background.fbmdr_year")
@@ -461,7 +467,26 @@ def _block_value(spec, raw: str):
     return raw
 
 
+def _minutes(raw: str) -> int:
+    text = raw.strip().lower().replace(" ", "")
+    try:
+        if ":" in text:
+            h, m = text.split(":", 1)
+            return int(h) * 60 + int(m)
+        if "h" in text:
+            h, m = text.split("h", 1)
+            m = m.rstrip("m") or "0"
+            return int(float(h) * 60 + float(m))
+        if text.endswith("m"):
+            return int(float(text[:-1]))
+        return int(float(text))
+    except ValueError:
+        raise ValidationError("enter a duration like 7h 30m or 450")
+
+
 def _coerce(field, raw: str):
+    if field.type == "duration":
+        return {"minutes": _minutes(raw)}
     if field.type == "int":
         try:
             return int(raw)

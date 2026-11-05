@@ -215,11 +215,20 @@
   document.querySelectorAll('form.answer[data-autosave]').forEach(function (f) {
     var state = f.querySelector('.save-state');
     var timer = null;
+
+    function currentValue() {
+      var sel = f.querySelector('select[name=value]');
+      if (sel) return (sel.value || '').trim();
+      var boxes = f.querySelectorAll('input[type=checkbox][name=value]');
+      if (boxes.length) {
+        return Array.prototype.some.call(boxes, function (b) { return b.checked; }) ? 'x' : '';
+      }
+      var input = f.querySelector('input[name=value]');
+      return input ? (input.value || '').trim() : '';
+    }
+
     function send() {
-      var text = f.querySelector('input[type=text][name=value]');
-      var checked = f.querySelectorAll('input[name=value]:checked').length;
-      if (text && !(text.value || '').trim()) return;
-      if (!text && !checked) return;
+      if (!currentValue()) return;
       state.textContent = 'saving…';
       fetch(f.dataset.autosave, {
         method: 'POST', body: new FormData(f), credentials: 'same-origin'
@@ -238,14 +247,17 @@
         }
       }).catch(function () { state.textContent = 'not saved'; });
     }
+
     f.querySelectorAll('input[name=value], select[name=value]').forEach(function (c) {
-      if (c.type === 'text') {
+      var instant = c.tagName === 'SELECT' || c.type === 'checkbox' ||
+                    c.type === 'month' || c.type === 'date' || c.type === 'number';
+      if (instant) {
+        c.addEventListener('change', send);
+      } else {
         c.addEventListener('input', function () {
           clearTimeout(timer); timer = setTimeout(send, 900);
         });
         c.addEventListener('blur', function () { clearTimeout(timer); send(); });
-      } else {
-        c.addEventListener('change', send);
       }
     });
   });
