@@ -5,13 +5,20 @@
 <div class="review-head">
   <div>
     <h1>{{ review.pregnancy.patient.name }}</h1>
-    <p class="muted">
-      {{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }}
-      · <span class="status">{{ review.get_status_display }}</span>
-      · edits {{ review.edit_revision }}
-      {% if review.last_saved_at %} · saved {{ review.last_saved_at|timesince }} ago{% endif %}
-      {% if review.deadline_at %} · deadline {{ review.deadline_at|date:"d M H:i" }}{% endif %}
-    </p>
+    <p class="muted">{{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }}</p>
+    <div class="statusline">
+      <span class="statusbig {{ review.status }}">{{ review.get_status_display }}</span>
+      {% if review.submitted_at %}
+        <span>submitted {{ review.submitted_at|date:"d M H:i" }}{% if review.submitted_by %} by {{ review.submitted_by.username }}{% endif %}</span>
+      {% endif %}
+      {% if review.returned_at %}
+        <span>returned {{ review.returned_at|date:"d M H:i" }}</span>
+      {% endif %}
+      {% if review.approved_at %}
+        <span>approved {{ review.approved_at|date:"d M H:i" }}{% if review.approved_by %} by {{ review.approved_by.username }}{% endif %}</span>
+      {% endif %}
+      <span class="muted">edits {{ review.edit_revision }}{% if review.last_saved_at %} · saved {{ review.last_saved_at|timesince }} ago{% endif %}{% if review.deadline_at %} · deadline {{ review.deadline_at|date:"d M H:i" }}{% endif %}</span>
+    </div>
   </div>
   <div class="head-actions">
     {% if not locked %}
@@ -52,13 +59,17 @@
 
 {% if locked %}
   {% if is_fno and review.status == "submitted" and last_return %}
-    <div class="key" style="margin:6px 0">Previously returned {{ last_return.at|date:"d M H:i" }} · {{ last_return.comments|length }} field comment{{ last_return.comments|length|pluralize }} · {% if last_return.resolved_at %}addressed and resubmitted{% else %}open{% endif %}</div>
+    <div class="lastreturn">Previously returned {{ last_return.at|date:"d M H:i" }} · {{ last_return.comments|length }} field comment{{ last_return.comments|length|pluralize }} · {% if last_return.resolved_at %}addressed and resubmitted{% else %}open{% endif %}</div>
   {% endif %}
-  <div class="locked">
+  <div class="statebox">
     {% if review.status == "draft" or review.status == "returned" %}
-      View only — this review belongs to another author. Only the author or assignee can change it.
+      View only — this review belongs to another author.
+    {% elif review.status == "submitted" %}
+      Waiting for FNO review. You will be able to edit again if it is returned.
+    {% elif review.status == "approved" %}
+      Approved and closed. Later changes would need an amendment, which is not built yet.
     {% else %}
-      This review is {{ review.get_status_display|lower }} and locked. A change would be an attributed amendment.
+      This review is {{ review.get_status_display|lower }}.
     {% endif %}
   </div>
 {% endif %}
