@@ -422,7 +422,8 @@
       e.preventDefault();
       drawerBody.innerHTML = 'loading…';
       drawer.hidden = false;
-      fetch(link.dataset.url + '?frag=1', { credentials: 'same-origin' })
+      var u = link.dataset.url;
+      fetch(u + (u.indexOf('?') === -1 ? '?' : '&') + 'frag=1', { credentials: 'same-origin' })
         .then(function (r) { return r.text(); })
         .then(function (html) { drawerBody.innerHTML = html; })
         .catch(function () { drawerBody.innerHTML = 'could not load the source'; });

@@ -85,6 +85,10 @@ class Admission(models.Model):
     condition_on_admission = models.CharField(max_length=100, blank=True)
     complaints = models.TextField(blank=True)
 
+    def __str__(self) -> str:
+        when = f" at {self.admitted_at:%d %b %H:%M}" if self.admitted_at else ""
+        return f"Admission {self.uin or self.pk}{when}"
+
 
 class SourceDocument(models.Model):
     class Kind(models.TextChoices):
@@ -306,6 +310,10 @@ class Delivery(models.Model):
     )
     note = models.TextField(blank=True)
 
+    def __str__(self) -> str:
+        when = f" at {self.delivered_at:%d %b %H:%M}" if self.delivered_at else ""
+        return f"{self.mode or 'Delivery'}{when}"
+
 
 class Neonate(models.Model):
     delivery = models.ForeignKey(Delivery, on_delete=models.PROTECT, related_name="neonates")
@@ -361,6 +369,10 @@ class Death(models.Model):
     supersedes = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
     )
+
+    def __str__(self) -> str:
+        when = f" at {self.died_at:%d %b %H:%M}" if self.died_at else ""
+        return f"Death{when}"
 
 
 class Review(models.Model):

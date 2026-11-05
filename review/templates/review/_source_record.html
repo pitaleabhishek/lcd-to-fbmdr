@@ -1,8 +1,22 @@
 <h2>{{ kind|capfirst }} record #{{ obj.pk }}</h2>
-<table>
-  <tbody>
-  {% for f in fields %}
-    <tr><th style="width:34%">{{ f.label }}</th><td>{{ f.value|default:"—" }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+{% if header_rows %}
+  <p class="muted small">Section 1 of the chart — one value per chart, not a time series.</p>
+  <table>
+    <tbody>
+    {% for h in header_rows %}
+      <tr {% if h.hit %}class="hit"{% endif %}>
+        <th style="width:42%">{{ h.label }}</th>
+        <td>{{ h.value|default:"—" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <table>
+    <tbody>
+    {% for f in fields %}
+      <tr><th style="width:34%">{{ f.label }}</th><td>{{ f.value|default:"—" }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}

@@ -536,6 +536,9 @@ def _provenance(proposal, death):
     for inp in proposal.frozen_inputs:
         doc_at = _parse_dt(inp.get("documented_at"))
         late = bool(death and death.died_at and doc_at and doc_at > death.died_at)
+        url = _ref_url(inp.get("ref", ""))
+        if url and inp.get("key"):
+            url += f"?key={inp['key']}"
         out.append(
             {
                 "label": inp.get("label", ""),
@@ -544,7 +547,7 @@ def _provenance(proposal, death):
                 "documented": _fmt_when(inp.get("documented_at")),
                 "author": inp.get("author", ""),
                 "late": late,
-                "url": _ref_url(inp.get("ref", "")),
+                "url": url,
             }
         )
     return out
@@ -833,17 +836,45 @@ def source(request, kind: str, pk: int):
         )
         return render(request, template, {"observation": obj, "column": column})
 
+    from django.db.models import Model as DjangoModel
+
+    header_rows = None
     fields = []
     for f in obj._meta.fields:
-        if f.name == "id":
+        if f.name in ("id", "header_json"):
             continue
-        fields.append({"label": f.verbose_name.capitalize(), "value": getattr(obj, f.name)})
+        value = getattr(obj, f.name)
+        if isinstance(value, datetime):
+            value = (
+                timezone.localtime(value).strftime("%d %b %Y %H:%M")
+                if timezone.is_aware(value) else value.strftime("%d %b %Y %H:%M")
+            )
+        elif isinstance(value, DjangoModel):
+            value = str(value)
+        fields.append({"label": f.verbose_name.capitalize(), "value": value})
+
+    if kind == "sourcedocument":
+        wanted = request.GET.get("key", "")
+        header_rows = [
+            {
+                "key": k,
+                "label": k.replace("_", " ").capitalize(),
+                "value": v,
+                "hit": k == wanted,
+            }
+            for k, v in (obj.header_json or {}).items()
+        ]
+
     template = (
         "review/_source_record.html"
         if request.GET.get("frag")
         else "review/source_record.html"
     )
-    return render(request, template, {"kind": kind, "obj": obj, "fields": fields})
+    return render(
+        request,
+        template,
+        {"kind": kind, "obj": obj, "fields": fields, "header_rows": header_rows},
+    )
 
 
 @login_required

@@ -274,8 +274,8 @@ F("risks", "antenatal_care", "3.e Risk factor identified", "multi", 2,
 
 # --- Delivery, puerperium, neonatal (17) ------------------------------------
 F("labour_pains", "delivery", "4.a Did she have labour pains", "enum", 2,
-  handling="propose", source="lcg", rule="f4.delivery.labour_pains.from_lcg",
-  options=YESNO)
+  options=YESNO,
+  terminology_note="the LCG charts labour onset and contractions, not pain")
 F("partograph_past", "delivery", "4.b.i Partograph used - past facility", "enum", 2,
   options=YNU)
 F("partograph_current", "delivery", "4.b.ii Partograph used - current facility", "enum", 2,

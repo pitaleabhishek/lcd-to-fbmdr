@@ -75,12 +75,13 @@ def obs_input(o: Observation) -> dict:
     }
 
 
-def header_input(doc, label: str, value: Any) -> dict:
+def header_input(doc, label: str, value: Any, key: str = "") -> dict:
     return {
         "kind": "document",
         "ref": f"sourcedocument:{doc.pk}",
         "label": label,
         "value": value,
+        "key": key,
         "observed_at": None,
         "documented_at": _iso(doc.documented_at),
         "entered_at": _iso(doc.entered_at),
@@ -311,22 +312,10 @@ def para(ctx: Context):
         value = int(value)
     except (TypeError, ValueError):
         pass
-    return Value(value, [header_input(doc, "Parity", value)])
+    return Value(value, [header_input(doc, "Parity", value, "parity")])
 
 
 # --- delivery ----------------------------------------------------------------
-
-@rule("f4.delivery.labour_pains.from_lcg", "f4.delivery.labour_pains", source_kind="document")
-def labour_pains(ctx: Context):
-    doc = ctx.document
-    if doc is None:
-        return NotComputable("no labour record", "missing")
-    onset = doc.header_json.get("labour_onset")
-    if not onset:
-        return NotComputable("labour onset not recorded", "missing")
-    return Value("yes" if onset in ("spontaneous", "induced") else "no",
-                 [header_input(doc, "Labour onset", onset)])
-
 
 @rule("f4.delivery.mode.from_delivery", "f4.delivery.mode")
 def delivery_mode(ctx: Context):
