@@ -570,7 +570,7 @@ def _block_rows(field, item):
             {
                 "index": i,
                 "cells": [
-                    {"name": name, "spec": spec,
+                    {"name": name, "spec": spec, "label": name.replace("_", " ").title(),
                      "multiline": name in BLOCK_LONG, "value": row.get(name, "")}
                     for name, spec in (field.block_schema or {}).get("fields", {}).items()
                 ],

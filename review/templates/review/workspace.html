@@ -250,7 +250,19 @@
         {% if row.is_block %}
         <div class="block-card" id="b-{{ row.field.slug }}">
           <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span></h3>
-          {% if row.places %}
+          {% if locked %}
+            <div class="readonly-block">
+              {% if row.places %}
+                {% for p in row.places %}{% if p.exists %}
+                  <div><b>{{ p.label }}</b>{% for c in p.cells %}{% if c.value %} · {{ c.label }}: {{ c.value }}{% endif %}{% endfor %}</div>
+                {% endif %}{% endfor %}
+              {% else %}
+                {% for r in row.block_rows %}
+                  <div>{% for c in r.cells %}{% if c.value %}{{ c.label }}: {{ c.value }} · {% endif %}{% endfor %}</div>
+                {% empty %}<span class="muted small">no rows</span>{% endfor %}
+              {% endif %}
+            </div>
+          {% elif row.places %}
             {% for p in row.places %}
               <form method="post" class="place"
                     data-autosave="{% url 'save_field' review.pk %}">{% csrf_token %}
