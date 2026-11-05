@@ -116,9 +116,45 @@ class SourceDocument(models.Model):
     note = models.TextField(blank=True)
 
 
+class LCGSection(models.Model):
+    """One of the seven printed sections of the WHO Labour Care Guide."""
+
+    ord = models.PositiveSmallIntegerField(unique=True)
+    key = models.CharField(max_length=50, unique=True)
+    label = models.CharField(max_length=200)
+
+    class Meta:
+        ordering = ["ord"]
+
+    def __str__(self) -> str:
+        return self.label
+
+
+class LCGVariable(models.Model):
+    """A printed row of the LCG. The ALERT column is a rule, not a value."""
+
+    key = models.CharField(max_length=50, unique=True)
+    section = models.ForeignKey(LCGSection, on_delete=models.PROTECT, related_name="variables")
+    label = models.CharField(max_length=200)
+    ord = models.PositiveSmallIntegerField()
+    type = models.CharField(max_length=20)
+    unit = models.CharField(max_length=30, blank=True)
+    alert_rule = models.CharField(max_length=200, blank=True)
+    options = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["section__ord", "ord"]
+        constraints = [
+            models.UniqueConstraint(fields=["section", "ord"], name="uniq_lcg_section_ord")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.section.label} / {self.label}"
+
+
 class Observation(models.Model):
     document = models.ForeignKey(SourceDocument, on_delete=models.PROTECT, related_name="observations")
-    kind = models.CharField(max_length=50)
+    variable = models.ForeignKey(LCGVariable, on_delete=models.PROTECT, related_name="observations")
     value_num = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     value_text = models.CharField(max_length=200, blank=True)
     value_code = models.CharField(max_length=50, blank=True)
@@ -140,7 +176,10 @@ class Observation(models.Model):
     note = models.TextField(blank=True)
 
     class Meta:
-        indexes = [models.Index(fields=["document", "kind", "observed_at"])]
+        indexes = [
+            models.Index(fields=["document", "variable", "observed_at"],
+                         name="obs_doc_var_time_idx")
+        ]
 
 
 class CareContact(models.Model):

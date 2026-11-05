@@ -16,7 +16,8 @@ for the app; measured idle footprint is ~140 MB total.
 ```sh
 docker compose up -d --build
 docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed_case_a
+docker compose exec web python manage.py seed_case_0   # complete normal labour
+docker compose exec web python manage.py seed_case_a   # death review
 ```
 
 Open http://127.0.0.1:8000
@@ -30,6 +31,7 @@ Reset the demo (TRUNCATE bypasses the append-only row triggers):
 
 ```sh
 docker compose exec web python manage.py flush --no-input
+docker compose exec web python manage.py seed_case_0
 docker compose exec web python manage.py seed_case_a
 ```
 
@@ -41,6 +43,23 @@ uv run pytest
 
 (or `docker compose exec web python -m pytest` once dev dependencies are in the
 image; the compose image is built without them).
+
+## The LCG as data
+
+The guide itself is registered: **7 sections, 34 variables**, in printed order, with
+type, unit and the ALERT rule for each (`review/registry_lcg.py`). Observations
+reference a variable — never a free-text kind — so a typo fails at insert time.
+
+Read a chart like the paper form:
+
+```sh
+docker compose exec db psql -U mdr -d mdr \
+  -c "select section, variable, cells from lcg_chart where patient = 'Meena Kulkarni' order by section_ord, row_ord;"
+```
+
+`lcg_chart` is a Postgres view: one row per variable, cells across time in IST.
+Case 0 has ten first-stage columns and two second-stage columns; cervical
+dilatation correctly stops at full dilatation.
 
 ## Regenerate the inventory
 
@@ -57,6 +76,10 @@ of the registry, never hand-maintained.
   append-only (`Observation`, `SourceDocument`, `Delivery`, `Death`, `CareContact`).
 - Registry with full-word section keys and `f4.<section>.<label>` grammar
   (53 fields in the first slice).
+- LCG registry: 7 sections, 34 variables, ordered and typed; observations FK to a
+  variable. `lcg_chart` view renders the grid.
+- Case 0: a complete, normal labour — every grid variable across ten first-stage
+  columns and two second-stage columns, 340 observations, no death.
 - 18 rules producing proposals with frozen inputs; `NotComputable` keeps
   missing / unknown / not-applicable apart.
 - Case A seeded: charted labour, an alert crossing, one missed observation, a

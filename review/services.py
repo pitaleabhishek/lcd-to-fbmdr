@@ -42,7 +42,9 @@ def build_context(review: Review) -> Context:
         or pregnancy.admissions.order_by("-admitted_at").first()
     )
     observations = list(
-        Observation.objects.filter(document__pregnancy=pregnancy).order_by("observed_at", "pk")
+        Observation.objects.filter(document__pregnancy=pregnancy)
+        .select_related("variable")
+        .order_by("observed_at", "pk")
     )
     return Context(
         pregnancy=pregnancy,

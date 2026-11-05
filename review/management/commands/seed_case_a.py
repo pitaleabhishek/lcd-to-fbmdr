@@ -15,6 +15,7 @@ from review.models import (
     Death,
     Delivery,
     Facility,
+    LCGVariable,
     Neonate,
     Observation,
     Patient,
@@ -81,7 +82,7 @@ class Command(BaseCommand):
             pregnancy=pregnancy,
             admission=admission,
             kind=SourceDocument.Kind.LCG,
-            source_format="lcg_2020",
+            source_format="lcg_2021",
             origin_facility=facility.name,
             author="Nurse P. Meshram",
             entered_by="Nurse P. Meshram",
@@ -89,11 +90,13 @@ class Command(BaseCommand):
             time_precision=TimePrecision.EXACT,
         )
 
-        def obs(kind, at, *, num=None, text="", unit="", author="Nurse P. Meshram",
+        variables = {v.key: v for v in LCGVariable.objects.all()}
+
+        def obs(key, at, *, num=None, text="", unit="", author="Nurse P. Meshram",
                 documented=None, raw_label="", raw_value="", precision=TimePrecision.EXACT):
             return Observation.objects.create(
                 document=lcg,
-                kind=kind,
+                variable=variables[key],
                 value_num=Decimal(str(num)) if num is not None else None,
                 value_text=text,
                 unit=unit,
@@ -103,7 +106,7 @@ class Command(BaseCommand):
                 entered_by=author,
                 author=author,
                 author_role="nurse" if author.startswith("Nurse") else "resident",
-                raw_label=raw_label or kind,
+                raw_label=raw_label or variables[key].label,
                 raw_value=raw_value or (str(num) if num is not None else text),
             )
 

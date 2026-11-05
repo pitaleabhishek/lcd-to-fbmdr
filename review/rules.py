@@ -50,8 +50,8 @@ class Context:
     def patient(self):
         return self.pregnancy.patient
 
-    def obs(self, kind: str) -> Observation | None:
-        rows = [o for o in (self.observations or []) if o.kind == kind]
+    def obs(self, key: str) -> Observation | None:
+        rows = [o for o in (self.observations or []) if o.variable.key == key]
         return max(rows, key=lambda o: (o.observed_at or datetime.min, o.pk or 0), default=None)
 
 
@@ -63,7 +63,7 @@ def obs_input(o: Observation) -> dict:
     return {
         "kind": "observation",
         "ref": f"observation:{o.pk}",
-        "label": o.raw_label or o.kind,
+        "label": o.raw_label or o.variable.label,
         "value": o.raw_value or o.value_text or (str(o.value_num) if o.value_num is not None else ""),
         "observed_at": _iso(o.observed_at),
         "documented_at": _iso(o.documented_at),

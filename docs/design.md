@@ -81,7 +81,9 @@ Amendment(id, review, base_version_id, payload_json, reason, by, at, status,
 AuditEvent(id, at, actor, action, entity_type, entity_id, review, payload jsonb)
 ```
 
-Recorded facts are append-only, corrected by a new row with `supersedes_id` (no cycles, no branches): `Observation`, `SourceDocument`, `Delivery`, `Death`, `CareContact`. Everything else is editable, and every change writes an `AuditEvent`. A `Proposal` freezes its inputs and rule version; decisions are new rows, never edits. `edit_revision` counts workspace edits, `version_no` counts published versions.
+Recorded facts are append-only, corrected by a new row with `supersedes_id` (no cycles, no branches): `Observation`, `SourceDocument`, `Delivery`, `Death`, `CareContact`. Everything else is editable, and every change writes an `AuditEvent`.
+
+**The source side is registered too.** The LCG is not a free-text stream: seven printed sections and 34 variables are declared with their order, type, unit and ALERT rule (`review/registry_lcg.py`), and every `Observation` points at one of them. The alert column is a rule, never a cell. A database view, `lcg_chart`, renders one row per variable with its cells across time, so the stored data reads as the paper chart. A `Proposal` freezes its inputs and rule version; decisions are new rows, never edits. `edit_revision` counts workspace edits, `version_no` counts published versions.
 
 **Rules that prevent silent data loss**
 
