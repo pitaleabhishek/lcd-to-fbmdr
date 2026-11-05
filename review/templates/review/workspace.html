@@ -167,13 +167,18 @@
                   {% endif %}
                 </div>
               {% elif not locked %}
-              <form method="post" class="entry">{% csrf_token %}
+              <form method="post" class="entry"
+                    data-autosave="{% url 'save_field' review.pk %}"
+                    data-key="{{ row.field.key }}">{% csrf_token %}
                 <input type="hidden" name="key" value="{{ row.field.key }}">
                 <input type="text" name="value" placeholder="value" class="val">
-                <input type="text" name="reason" placeholder="reason" class="why-in">
-                {% if row.is_answered %}<label class="why"><input type="checkbox" name="corrected" value="1"> fix</label>{% endif %}
+                <input type="text" name="reason" placeholder="reason" class="why-in" title="note (used by N/A and corrections)">
+                {% if row.item.origin == "reused" or row.item.origin == "derived" %}
+                  <label class="why fix"><input type="checkbox" name="corrected" value="1"> correction</label>
+                {% endif %}
                 <button name="action" value="value">Save</button>
                 <button name="action" value="na" class="danger">N/A</button>
+                <span class="save-state"></span>
               </form>
               {% endif %}
             </td>

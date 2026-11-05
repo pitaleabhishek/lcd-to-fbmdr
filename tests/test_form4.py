@@ -167,3 +167,40 @@ def test_workspace_renders(client, case_a, django_user_model):
     body = resp.content.decode()
     assert "resolved" in body
     assert "to enter" in body
+
+
+def test_autosave_endpoint(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.primary_diagnosis.dx", "value": "PPH"},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+    assert case_a.items.get(field_key="f4.primary_diagnosis.dx").value_json == "PPH"
+
+
+def test_autosave_rejects_an_off_form_value(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.delivery.mode", "value": "vaginal"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False
+
+
+def test_na_needs_a_reason(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    with pytest.raises(ValidationError):
+        services.set_applicability(
+            case_a, "f4.delivery.phase", ReviewItem.Applicability.NOT_APPLICABLE, user, ""
+        )
+    services.set_applicability(
+        case_a, "f4.delivery.phase", ReviewItem.Applicability.NOT_APPLICABLE, user,
+        "no complication recorded",
+    )

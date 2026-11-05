@@ -224,6 +224,8 @@ def set_applicability(review: Review, key: str, state: str, user, reason: str = 
     review = Review.objects.select_for_update().get(pk=review.pk)
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is locked")
+    if state == ReviewItem.Applicability.NOT_APPLICABLE and not (reason or "").strip():
+        raise ValidationError("a reason is required to mark a field not applicable")
     item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
     item.applicability_state = state
     item.reason = reason
