@@ -8,29 +8,29 @@
   :root { --ink:#1a1f24; --muted:#5d6b78; --line:#d9e0e6; --bg:#f7f9fa;
           --accent:#0f5c6b; --warn:#8a4b00; --ok:#1f6b3a; --chip:#eef3f5; }
   * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  body { margin:0; font:13.5px/1.38 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
          color:var(--ink); background:var(--bg); }
-  header { background:#fff; border-bottom:1px solid var(--line); padding:10px 18px;
+  header { background:#fff; border-bottom:1px solid var(--line); padding:7px 14px;
            display:flex; gap:16px; align-items:center; }
   header a { color:var(--accent); text-decoration:none; font-weight:600; }
   header .spacer { flex:1; }
-  main { max-width:1100px; margin:0 auto; padding:18px; }
-  h1 { font-size:20px; margin:0 0 4px; }
-  h2 { font-size:15px; margin:26px 0 8px; text-transform:uppercase;
+  main { max-width:1320px; margin:0 auto; padding:14px; }
+  h1 { font-size:17px; margin:0 0 2px; }
+  h2 { font-size:12.5px; margin:18px 0 6px; text-transform:uppercase;
        letter-spacing:.04em; color:var(--muted); }
   .muted { color:var(--muted); }
   .stats { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 0; }
   .stat { background:#fff; border:1px solid var(--line); border-radius:6px;
-          padding:6px 10px; font-size:13px; }
-  .stat b { font-size:15px; }
+          padding:4px 8px; font-size:12px; }
+  .stat b { font-size:13px; }
   table { width:100%; border-collapse:collapse; background:#fff;
           border:1px solid var(--line); border-radius:6px; overflow:hidden; }
-  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);
-           vertical-align:top; font-size:14px; }
-  th { background:#f2f5f7; font-size:12px; text-transform:uppercase;
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line);
+           vertical-align:top; font-size:13px; }
+  th { background:#f2f5f7; font-size:10.5px; text-transform:uppercase;
        letter-spacing:.04em; color:var(--muted); }
   tr:last-child td { border-bottom:0; }
-  .key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px;
+  .key { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10px;
          color:var(--muted); }
   .chip { display:inline-block; background:var(--chip); border:1px solid var(--line);
           border-radius:10px; padding:1px 7px; font-size:11px; font-weight:700;
@@ -39,7 +39,7 @@
   .chip.E { color:var(--ink); } .chip.C { color:var(--warn); }
   .chip.N { color:var(--muted); }
   .value { font-weight:600; }
-  .prop { border:1px dashed var(--line); border-radius:5px; padding:6px 8px;
+  .prop { border:1px dashed var(--line); border-radius:5px; padding:4px 7px;
           margin:4px 0; background:#fcfdfd; }
   .prop .why { font-size:12px; color:var(--muted); }
   details { margin-top:2px; }
@@ -49,7 +49,7 @@
            border:1px solid var(--line); background:#fff; cursor:pointer; }
   button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
   button.danger { color:var(--warn); }
-  input[type=text], input[type=number] { font:inherit; padding:3px 6px; width:130px;
+  input[type=text], input[type=number] { font:inherit; padding:2px 5px; width:120px;
            border:1px solid var(--line); border-radius:4px; }
   .msg { background:#fff4e5; border:1px solid #f0d3a8; padding:8px 10px;
          border-radius:5px; margin:10px 0; font-size:13px; }
@@ -61,11 +61,11 @@
                 background:#fff; }
   table.chart { border:0; border-radius:0; min-width:100%; }
   table.chart th.sticky, table.chart td.sticky { position:sticky; left:0; background:#fff;
-                z-index:2; min-width:190px; max-width:190px; }
+                z-index:2; min-width:168px; max-width:168px; }
   table.chart thead th { position:sticky; top:0; background:#f2f5f7; z-index:1;
                 white-space:nowrap; font-size:12px; }
   table.chart thead th.sticky { z-index:3; }
-  table.chart td { text-align:center; min-width:62px; white-space:nowrap; }
+  table.chart td { text-align:center; min-width:54px; white-space:nowrap; }
   table.chart tr.sec th { background:#eef3f5; color:var(--accent); text-align:left;
                 font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
   .chart .stage { color:var(--muted); font-weight:400; font-size:10px;
@@ -83,20 +83,20 @@
   .progress { height:6px; background:#e6ecef; border-radius:3px; overflow:hidden;
               margin:14px 0 8px; }
   .progress span { display:block; height:6px; background:var(--accent); }
-  .layout { display:grid; grid-template-columns:230px 1fr; gap:18px;
+  .layout { display:grid; grid-template-columns:205px 1fr; gap:14px;
             align-items:start; margin-top:18px; }
   .secnav { position:sticky; top:12px; background:#fff; border:1px solid var(--line);
             border-radius:6px; overflow:hidden; }
-  .secnav a { display:flex; justify-content:space-between; gap:8px; padding:7px 10px;
+  .secnav a { display:flex; justify-content:space-between; gap:8px; padding:5px 8px;
               border-bottom:1px solid var(--line); color:var(--ink);
-              text-decoration:none; font-size:13px; }
+              text-decoration:none; font-size:12px; }
   .secnav a:last-child { border-bottom:0; }
   .secnav a:hover { background:#f2f5f7; }
   .count { color:var(--muted); font-size:11px; font-weight:600; white-space:nowrap; }
   h2 .count { float:right; font-weight:400; text-transform:none; letter-spacing:0; }
   .req { color:var(--warn); font-size:10px; font-weight:700; text-transform:uppercase;
          letter-spacing:.04em; }
-  .label { font-size:14px; }
+  .label { font-size:13px; }
   .entry { margin-top:5px; }
   a.button { border:1px solid var(--line); border-radius:4px; padding:4px 9px;
              font-size:12px; text-decoration:none; color:var(--ink); background:#fff; }
@@ -105,7 +105,7 @@
   .brow { display:grid; gap:4px; align-items:center; padding:3px 2px; }
   .brow.bhead { border-bottom:1px solid var(--line); color:var(--muted);
                 font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
-  .brow input, .brow select { width:100%; font:inherit; font-size:12px; padding:2px 4px;
+  .brow input, .brow select { width:100%; font:inherit; font-size:11.5px; padding:1px 4px;
                 border:1px solid var(--line); border-radius:3px; background:#fff; }
   .row-actions { display:flex; gap:4px; }
   .row-actions button { padding:2px 7px; }

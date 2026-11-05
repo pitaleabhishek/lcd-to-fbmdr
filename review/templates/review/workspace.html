@@ -117,11 +117,11 @@
               {% endfor %}
               {% if row.is_block %}
                 <div class="block-wrap">
-                  <form method="post" class="brow bhead" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(96px,1fr)) 132px">
+                  <form method="post" class="brow bhead" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">
                     {% for name, spec in row.block_cols %}<span>{{ name|cut:"_"|title }}</span>{% endfor %}<span></span>
                   </form>
                   {% for r in row.block_rows %}
-                    <form method="post" class="brow" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(96px,1fr)) 132px">{% csrf_token %}
+                    <form method="post" class="brow" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">{% csrf_token %}
                       <input type="hidden" name="action" value="block_row">
                       <input type="hidden" name="key" value="{{ row.field.key }}">
                       <input type="hidden" name="index" value="{{ r.index }}">
