@@ -278,26 +278,37 @@
     } catch (e) {}
   });
 
-  document.querySelectorAll('form.answer[data-autosave]').forEach(function (f) {
+  function human(ms) {
+    var s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+    if (s < 2) return 'just now';
+    if (s < 60) return s + 's ago';
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ago';
+    return Math.floor(m / 60) + 'h ago';
+  }
+
+  setInterval(function () {
+    document.querySelectorAll('.saved-stamp').forEach(function (el) {
+      if (el.dataset.at) el.textContent = 'saved ' + human(Date.parse(el.dataset.at));
+    });
+    document.querySelectorAll('.save-state[data-at]').forEach(function (el) {
+      el.textContent = 'saved ' + human(Number(el.dataset.at));
+    });
+  }, 1000);
+
+  function wireAutosave(f, hasValue) {
     var state = f.querySelector('.save-state');
-    var timer = null;
+    if (!state) return;
+    var timer = null, inflight = false, dirty = false;
 
-    function currentValue() {
-      var sel = f.querySelector('select[name=value]');
-      if (sel) return (sel.value || '').trim();
-      var boxes = f.querySelectorAll('input[type=checkbox][name=value]');
-      if (boxes.length) {
-        return Array.prototype.some.call(boxes, function (b) { return b.checked; }) ? 'x' : '';
-      }
-      var input = f.querySelector('input[name=value]');
-      return input ? (input.value || '').trim() : '';
-    }
-
-    function send() {
-      if (!currentValue()) return;
+    function post() {
+      if (!hasValue()) return;
+      if (inflight) { dirty = true; return; }
+      inflight = true;
+      state.className = 'save-state';
       state.textContent = 'saving…';
       fetch(f.dataset.autosave, {
-        method: 'POST', body: new FormData(f), credentials: 'same-origin'
+        method: 'POST', body: new FormData(f), credentials: 'same-origin', keepalive: true
       }).then(function (r) {
         return r.json().then(function (j) { return { ok: r.ok, j: j }; });
       }).then(function (res) {
@@ -306,101 +317,66 @@
           state.textContent = res.j.error || 'not saved';
           return;
         }
-        state.className = 'save-state';
-        state.textContent = 'saved';
+        state.dataset.at = Date.now();
+        state.textContent = 'saved just now';
         var chipEl = f.querySelector('.chip');
         if (chipEl && res.j.mark) {
           chipEl.className = 'chip ' + res.j.mark;
           chipEl.textContent = res.j.mark;
         }
-      }).catch(function () { state.textContent = 'not saved'; });
+        var stamp = document.querySelector('.saved-stamp');
+        if (stamp) stamp.dataset.at = new Date().toISOString();
+      }).catch(function () {
+        state.className = 'save-state error';
+        state.textContent = 'not saved';
+      }).finally(function () {
+        inflight = false;
+        if (dirty) { dirty = false; post(); }
+      });
     }
 
-    f.querySelectorAll('input[name=value], select[name=value]').forEach(function (c) {
+    f.querySelectorAll('input, select, textarea').forEach(function (c) {
+      if (c.type === 'hidden') return;
       var instant = c.tagName === 'SELECT' || c.type === 'checkbox' ||
-                    c.type === 'month' || c.type === 'date' || c.type === 'number' ||
+                    c.type === 'number' || c.type === 'date' || c.type === 'month' ||
                     c.type === 'datetime-local';
       if (instant) {
-        c.addEventListener('change', send);
+        c.addEventListener('change', post);
       } else {
         c.addEventListener('input', function () {
-          clearTimeout(timer); timer = setTimeout(send, 900);
+          clearTimeout(timer);
+          timer = setTimeout(post, 250);   // save almost immediately, never only on blur
         });
-        c.addEventListener('blur', function () { clearTimeout(timer); send(); });
+        c.addEventListener('blur', function () { clearTimeout(timer); post(); });
       }
+    });
+
+    addEventListener('pagehide', function () {
+      if (!hasValue()) return;
+      try { navigator.sendBeacon(f.dataset.autosave, new FormData(f)); } catch (e) {}
+    });
+  }
+
+  document.querySelectorAll('form.answer[data-autosave]').forEach(function (f) {
+    wireAutosave(f, function () {
+      var sel = f.querySelector('select[name=value]');
+      if (sel) return !!(sel.value || '').trim();
+      var boxes = f.querySelectorAll('input[type=checkbox][name=value]');
+      if (boxes.length) {
+        return Array.prototype.some.call(boxes, function (b) { return b.checked; });
+      }
+      var input = f.querySelector('input[name=value], textarea[name=value]');
+      return !!(input && (input.value || '').trim());
     });
   });
 
-  document.querySelectorAll('form.place[data-autosave]').forEach(function (f) {
-    var state = f.querySelector('.save-state');
-    var timer = null;
-    function send() {
-      state.className = 'save-state';
-      state.textContent = 'saving…';
-      fetch(f.dataset.autosave, {
-        method: 'POST', body: new FormData(f), credentials: 'same-origin'
-      }).then(function (r) {
-        return r.json().then(function (j) { return { ok: r.ok, j: j }; });
-      }).then(function (res) {
-        if (!res.ok || !res.j.ok) {
-          state.className = 'save-state error';
-          state.textContent = res.j.error || 'not saved';
-          return;
-        }
-        state.textContent = 'saved';
-      }).catch(function () {
-        state.className = 'save-state error';
-        state.textContent = 'not saved';
+  document.querySelectorAll('form.place[data-autosave], form.brow[data-autosave]').forEach(function (f) {
+    wireAutosave(f, function () {
+      var any = false;
+      f.querySelectorAll('input[name^=col_], select[name^=col_], textarea[name^=col_]').forEach(function (c) {
+        if ((c.value || '').trim()) any = true;
       });
-    }
-    f.querySelectorAll('input, select').forEach(function (c) {
-      if (c.type === 'hidden') return;
-      var instant = c.tagName === 'SELECT' || c.type === 'number' ||
-                    c.type === 'date' || c.type === 'datetime-local';
-      if (instant) {
-        c.addEventListener('change', send);
-      } else {
-        c.addEventListener('input', function () {
-          clearTimeout(timer); timer = setTimeout(send, 900);
-        });
-        c.addEventListener('blur', function () { clearTimeout(timer); send(); });
-      }
-    });
-  });
-
-  document.querySelectorAll('form.brow[data-autosave]').forEach(function (f) {
-    var state = f.querySelector('.save-state');
-    var timer = null;
-    function send() {
-      state.className = 'save-state';
-      state.textContent = 'saving…';
-      fetch(f.dataset.autosave, {
-        method: 'POST', body: new FormData(f), credentials: 'same-origin'
-      }).then(function (r) {
-        return r.json().then(function (j) { return { ok: r.ok, j: j }; });
-      }).then(function (res) {
-        if (!res.ok || !res.j.ok) {
-          state.className = 'save-state error';
-          state.textContent = res.j.error || 'not saved';
-          return;
-        }
-        state.textContent = 'saved';
-      }).catch(function () {
-        state.className = 'save-state error';
-        state.textContent = 'not saved';
-      });
-    }
-    f.querySelectorAll('input, select').forEach(function (c) {
-      if (c.type === 'hidden') return;
-      var instant = c.tagName === 'SELECT' || c.type === 'number';
-      if (instant) {
-        c.addEventListener('change', send);
-      } else {
-        c.addEventListener('input', function () {
-          clearTimeout(timer); timer = setTimeout(send, 900);
-        });
-        c.addEventListener('blur', function () { clearTimeout(timer); send(); });
-      }
+      return any;
     });
   });
 
