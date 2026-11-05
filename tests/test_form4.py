@@ -496,3 +496,17 @@ def test_author_who_is_an_fno_can_reopen_their_own_submission(case_a, django_use
     with pytest.raises(ValidationError):  # self-approval is still refused
         services.submit(case_a, fno)
         services.approve(case_a, fno)
+
+
+def test_source_page_shows_the_chart_column(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    client.force_login(resident)
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    resp = client.get(f"/source/observation/{case_a.pregnancy.documents.first().observations.first().pk}/")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Where this came from" in body
+    assert "This column" in body

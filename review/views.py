@@ -6,8 +6,9 @@ from datetime import datetime
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -208,6 +209,7 @@ def workspace(request, pk: int):
 
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
+    death = review.pregnancy.deaths.order_by("-died_at").first()
     open_return = services.latest_return(review, open_only=True)
     last_return = services.latest_return(review)
     field_comments = (open_return.comments or {}) if open_return else {}
@@ -259,7 +261,8 @@ def workspace(request, pk: int):
                     "current": _current(item, f),
                     "mark": chip(item.origin) if item else "—",
                     "proposals": [
-                        {"p": p, "display": fmt(p.value_json), "mark": mark} for p in proposals
+                        {"p": p, "display": fmt(p.value_json), "mark": mark,
+                         "inputs": _provenance(p, death)} for p in proposals
                     ],
                     "decision": _decision(item, decisions.get(f.key), mark),
                     "is_answered": is_answered,
@@ -510,6 +513,43 @@ EXAMPLES = {
 }
 
 
+def _fmt_when(value):
+    dt = _parse_dt(value) if isinstance(value, str) else None
+    if dt is None:
+        return ""
+    if timezone.is_aware(dt):
+        dt = timezone.localtime(dt)
+    return dt.strftime("%d %b %H:%M")
+
+
+def _ref_url(ref: str) -> str:
+    if not ref or ":" not in ref:
+        return ""
+    kind, _, pk = ref.partition(":")
+    if not pk.isdigit():
+        return ""
+    return reverse("source", args=[kind, pk])
+
+
+def _provenance(proposal, death):
+    out = []
+    for inp in proposal.frozen_inputs:
+        doc_at = _parse_dt(inp.get("documented_at"))
+        late = bool(death and death.died_at and doc_at and doc_at > death.died_at)
+        out.append(
+            {
+                "label": inp.get("label", ""),
+                "value": inp.get("value", ""),
+                "when": _fmt_when(inp.get("observed_at")),
+                "documented": _fmt_when(inp.get("documented_at")),
+                "author": inp.get("author", ""),
+                "late": late,
+                "url": _ref_url(inp.get("ref", "")),
+            }
+        )
+    return out
+
+
 def _decision(item, last, mark: str):
     if item and item.accepted_proposal_id:
         p = item.accepted_proposal
@@ -754,6 +794,50 @@ def save_field(request, pk: int):
     return JsonResponse(
         {"ok": True, "mark": chip(item.origin), "display": fmt(item.value_json)}
     )
+
+
+@login_required
+def source(request, kind: str, pk: int):
+    """Show where a value came from: the chart column, or the record row."""
+    from .models import (
+        Admission, Death, Delivery, Facility, Neonate, Observation, Patient,
+        Pregnancy, SourceDocument,
+    )
+
+    models = {
+        "observation": Observation,
+        "admission": Admission,
+        "delivery": Delivery,
+        "death": Death,
+        "patient": Patient,
+        "pregnancy": Pregnancy,
+        "facility": Facility,
+        "neonate": Neonate,
+        "sourcedocument": SourceDocument,
+    }
+    model = models.get(kind)
+    if model is None:
+        raise Http404
+
+    obj = get_object_or_404(model, pk=pk)
+    if kind == "observation":
+        column = list(
+            Observation.objects.filter(document=obj.document, observed_at=obj.observed_at)
+            .select_related("variable__section")
+            .order_by("variable__section__ord", "variable__ord")
+        )
+        return render(
+            request,
+            "review/source_observation.html",
+            {"observation": obj, "column": column},
+        )
+
+    fields = []
+    for f in obj._meta.fields:
+        if f.name == "id":
+            continue
+        fields.append({"label": f.verbose_name.capitalize(), "value": getattr(obj, f.name)})
+    return render(request, "review/source_record.html", {"kind": kind, "obj": obj, "fields": fields})
 
 
 @login_required

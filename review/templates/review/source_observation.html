@@ -1,0 +1,33 @@
+{% extends "review/base.html" %}
+{% block title %}Where this came from{% endblock %}
+{% block content %}
+<h1>Where this came from</h1>
+<p class="muted">
+  {{ observation.document.source_format|upper }} ·
+  {{ observation.document.origin_facility|default:"—" }} ·
+  authored by {{ observation.document.author|default:"—" }}
+  {% if observation.document.documented_at %}· documented {{ observation.document.documented_at|date:"d M Y H:i" }}{% endif %}
+</p>
+<p>
+  <a href="javascript:history.back()">← back to the review</a>
+  {% with review=observation.document.pregnancy.reviews.first %}
+    {% if review %}· <a href="{% url 'labour' observation.document.pk %}">open the whole chart</a>{% endif %}
+  {% endwith %}
+</p>
+
+<h2>This column — {{ observation.observed_at|date:"d M H:i" }}</h2>
+<table>
+  <thead><tr><th>Item</th><th>Value</th><th>Author</th><th>Charted</th></tr></thead>
+  <tbody>
+  {% for o in column %}
+    <tr {% if o.pk == observation.pk %}class="hit"{% endif %}>
+      <td>{{ o.variable.label }}<div class="key">{{ o.variable.section.label }}</div></td>
+      <td><b>{{ o.value_text|default:o.value_num }}{% if o.unit %} {{ o.unit }}{% endif %}</b></td>
+      <td>{{ o.author|default:"—" }}</td>
+      <td>{{ o.documented_at|date:"d M H:i" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted small">Highlighted row is the value this review used. The rest of the column is shown so a single number can be read next to its neighbours.</p>
+{% endblock %}

@@ -245,12 +245,14 @@
                     <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
                     <details>
                       <summary>where it came from</summary>
-                      {% for inp in pr.p.frozen_inputs %}
+                      {% for inp in pr.inputs %}
                         <div class="why">
-                          {{ inp.label }} = {{ inp.value }}
+                          <b>{{ inp.label }}</b> = {{ inp.value }}
+                          {% if inp.when %} · {{ inp.when }}{% endif %}
+                          {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
+                          {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
                           {% if inp.author %} · {{ inp.author }}{% endif %}
-                          {% if inp.observed_at %} · {{ inp.observed_at }}{% endif %}
-                          {% if inp.precision != "exact" %} · {{ inp.precision }}{% endif %}
+                          {% if inp.url %} · <a href="{{ inp.url }}" target="_blank">see source</a>{% endif %}
                         </div>
                       {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
                     </details>

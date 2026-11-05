@@ -98,6 +98,11 @@ Two separate things:
   was documented after death.
 - **Review history**: per-field change log and the decision trail.
 
+Every proposal shows its inputs with the time, the author, a late-entry flag, and a
+**see source** link. The link opens the exact place the value came from: for an LCG
+value, the whole time column with that cell highlighted, so a reading is read next
+to its neighbours; for a fact, the record row (admission, delivery, death).
+
 Provenance in the full sense — several documents for one pregnancy, supersession,
 conflicting sources — is out of scope. What we show is the source entry, its time
 and its author, which is what the brief asks for.

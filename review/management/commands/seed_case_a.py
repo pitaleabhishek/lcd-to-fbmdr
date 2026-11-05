@@ -63,7 +63,7 @@ class Command(BaseCommand):
         pregnancy = Pregnancy.objects.create(
             patient=patient,
             outcome=Pregnancy.Outcome.DELIVERY,
-            outcome_at=dt(12, 19, 5),
+            outcome_at=dt(12, 22, 50),
             gestation_weeks=39,
         )
         admission = Admission.objects.create(
@@ -100,10 +100,11 @@ class Command(BaseCommand):
         variables = {v.key: v for v in LCGVariable.objects.all()}
 
         def obs(key, at, *, num=None, text="", unit="", author="Nurse P. Meshram",
-                documented=None, precision=TimePrecision.EXACT):
+                documented=None, precision=TimePrecision.EXACT, stage="first"):
             return Observation.objects.create(
                 document=lcg,
                 variable=variables[key],
+                stage=stage,
                 value_num=Decimal(str(num)) if num is not None else None,
                 value_text=text,
                 unit=unit,
@@ -116,7 +117,7 @@ class Command(BaseCommand):
             )
 
         # Section 1 lives on the document (header_json), not on the time axis.
-        # Observations across labour. Gap between 21:00 and 23:00.
+        # Observations across labour. Gap between 20:30 and 22:30.
         for hh, mm in [(18, 0), (18, 30), (19, 0), (19, 30), (20, 0), (20, 30)]:
             obs("systolic_bp", dt(12, hh, mm), num=118 + (hh - 18) * 6, unit="mmHg")
             obs("diastolic_bp", dt(12, hh, mm), num=76 + (hh - 18) * 3, unit="mmHg")
@@ -126,27 +127,28 @@ class Command(BaseCommand):
             obs("contractions", dt(12, hh, mm), num=3 + (1 if hh >= 19 else 0), unit="/10min")
             obs("cervix", dt(12, hh, mm), num=min(10, 4 + (hh - 18)), unit="cm")
 
-        # Alert crossing: systolic 148 and diastolic 94 at 20:30 (already above 140/90).
-        # A late entry: observed at 22:30, documented after death at 00:15.
-        obs("systolic_bp", dt(12, 22, 30), num=150, unit="mmHg",
-            author="Dr A. Rane", documented=dt(13, 0, 15))
-        obs("diastolic_bp", dt(12, 22, 30), num=96, unit="mmHg",
-            author="Dr A. Rane", documented=dt(13, 0, 15))
         obs("oxytocin", dt(12, 20, 30), num=2.5, unit="U/L")
         obs("oxytocin_drops", dt(12, 20, 30), num=10, unit="drops/min")
         obs("iv_fluids", dt(12, 19, 0), text="yes")
         obs("urine_protein", dt(12, 20, 0), text="1+")
 
+        # The 22:30 crossing is in second stage and was never acted on; the chart has a
+        # two-hour hole before it. She delivers at 22:50 and dies at 23:40.
+        obs("systolic_bp", dt(12, 22, 30), num=150, unit="mmHg",
+            author="Dr A. Rane", documented=dt(13, 0, 15), stage="second")
+        obs("diastolic_bp", dt(12, 22, 30), num=96, unit="mmHg",
+            author="Dr A. Rane", documented=dt(13, 0, 15), stage="second")
+
         delivery = Delivery.objects.create(
             pregnancy=pregnancy,
-            delivered_at=dt(12, 19, 5),
+            delivered_at=dt(12, 22, 50),
             time_precision=TimePrecision.EXACT,
             mode="normal",
             facility=facility,
             performed_by="Dr A. Rane",
         )
         Neonate.objects.create(
-            delivery=delivery, outcome="alive", assessed_at=dt(12, 19, 6),
+            delivery=delivery, outcome="alive", assessed_at=dt(12, 22, 51),
             status_context="at birth",
         )
 

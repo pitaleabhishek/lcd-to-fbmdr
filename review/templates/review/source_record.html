@@ -1,0 +1,14 @@
+{% extends "review/base.html" %}
+{% block title %}Where this came from{% endblock %}
+{% block content %}
+<h1>Where this came from</h1>
+<p class="muted">{{ kind|capfirst }} record #{{ obj.pk }}</p>
+<p><a href="javascript:history.back()">← back to the review</a></p>
+<table>
+  <tbody>
+  {% for f in fields %}
+    <tr><th style="width:34%">{{ f.label }}</th><td>{{ f.value|default:"—" }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -6,6 +6,7 @@ from . import views
 urlpatterns = [
     path("", views.index, name="index"),
     path("labour/<int:pk>/", views.labour, name="labour"),
+    path("source/<str:kind>/<int:pk>/", views.source, name="source"),
     path("review/<int:pk>/", views.workspace, name="workspace"),
     path("review/<int:pk>/field/", views.save_field, name="save_field"),
     path("review/<int:pk>/output/", views.output, name="output"),

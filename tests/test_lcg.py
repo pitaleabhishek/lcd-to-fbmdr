@@ -94,10 +94,12 @@ def test_cervix_does_not_exist_after_second_stage_starts(case_0):
     ).exists()
 
 
-def test_case_a_is_all_first_stage(db):
+def test_case_a_has_a_second_stage_crossing(db):
     call_command("seed_case_a", verbosity=0)
     doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Sunita Devi")
-    assert set(Observation.objects.filter(document=doc).values_list("stage", flat=True)) == {"first"}
+    second = Observation.objects.filter(document=doc, stage="second")
+    assert second.count() == 2  # systolic and diastolic at 22:30
+    assert all(o.value_num >= 90 for o in second)
 
 
 def test_lcg_cells_view_labels_stage_per_cell(case_0):
