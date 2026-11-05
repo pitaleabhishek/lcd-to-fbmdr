@@ -167,7 +167,10 @@
                   {% endif %}
                   <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                   <span class="save-state"></span>
-                  <input type="text" name="reason" class="why-in" placeholder="note">
+                  <details class="notewrap">
+                    <summary title="Add a note to this field">note</summary>
+                    <input type="text" name="reason" class="why-in" placeholder="note (optional)">
+                  </details>
                   <button name="action" value="na" class="linkish" title="Mark not applicable">N/A</button>
                 </form>
               {% endif %}
