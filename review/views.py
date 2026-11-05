@@ -236,6 +236,7 @@ def workspace(request, pk: int):
                     "item": item,
                     "display": fmt(item.value_json) if item else "—",
                     "widget": f.widget,
+                    "period": _period(items),
                     "current": ""
                     if not item or item.value_json is None
                     else (item.value_json if isinstance(item.value_json, str)
@@ -405,6 +406,19 @@ def _handle_action(request, review: Review):
     raise ValidationError(f"unknown action {action!r}")
 
 
+def _period(items):
+    month = items.get("f4.background.fbmdr_month")
+    year = items.get("f4.background.fbmdr_year")
+    try:
+        m = int(month.value_json) if month and month.value_json is not None else None
+        y = int(year.value_json) if year and year.value_json is not None else None
+    except (TypeError, ValueError):
+        return ""
+    if not m or not y:
+        return ""
+    return f"{y:04d}-{m:02d}"
+
+
 def _decision(item, last, mark: str):
     if item and item.accepted_proposal_id:
         p = item.accepted_proposal
@@ -470,6 +484,18 @@ def save_field(request, pk: int):
 
     item = review.items.filter(field_key=key).first()
     corrected = bool(item and item.origin in ("reused", "derived"))
+
+    if key == "f4.background.fbmdr_month":
+        raw = request.POST.get("value", "").strip()
+        try:
+            year_s, month_s = raw.split("-")
+            year, month = int(year_s), int(month_s)
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "pick a month"}, status=400)
+        services.set_answer(review, key, month, request.user, request.POST.get("reason", ""),
+                            corrected=corrected)
+        services.set_answer(review, "f4.background.fbmdr_year", year, request.user)
+        return JsonResponse({"ok": True, "mark": "E", "display": month})
 
     if field.type == "multi":
         values = [v for v in request.POST.getlist("value") if v]

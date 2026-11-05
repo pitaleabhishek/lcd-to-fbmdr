@@ -216,3 +216,16 @@ def test_autosave_accepts_a_multi_value(client, case_a, django_user_model):
     assert case_a.items.get(field_key="f4.antenatal_care.risks").value_json == [
         "anaemia", "pih_pe"
     ]
+
+
+def test_month_picker_sets_month_and_year(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.background.fbmdr_month", "value": "2026-10"},
+    )
+    assert resp.status_code == 200
+    assert case_a.items.get(field_key="f4.background.fbmdr_month").value_json == 10
+    assert case_a.items.get(field_key="f4.background.fbmdr_year").value_json == 2026
