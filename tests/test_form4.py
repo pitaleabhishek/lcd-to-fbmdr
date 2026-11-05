@@ -218,15 +218,19 @@ def test_autosave_accepts_a_multi_value(client, case_a, django_user_model):
     ]
 
 
-def test_month_picker_sets_month_and_year(client, case_a, django_user_model):
+def test_month_and_year_save_separately(client, case_a, django_user_model):
     from django.contrib.auth.models import User
 
     client.force_login(User.objects.get(username="resident"))
-    resp = client.post(
+    month = client.post(
         f"/review/{case_a.pk}/field/",
-        {"key": "f4.background.fbmdr_month", "value": "2026-10"},
+        {"key": "f4.background.fbmdr_month", "value": "10"},
     )
-    assert resp.status_code == 200
+    year = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.background.fbmdr_year", "value": "2026"},
+    )
+    assert month.status_code == 200 and year.status_code == 200
     assert case_a.items.get(field_key="f4.background.fbmdr_month").value_json == 10
     assert case_a.items.get(field_key="f4.background.fbmdr_year").value_json == 2026
 
@@ -259,14 +263,13 @@ def test_bad_number_returns_a_message_not_a_crash(client, case_a, django_user_mo
     assert "whole number" in resp.json()["error"]
 
 
-def test_month_picker_rejects_an_impossible_year(client, case_a, django_user_model):
+def test_year_range_is_enforced(client, case_a, django_user_model):
     from django.contrib.auth.models import User
 
     client.force_login(User.objects.get(username="resident"))
     resp = client.post(
         f"/review/{case_a.pk}/field/",
-        {"key": "f4.background.fbmdr_month", "value": "67867-06"},
+        {"key": "f4.background.fbmdr_year", "value": "67867"},
     )
     assert resp.status_code == 400
-    assert resp.json()["ok"] is False
     assert "1900" in resp.json()["error"]

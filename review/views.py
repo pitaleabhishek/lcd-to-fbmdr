@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from . import services
@@ -63,8 +64,6 @@ def _num(value) -> str:
 
 @login_required
 def labour(request, pk: int):
-    from django.utils import timezone
-
     from .models import SourceDocument
 
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
@@ -236,7 +235,7 @@ def workspace(request, pk: int):
                     "item": item,
                     "display": fmt(item.value_json) if item else "—",
                     "widget": f.widget,
-                    "period": _period(items),
+                    "example": EXAMPLES.get(f.key, "e.g. 1"),
                     "current": _current(item, f),
                     "mark": chip(item.origin) if item else "—",
                     "proposals": [
@@ -300,6 +299,7 @@ def workspace(request, pk: int):
             "review": review,
             "sections": sections,
             "stats": stats,
+            "years": list(range(timezone.now().year + 1, 1989, -1)),
             "months": [
                 {"value": i, "label": name}
                 for i, name in enumerate(
@@ -412,17 +412,15 @@ def _current(item, field):
     return value if isinstance(value, str) else str(value)
 
 
-def _period(items):
-    month = items.get("f4.background.fbmdr_month")
-    year = items.get("f4.background.fbmdr_year")
-    try:
-        m = int(month.value_json) if month and month.value_json is not None else None
-        y = int(year.value_json) if year and year.value_json is not None else None
-    except (TypeError, ValueError):
-        return ""
-    if not m or not y:
-        return ""
-    return f"{y:04d}-{m:02d}"
+EXAMPLES = {
+    "f4.background.age": "e.g. 26",
+    "f4.admission.gravida": "e.g. 2",
+    "f4.admission.para": "e.g. 1",
+    "f4.admission.abortions": "e.g. 0",
+    "f4.admission.living_children": "e.g. 1",
+    "f4.condition.places": "e.g. 2",
+    "f4.interventions.transfusion_units": "e.g. 2",
+}
 
 
 def _decision(item, last, mark: str):
@@ -509,24 +507,6 @@ def save_field(request, pk: int):
 
     item = review.items.filter(field_key=key).first()
     corrected = bool(item and item.origin in ("reused", "derived"))
-
-    if key == "f4.background.fbmdr_month":
-        raw = request.POST.get("value", "").strip()
-        try:
-            year_s, month_s = raw.split("-")
-            year, month = int(year_s), int(month_s)
-        except ValueError:
-            return JsonResponse({"ok": False, "error": "pick a month"}, status=400)
-        if not 1900 <= year <= 2100:
-            return JsonResponse(
-                {"ok": False, "error": "enter a year between 1900 and 2100"}, status=400
-            )
-        if not 1 <= month <= 12:
-            return JsonResponse({"ok": False, "error": "pick a month"}, status=400)
-        services.set_answer(review, key, month, request.user, request.POST.get("reason", ""),
-                            corrected=corrected)
-        services.set_answer(review, "f4.background.fbmdr_year", year, request.user)
-        return JsonResponse({"ok": True, "mark": "E", "display": month})
 
     if field.type == "multi":
         values = [v for v in request.POST.getlist("value") if v]

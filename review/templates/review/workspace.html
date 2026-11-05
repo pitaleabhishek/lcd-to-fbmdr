@@ -83,17 +83,25 @@
                       data-autosave="{% url 'save_field' review.pk %}"
                       data-key="{{ row.field.key }}">{% csrf_token %}
                   <input type="hidden" name="key" value="{{ row.field.key }}">
-                  {% if row.widget == "monthpicker" %}
-                    <input type="month" name="value" class="val" min="1900-01" max="2100-12"
-                           title="Pick a month and year" value="{{ row.period }}">
-                  {% elif row.widget == "readonly" %}
-                    <span class="value">{{ row.display }}</span>
-                    <span class="key">set by Month</span>
+                  {% if row.widget == "month" %}
+                    <select name="value" class="val" title="Month">
+                      <option value="">—</option>
+                      {% for m in months %}
+                        <option value="{{ m.value }}" {% if row.current == m.value|stringformat:"s" %}selected{% endif %}>{{ m.label }}</option>
+                      {% endfor %}
+                    </select>
+                  {% elif row.widget == "year" %}
+                    <select name="value" class="val" title="Year">
+                      <option value="">—</option>
+                      {% for y in years %}
+                        <option value="{{ y }}" {% if row.current == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
+                      {% endfor %}
+                    </select>
                   {% elif row.field.type == "date" %}
                     <input type="date" name="value" class="val" value="{{ row.current }}">
                   {% elif row.field.type == "int" %}
                     <input type="number" name="value" class="val" step="1" min="0"
-                           inputmode="numeric" placeholder="number"
+                           inputmode="numeric" placeholder="{{ row.example }}"
                            title="Whole number only"
                            value="{{ row.current }}">
                   {% elif row.field.type == "enum" %}
