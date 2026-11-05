@@ -62,19 +62,21 @@
             padding:10px; color:var(--warn); }
   .chart-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:6px;
                 background:#fff; }
-  table.chart { border:0; border-radius:0; min-width:100%; }
+  table.chart { border:0; border-radius:0; width:100%; table-layout:fixed; }
   table.chart th.sticky, table.chart td.sticky { position:sticky; left:0; background:#fff;
-                z-index:2; min-width:168px; max-width:168px; }
+                z-index:2; width:118px; min-width:118px; max-width:118px;
+                font-size:11px; }
   table.chart thead th { position:sticky; top:0; background:#f2f5f7; z-index:1;
-                white-space:nowrap; font-size:12px; }
+                white-space:nowrap; font-size:10px; padding:4px 2px; }
   table.chart thead th.sticky { z-index:3; }
-  table.chart td { text-align:center; min-width:54px; white-space:nowrap; }
+  table.chart td { text-align:center; padding:3px 2px; font-size:10.5px;
+                white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   table.chart tr.sec th { background:#eef3f5; color:var(--accent); text-align:left;
                 font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
   .chart .stage { color:var(--muted); font-weight:400; font-size:10px;
                 text-transform:none; letter-spacing:0; }
-  .chart .unit { color:var(--muted); font-size:10px; font-weight:400; }
-  .chart .alert-ref { color:var(--muted); font-size:10px; font-weight:400; }
+  .chart .unit { color:var(--muted); font-size:9px; font-weight:400; }
+  .chart .alert-ref { color:var(--muted); font-size:9px; font-weight:400; }
   .chart .empty { color:#c4ccd3; }
   .chart .late { color:var(--warn); font-weight:700; }
   .chart .late sup { font-size:9px; margin-left:2px; }
@@ -125,7 +127,7 @@
   .hlabel { font-size:10px; text-transform:uppercase; color:var(--muted);
             letter-spacing:.04em; }
   .hvalue { font-size:13px; font-weight:600; }
-  table.chart tr.band th { text-align:center; font-size:10px; letter-spacing:.06em;
+  table.chart tr.band th { text-align:center; font-size:9px; letter-spacing:.06em;
             background:#eef3f5; border-left:1px solid var(--line); }
   table.chart tr.band th.first { color:var(--accent); }
   table.chart tr.band th.second { color:var(--warn); }
