@@ -84,7 +84,8 @@
                       data-key="{{ row.field.key }}">{% csrf_token %}
                   <input type="hidden" name="key" value="{{ row.field.key }}">
                   {% if row.widget == "monthpicker" %}
-                    <input type="month" name="value" class="val" value="{{ row.period }}">
+                    <input type="month" name="value" class="val" min="1900-01" max="2100-12"
+                           title="Pick a month and year" value="{{ row.period }}">
                   {% elif row.widget == "readonly" %}
                     <span class="value">{{ row.display }}</span>
                     <span class="key">set by Month</span>

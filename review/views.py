@@ -517,6 +517,12 @@ def save_field(request, pk: int):
             year, month = int(year_s), int(month_s)
         except ValueError:
             return JsonResponse({"ok": False, "error": "pick a month"}, status=400)
+        if not 1900 <= year <= 2100:
+            return JsonResponse(
+                {"ok": False, "error": "enter a year between 1900 and 2100"}, status=400
+            )
+        if not 1 <= month <= 12:
+            return JsonResponse({"ok": False, "error": "pick a month"}, status=400)
         services.set_answer(review, key, month, request.user, request.POST.get("reason", ""),
                             corrected=corrected)
         services.set_answer(review, "f4.background.fbmdr_year", year, request.user)
@@ -535,6 +541,13 @@ def save_field(request, pk: int):
             value = _coerce(field, raw)
         except ValidationError as exc:
             return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
+
+    if key == "f4.background.fbmdr_year" and not 1900 <= value <= 2100:
+        return JsonResponse(
+            {"ok": False, "error": "enter a year between 1900 and 2100"}, status=400
+        )
+    if key == "f4.background.fbmdr_month" and not 1 <= value <= 12:
+        return JsonResponse({"ok": False, "error": "pick a month"}, status=400)
 
     try:
         services.set_answer(

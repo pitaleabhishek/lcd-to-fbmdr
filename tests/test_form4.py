@@ -257,3 +257,16 @@ def test_bad_number_returns_a_message_not_a_crash(client, case_a, django_user_mo
     assert resp.status_code == 400
     assert resp.json()["ok"] is False
     assert "whole number" in resp.json()["error"]
+
+
+def test_month_picker_rejects_an_impossible_year(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.background.fbmdr_month", "value": "67867-06"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False
+    assert "1900" in resp.json()["error"]
