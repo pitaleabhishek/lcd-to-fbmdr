@@ -650,3 +650,24 @@ def test_addressed_comments_are_still_navigable(client, case_a, django_user_mode
     assert 'class="addressed"' in page
     assert "tr.addressed" in page          # selector includes addressed rows
     assert "tighten up" in page            # overall comment still visible
+
+
+def test_history_lists_each_field_comment(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(
+        case_a, fno, "overall note",
+        {"f4.primary_diagnosis.dx": "Which type of PPH?"},
+    )
+
+    client.force_login(resident)
+    page = client.get(f"/review/{case_a.pk}/history/").content.decode()
+    assert "overall note" in page
+    assert "Which type of PPH?" in page
+    assert "Primary diagnosis" in page
+    assert "v1" in page

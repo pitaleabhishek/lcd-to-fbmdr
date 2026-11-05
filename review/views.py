@@ -883,7 +883,27 @@ def history(request, pk: int):
             {"at": e.at, "actor": e.actor, "action": action, "detail": detail}
         )
     versions = review.versions.select_related("created_by").order_by("-version_no")
-    returns = review.returns.select_related("by", "submission_version").order_by("-at")
+
+    items_by_key = {i.field_key: i for i in review.items.all()}
+    returns = []
+    for ret in (
+        review.returns.select_related("by", "submission_version").order_by("-at")
+    ):
+        comments = []
+        for key, text in (ret.comments or {}).items():
+            field = registry._fields.get(key)
+            item = items_by_key.get(key)
+            comments.append(
+                {
+                    "label": field.label_printed if field else key,
+                    "key": key,
+                    "text": text,
+                    "addressed": bool(
+                        item and item.decided_at and item.decided_at > ret.at
+                    ),
+                }
+            )
+        returns.append({"return": ret, "comments": comments})
     return render(
         request,
         "review/history.html",

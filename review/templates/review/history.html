@@ -34,18 +34,36 @@
 
 <h2>Returns</h2>
 <table>
-  <thead><tr><th>When</th><th>By</th><th>Overall comment</th><th>Field comments</th><th>State</th></tr></thead>
+  <thead><tr><th>When</th><th>By</th><th>Overall comment</th><th>Field comments</th><th>Basis</th><th>State</th></tr></thead>
   <tbody>
-  {% for r in returns %}
+  {% for row in returns %}
+    {% with r=row.return %}
     <tr>
       <td>{{ r.at|date:"d M Y H:i" }}</td>
       <td>{{ r.by.username }}</td>
       <td>{{ r.overall_comment|default:"—" }}</td>
-      <td>{{ r.comments|length }}</td>
+      <td>
+        {% if row.comments %}
+          <details>
+            <summary>{{ row.comments|length }} comment{{ row.comments|length|pluralize }}</summary>
+            <ul class="comment-list">
+              {% for c in row.comments %}
+                <li>
+                  <b>{{ c.label }}</b> — {{ c.text }}
+                  {% if c.addressed %}<span class="count">addressed</span>{% endif %}
+                  <div class="key">{{ c.key }}</div>
+                </li>
+              {% endfor %}
+            </ul>
+          </details>
+        {% else %}—{% endif %}
+      </td>
+      <td>{% if r.submission_version %}v{{ r.submission_version.version_no }}{% else %}—{% endif %}</td>
       <td>{% if r.resolved_at %}addressed{% else %}open{% endif %}</td>
     </tr>
+    {% endwith %}
   {% empty %}
-    <tr><td colspan="5" class="muted">Never returned.</td></tr>
+    <tr><td colspan="6" class="muted">Never returned.</td></tr>
   {% endfor %}
   </tbody>
 </table>
