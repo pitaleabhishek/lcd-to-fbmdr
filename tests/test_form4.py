@@ -629,3 +629,24 @@ def test_returned_page_has_a_sticky_comment_navigator(client, case_a, django_use
     assert 'id="rb-next"' in page and 'id="rb-prev"' in page
     assert "please tighten this up" in page
     assert 'class="commented"' in page
+
+
+def test_addressed_comments_are_still_navigable(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(
+        case_a, fno, "tighten up", {"f4.primary_diagnosis.dx": "which type?"}
+    )
+    # the resident addresses it
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "Atonic PPH", resident)
+
+    client.force_login(resident)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert 'class="addressed"' in page
+    assert "tr.addressed" in page          # selector includes addressed rows
+    assert "tighten up" in page            # overall comment still visible

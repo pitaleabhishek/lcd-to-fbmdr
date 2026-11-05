@@ -109,8 +109,9 @@
   .returnbar { display:flex; justify-content:space-between; gap:10px; align-items:center;
                 background:#fffaf2; border:1px solid #f0d3a8; border-radius:5px;
                 padding:5px 8px; margin:6px 0 0; font-size:12px; }
-  .rb-main { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-  .rb-overall { color:#6b4a12; }
+  .rb-main { min-width:0; }
+  .rb-head { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .rb-overall { color:#6b4a12; margin-top:2px; font-style:italic; }
   .rb-nav { display:flex; gap:6px; align-items:center; flex-shrink:0; }
   .rb-nav button { padding:1px 8px; font-size:13px; }
   tr[id], .block-card[id] { scroll-margin-top:calc(var(--stack-h) + 46px); }
@@ -432,7 +433,9 @@
   var rbNext = document.getElementById('rb-next');
   if (rbNext) {
     var marks = Array.prototype.slice.call(
-      document.querySelectorAll('tr.commented, .block-card.commented')
+      document.querySelectorAll(
+        'tr.commented, tr.addressed, .block-card.commented, .block-card.addressed'
+      )
     );
     var rbCount = document.getElementById('rb-count');
     function rbIndex() {

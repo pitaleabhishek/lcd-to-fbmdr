@@ -50,13 +50,15 @@
 {% if open_return %}
   <div class="returnbar" id="returnbar">
     <div class="rb-main">
-      <b>Returned by {{ open_return.by.username }}</b>
-      <span class="muted">· {{ open_return.at|date:"d M H:i" }}</span>
+      <div class="rb-head">
+        <b>Returned by {{ open_return.by.username }}</b>
+        <span class="muted">· {{ open_return.at|date:"d M H:i" }}</span>
+        {% if open_return.comments %}
+          <span class="muted">· {{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }}</span>
+        {% endif %}
+      </div>
       {% if open_return.overall_comment %}
-        <span class="rb-overall" title="{{ open_return.overall_comment }}">“{{ open_return.overall_comment }}”</span>
-      {% endif %}
-      {% if open_return.comments %}
-        <span class="muted">· {{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }}</span>
+        <div class="rb-overall" title="{{ open_return.overall_comment }}">“{{ open_return.overall_comment }}”</div>
       {% endif %}
     </div>
     {% if open_return.comments %}
