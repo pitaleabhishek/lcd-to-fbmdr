@@ -436,12 +436,17 @@
     {% endfor %}
   </div>
 </div>
-{% if is_fno and review.status == "submitted" %}
+{% if fno_can_comment %}
   <div class="decision-bar">
     <input type="text" name="comment" class="return-comment"
-           placeholder="overall comment — required to return">
-    <button name="action" value="return" class="danger">Return</button>
-    <button name="action" value="approve" class="primary">Approve</button>
+           value="{{ overall_value }}"
+           placeholder="overall comment (optional if you comment a field)">
+    {% if review.status == "submitted" %}
+      <button name="action" value="return" class="danger">Return</button>
+      <button name="action" value="approve" class="primary" id="approve-btn">Approve</button>
+    {% else %}
+      <button name="action" value="return_update" class="primary">Update return</button>
+    {% endif %}
   </div>
   </form>
 {% endif %}

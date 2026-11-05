@@ -605,7 +605,8 @@ def test_approve_is_refused_when_comments_are_present(client, case_a, django_use
         f"/review/{case_a.pk}/",
         {"action": "approve", "comment": "", "fc_f4.primary_diagnosis.dx": "check this"},
     )
-    assert resp.status_code == 302
+    assert resp.status_code == 200
+    assert "check this" in resp.content.decode()   # the comment is not lost
     case_a.refresh_from_db()
     assert case_a.status == Review.Status.SUBMITTED  # not approved
 

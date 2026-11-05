@@ -200,19 +200,25 @@ def workspace(request, pk: int):
         Review.objects.select_related("pregnancy__patient", "reporting_facility"), pk=pk
     )
 
+    draft_comments = None
+    draft_overall = None
     if request.method == "POST":
-        anchor = request.POST.get("key")
-        if not anchor and request.POST.get("proposal"):
-            anchor = (
-                Proposal.objects.filter(pk=request.POST["proposal"])
-                .values_list("field_key", flat=True)
-                .first()
-            )
+        action = request.POST.get("action")
         try:
             _handle_action(request, review)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-        return redirect("workspace", pk=review.pk)
+            if action != "approve":
+                return redirect("workspace", pk=review.pk)
+            # Keep what the FNO typed so an error never costs them their comments.
+            draft_comments = {
+                k[3:]: v
+                for k, v in request.POST.items()
+                if k.startswith("fc_") and v and v.strip()
+            }
+            draft_overall = request.POST.get("comment", "")
+        else:
+            return redirect("workspace", pk=review.pk)
 
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
@@ -235,7 +241,15 @@ def workspace(request, pk: int):
         keys = sorted(open_return.comments, key=lambda k: order.get(k, 9999))
         if keys[0] in registry:
             first_comment_slug = registry[keys[0]].slug
-    field_comments = (open_return.comments or {}) if open_return else {}
+    if draft_comments is not None:
+        field_comments = draft_comments
+    else:
+        field_comments = (open_return.comments or {}) if open_return else {}
+    overall_value = (
+        draft_overall
+        if draft_overall is not None
+        else (open_return.overall_comment if open_return else "")
+    )
 
     items = {i.field_key: i for i in review.items.all()}
     decisions = {}
@@ -366,6 +380,7 @@ def workspace(request, pk: int):
             "is_fno": is_fno(request.user),
             "open_return": open_return,
             "submission_note": submission_note,
+            "overall_value": overall_value,
             "fno_can_comment": fno_can_comment,
             "first_comment_slug": first_comment_slug,
             "last_return": last_return,
