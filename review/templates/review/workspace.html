@@ -252,7 +252,7 @@
                           {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
                           {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
                           {% if inp.author %} · {{ inp.author }}{% endif %}
-                          {% if inp.url %} · <a href="{{ inp.url }}" target="_blank">see source</a>{% endif %}
+                          {% if inp.url %} · <a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a>{% endif %}
                         </div>
                       {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
                     </details>

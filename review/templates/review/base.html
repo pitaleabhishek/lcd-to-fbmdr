@@ -70,6 +70,13 @@
   .fc textarea { width:100%; margin-top:3px; }
   .warn { color:var(--warn); font-weight:700; }
   tr.hit td { background:#fdf9e8; font-weight:600; }
+  .drawer { position:fixed; top:0; right:0; bottom:0; width:min(480px,94vw);
+            background:#fff; border-left:1px solid var(--line);
+            box-shadow:-8px 0 24px rgba(0,0,0,.14); z-index:60; overflow:auto;
+            padding:12px 14px; }
+  .drawer-head { display:flex; justify-content:space-between; align-items:center;
+            gap:8px; border-bottom:1px solid var(--line); padding-bottom:6px;
+            margin-bottom:8px; font-size:13px; }
   .fno-note { margin-top:4px; padding:4px 6px; border-left:3px solid var(--warn);
               background:#fffaf2; font-size:12px; }
   .fno-note.done { border-left-color:var(--ok); background:#f4faf6; }
@@ -246,6 +253,13 @@
   </div>
   {% block content %}{% endblock %}
 </main>
+<aside id="source-drawer" class="drawer" hidden>
+  <div class="drawer-head">
+    <b>Where this came from</b>
+    <button type="button" id="source-close">Close</button>
+  </div>
+  <div id="source-body"></div>
+</aside>
 <script>
   // keep the page exactly where it was across a form post
   document.addEventListener('submit', function () {
@@ -398,6 +412,28 @@
     autoGrow(t);
     t.addEventListener('input', function () { autoGrow(t); });
   });
+
+  var drawer = document.getElementById('source-drawer');
+  var drawerBody = document.getElementById('source-body');
+  if (drawer) {
+    document.addEventListener('click', function (e) {
+      var link = e.target.closest ? e.target.closest('a.see-source') : null;
+      if (!link) return;
+      e.preventDefault();
+      drawerBody.innerHTML = 'loading…';
+      drawer.hidden = false;
+      fetch(link.dataset.url + '?frag=1', { credentials: 'same-origin' })
+        .then(function (r) { return r.text(); })
+        .then(function (html) { drawerBody.innerHTML = html; })
+        .catch(function () { drawerBody.innerHTML = 'could not load the source'; });
+    });
+    document.getElementById('source-close').addEventListener('click', function () {
+      drawer.hidden = true;
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') drawer.hidden = true;
+    });
+  }
 
   function fitStack() {
     var h = document.querySelector('header');

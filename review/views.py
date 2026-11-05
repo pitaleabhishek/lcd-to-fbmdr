@@ -826,18 +826,24 @@ def source(request, kind: str, pk: int):
             .select_related("variable__section")
             .order_by("variable__section__ord", "variable__ord")
         )
-        return render(
-            request,
-            "review/source_observation.html",
-            {"observation": obj, "column": column},
+        template = (
+            "review/_source_observation.html"
+            if request.GET.get("frag")
+            else "review/source_observation.html"
         )
+        return render(request, template, {"observation": obj, "column": column})
 
     fields = []
     for f in obj._meta.fields:
         if f.name == "id":
             continue
         fields.append({"label": f.verbose_name.capitalize(), "value": getattr(obj, f.name)})
-    return render(request, "review/source_record.html", {"kind": kind, "obj": obj, "fields": fields})
+    template = (
+        "review/_source_record.html"
+        if request.GET.get("frag")
+        else "review/source_record.html"
+    )
+    return render(request, template, {"kind": kind, "obj": obj, "fields": fields})
 
 
 @login_required

@@ -1,0 +1,15 @@
+<h2>This column — {{ observation.observed_at|date:"d M H:i" }}</h2>
+<table>
+  <thead><tr><th>Item</th><th>Value</th><th>Author</th><th>Charted</th></tr></thead>
+  <tbody>
+  {% for o in column %}
+    <tr {% if o.pk == observation.pk %}class="hit"{% endif %}>
+      <td>{{ o.variable.label }}<div class="key">{{ o.variable.section.label }}</div></td>
+      <td><b>{{ o.value_text|default:o.value_num }}{% if o.unit %} {{ o.unit }}{% endif %}</b></td>
+      <td>{{ o.author|default:"—" }}</td>
+      <td>{{ o.documented_at|date:"d M H:i" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted small">Highlighted row is the value this review used. The rest of the column is shown so a single number can be read next to its neighbours.</p>

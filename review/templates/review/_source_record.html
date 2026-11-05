@@ -1,0 +1,8 @@
+<h2>{{ kind|capfirst }} record #{{ obj.pk }}</h2>
+<table>
+  <tbody>
+  {% for f in fields %}
+    <tr><th style="width:34%">{{ f.label }}</th><td>{{ f.value|default:"—" }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
