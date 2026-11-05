@@ -60,7 +60,7 @@
         <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}</span>
       </h2>
       <table>
-        <thead><tr><th style="width:36%">Item</th><th style="width:22%">Answer</th><th>Reuse / entry</th></tr></thead>
+        <thead><tr><th style="width:34%">Item</th><th style="width:18%">Answer</th><th>Reuse / entry</th></tr></thead>
         <tbody>
         {% for row in section.rows %}
           <tr>
@@ -104,16 +104,16 @@
                     <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
                     <button class="primary">Accept</button>
                   </form>
-                  <form method="post" class="inline">{% csrf_token %}
+                  <form method="post" class="inline reject">{% csrf_token %}
                     <input type="hidden" name="action" value="reject">
                     <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
-                    <input type="text" name="reason" placeholder="why reject">
+                    <input type="text" name="reason" placeholder="why" class="why-in">
                     <button class="danger">Reject</button>
                   </form>
                   {% endif %}
                 </div>
               {% empty %}
-                <span class="muted small">nothing proposed — enter it</span>
+                <span class="muted small">not proposed</span>
               {% endfor %}
               {% if row.is_block %}
                 <div class="block-wrap">
@@ -157,18 +157,12 @@
                 </div>
               {% elif not locked %}
               <form method="post" class="entry">{% csrf_token %}
-                <input type="hidden" name="action" value="value">
                 <input type="hidden" name="key" value="{{ row.field.key }}">
-                <input type="text" name="value" placeholder="enter value">
-                <input type="text" name="reason" placeholder="reason (optional)">
-                {% if row.is_answered %}<label class="why"><input type="checkbox" name="corrected" value="1"> correction</label>{% endif %}
-                <button>Save</button>
-              </form>
-              <form method="post" class="inline">{% csrf_token %}
-                <input type="hidden" name="action" value="na">
-                <input type="hidden" name="key" value="{{ row.field.key }}">
-                <input type="text" name="reason" placeholder="why N/A">
-                <button>N/A</button>
+                <input type="text" name="value" placeholder="value" class="val">
+                <input type="text" name="reason" placeholder="reason" class="why-in">
+                {% if row.is_answered %}<label class="why"><input type="checkbox" name="corrected" value="1"> fix</label>{% endif %}
+                <button name="action" value="value">Save</button>
+                <button name="action" value="na" class="danger">N/A</button>
               </form>
               {% endif %}
             </td>

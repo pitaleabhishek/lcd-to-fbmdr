@@ -97,7 +97,12 @@
   .req { color:var(--warn); font-size:10px; font-weight:700; text-transform:uppercase;
          letter-spacing:.04em; }
   .label { font-size:13px; }
-  .entry { margin-top:5px; }
+  .entry { display:flex; gap:4px; flex-wrap:wrap; align-items:center; margin-top:4px; }
+  .entry .val { width:132px; }
+  .entry .why-in, .reject .why-in { width:96px; }
+  .entry button, .reject button { padding:2px 8px; }
+  .prop .inline { margin-right:3px; }
+  .prop { margin:3px 0; }
   a.button { border:1px solid var(--line); border-radius:4px; padding:4px 9px;
              font-size:12px; text-decoration:none; color:var(--ink); background:#fff; }
   .block-wrap { margin-top:6px; border:1px solid var(--line); border-radius:5px;
