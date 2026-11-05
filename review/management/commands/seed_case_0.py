@@ -65,7 +65,6 @@ class Command(BaseCommand):
             origin_facility=facility.name,
             author="Nurse S. Bhoyar", entered_by="Nurse S. Bhoyar",
             documented_at=dt(18, 0), time_precision=TimePrecision.EXACT,
-            second_stage_at=dt(23, 0),
         )
 
         variables = {v.key: v for v in LCGVariable.objects.all()}
@@ -75,7 +74,8 @@ class Command(BaseCommand):
         second = [dt(23, 0), dt(23, 15)]
         rows = 0
 
-        def obs(key, at, value, *, text="", author="Nurse S. Bhoyar", documented=None):
+        def obs(key, at, value, *, text="", author="Nurse S. Bhoyar", documented=None,
+                stage="first"):
             nonlocal rows
             v = variables[key]
             num = None
@@ -85,7 +85,7 @@ class Command(BaseCommand):
             else:
                 text = str(value)
             Observation.objects.create(
-                document=lcg, variable=v,
+                document=lcg, variable=v, stage=stage,
                 value_num=num, value_text=text, unit=v.unit,
                 observed_at=at, observed_at_precision=TimePrecision.EXACT,
                 documented_at=documented or at,
@@ -174,7 +174,7 @@ class Command(BaseCommand):
         }
         for key, values in late.items():
             for at, value in zip(second, values):
-                obs(key, at, value, author="Dr A. Rane")
+                obs(key, at, value, author="Dr A. Rane", stage="second")
 
         delivery = Delivery.objects.create(
             pregnancy=pregnancy, delivered_at=dt(23, 20), time_precision=TimePrecision.EXACT,

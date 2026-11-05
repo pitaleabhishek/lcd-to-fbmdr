@@ -69,34 +69,32 @@ def test_chart_view_renders_one_row_per_variable(case_0):
         assert cur.fetchone()[0] == len(VARIABLES)
 
 
-def test_second_stage_boundary_is_stored_on_the_document(case_0):
+def test_stage_is_stamped_on_each_row(case_0):
     from django.utils import timezone
 
-    assert case_0.second_stage_at is not None
-    assert timezone.localtime(case_0.second_stage_at).hour == 23
+    second = Observation.objects.filter(document=case_0, stage="second")
+    assert second.count() == 54  # 27 variables x 2 second-stage columns
+    times = sorted({timezone.localtime(o.observed_at).hour for o in second})
+    assert times == [23]
 
-    before = Observation.objects.filter(
-        document=case_0, observed_at__lt=case_0.second_stage_at
-    ).first()
-    after = Observation.objects.filter(
-        document=case_0, observed_at__gte=case_0.second_stage_at
-    ).first()
-    assert before.stage == "first"
-    assert after.stage == "second"
+
+def test_one_column_never_mixes_stages(case_0):
+    rows = Observation.objects.filter(document=case_0).values_list("observed_at", "stage")
+    seen: dict = {}
+    for at, stage in rows:
+        assert seen.setdefault(at, stage) == stage, f"mixed stage at {at}"
 
 
 def test_cervix_does_not_exist_after_second_stage_starts(case_0):
     assert not Observation.objects.filter(
-        document=case_0,
-        variable__key="cervix",
-        observed_at__gte=case_0.second_stage_at,
+        document=case_0, variable__key="cervix", stage="second"
     ).exists()
 
 
-def test_case_a_has_no_second_stage(db):
+def test_case_a_is_all_first_stage(db):
     call_command("seed_case_a", verbosity=0)
     doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Sunita Devi")
-    assert doc.second_stage_at is None
+    assert set(Observation.objects.filter(document=doc).values_list("stage", flat=True)) == {"first"}
 
 
 def test_lcg_cells_view_labels_stage_per_cell(case_0):
@@ -107,7 +105,7 @@ def test_lcg_cells_view_labels_stage_per_cell(case_0):
             "select count(*) from lcg_cells where patient = %s and stage = 'second'",
             ["Meena Kulkarni"],
         )
-        assert cur.fetchone()[0] == 54  # 27 cells x 2 second-stage columns
+        assert cur.fetchone()[0] == 54
 
         cur.execute(
             "select count(distinct col) from lcg_cells where patient = %s",

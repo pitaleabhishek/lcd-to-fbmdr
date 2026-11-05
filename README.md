@@ -62,9 +62,9 @@ Two views render the chart:
 - `lcg_chart` — one row per variable, cells across time in IST.
 - `lcg_cells` — one row per cell with a computed column number and stage.
 
-Second stage is a single timestamp on the document (`second_stage_at`), not a
-per-cell or per-column flag: everything at or after it is second stage. Case 0
-begins second stage at 23:00; case A never does.
+Every observation carries `stage` (`first` / `second`) on the row itself, alongside
+`variable`, `observed_at`, `author` and the three timestamps. Case 0 has 54
+second-stage cells (23:00 and 23:15); case A is entirely first stage.
 
 ```sh
 docker compose exec db psql -U mdr -d mdr \
@@ -87,8 +87,8 @@ of the registry, never hand-maintained.
 - Registry with full-word section keys and `f4.<section>.<label>` grammar
   (53 fields in the first slice).
 - LCG registry: 7 sections, 34 variables, ordered and typed; observations FK to a
-  variable. Stage is one boundary on the document (`second_stage_at`). `lcg_chart`
-  and `lcg_cells` views render the grid.
+  variable and carry `stage` on the row. `lcg_chart` and `lcg_cells` views render
+  the grid.
 - Case 0: a complete, normal labour — every grid variable across ten first-stage
   columns and two second-stage columns, 340 observations, no death.
 - 18 rules producing proposals with frozen inputs; `NotComputable` keeps
