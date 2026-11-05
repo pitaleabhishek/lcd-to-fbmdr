@@ -481,7 +481,7 @@ def _minutes(raw: str) -> int:
             return int(float(text[:-1]))
         return int(float(text))
     except ValueError:
-        raise ValidationError("enter a duration like 7h 30m or 450")
+        raise ValidationError("enter a duration, e.g. 7h 30m or 450")
 
 
 def _coerce(field, raw: str):
@@ -491,7 +491,7 @@ def _coerce(field, raw: str):
         try:
             return int(raw)
         except ValueError:
-            raise ValidationError(f"{field.key} expects a whole number")
+            raise ValidationError("enter a whole number")
     if field.type == "bool":
         return raw.lower() in ("1", "true", "yes", "on")
     return raw

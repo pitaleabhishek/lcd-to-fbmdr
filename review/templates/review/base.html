@@ -130,6 +130,7 @@
   .entry .fix { display:none; }
   .entry:focus-within .fix { display:inline-flex; align-items:center; gap:3px; }
   .save-state { font-size:10px; color:var(--muted); min-width:36px; }
+  .save-state.error { color:var(--warn); font-weight:600; }
   .entry button, .reject button { padding:2px 8px; }
   .prop .inline { margin-right:3px; }
   .prop { margin:3px 0; }
@@ -236,9 +237,11 @@
         return r.json().then(function (j) { return { ok: r.ok, j: j }; });
       }).then(function (res) {
         if (!res.ok || !res.j.ok) {
+          state.className = 'save-state error';
           state.textContent = res.j.error || 'not saved';
           return;
         }
+        state.className = 'save-state';
         state.textContent = 'saved';
         var chipEl = f.querySelector('.chip');
         if (chipEl && res.j.mark) {

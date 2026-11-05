@@ -92,6 +92,8 @@
                     <input type="date" name="value" class="val" value="{{ row.current }}">
                   {% elif row.field.type == "int" %}
                     <input type="number" name="value" class="val" step="1" min="0"
+                           inputmode="numeric" placeholder="number"
+                           title="Whole number only"
                            value="{{ row.current }}">
                   {% elif row.field.type == "enum" %}
                     <select name="value" class="val">
@@ -111,7 +113,13 @@
                       </div>
                     </details>
                   {% else %}
-                    <input type="text" name="value" class="val" value="{{ row.current }}">
+                    <input type="text" name="value" class="val"
+                           {% if row.field.type == "duration" %}placeholder="7h 30m"
+                           title="Duration, e.g. 7h 30m or 450 minutes"
+                           {% elif row.field.type == "datetime" %}placeholder="2026-11-05 14:30"
+                           title="Date and time, 24-hour clock"
+                           {% else %}placeholder="{{ row.field.slug|cut:"_" }}"{% endif %}
+                           value="{{ row.current }}">
                   {% endif %}
                   <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                   <span class="save-state"></span>
