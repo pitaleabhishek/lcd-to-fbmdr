@@ -32,6 +32,11 @@ def fmt(value) -> str:
             return f"{len(value)} row{'s' if len(value) != 1 else ''}"
         return ", ".join(str(v) for v in value) if value else "—"
     if isinstance(value, str):
+        dt = _parse_dt(value) if "T" in value else None
+        if dt is not None:
+            if timezone.is_aware(dt):
+                dt = timezone.localtime(dt)
+            return dt.strftime("%d %b %Y %H:%M")
         return value.replace("_", " ")
     return str(value)
 
@@ -425,12 +430,32 @@ def _handle_action(request, review: Review):
     raise ValidationError(f"unknown action {action!r}")
 
 
+def _parse_dt(text):
+    if not isinstance(text, str):
+        return None
+    try:
+        return datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _input_dt(text):
+    dt = _parse_dt(text)
+    if dt is None:
+        return text or ""
+    if timezone.is_aware(dt):
+        dt = timezone.localtime(dt)
+    return dt.strftime("%Y-%m-%dT%H:%M")
+
+
 def _current(item, field):
     if not item or item.value_json is None:
         return ""
     value = item.value_json
     if field.type == "duration" and isinstance(value, dict) and "minutes" in value:
         return fmt(value)
+    if field.type == "datetime" and isinstance(value, str):
+        return _input_dt(value)
     return value if isinstance(value, str) else str(value)
 
 
@@ -528,6 +553,13 @@ def _block_value(spec, raw: str):
     raw = (raw or "").strip()
     if raw == "":
         return None
+    if spec["type"] == "datetime":
+        dt = _parse_dt(raw)
+        if dt is None:
+            raise ValidationError("pick a date and time")
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt.isoformat()
     if spec["type"] in ("int", "number"):
         try:
             return int(raw)
@@ -554,6 +586,13 @@ def _minutes(raw: str) -> int:
 
 
 def _coerce(field, raw: str):
+    if field.type == "datetime":
+        dt = _parse_dt(raw)
+        if dt is None:
+            raise ValidationError("pick a date and time")
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+        return dt.isoformat()
     if field.type == "duration":
         return {"minutes": _minutes(raw)}
     if field.type == "int":

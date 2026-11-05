@@ -295,3 +295,18 @@ def test_referral_places_are_keyed_by_place(case_a, django_user_model):
     services.clear_place_row(case_a, key, "facility_1", user)
     item.refresh_from_db()
     assert [r["place"] for r in item.value_json] == ["facility_2"]
+
+
+def test_datetime_field_round_trip(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.timing.a", "value": "2026-11-05T14:30"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["display"] == "05 Nov 2026 14:30"
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert 'type="datetime-local"' in page
+    assert 'value="2026-11-05T14:30"' in page

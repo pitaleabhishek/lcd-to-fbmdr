@@ -100,6 +100,9 @@
                     </select>
                   {% elif row.field.type == "date" %}
                     <input type="date" name="value" class="val" value="{{ row.current }}">
+                  {% elif row.field.type == "datetime" %}
+                    <input type="datetime-local" name="value" class="val"
+                           title="Date and time" value="{{ row.current }}">
                   {% elif row.field.type == "int" %}
                     <input type="number" name="value" class="val" step="1" min="0"
                            inputmode="numeric" placeholder="{{ row.example }}"
@@ -262,9 +265,12 @@
                           {% endfor %}
                         </select>
                       {% else %}
-                        <input type="text" name="col_{{ c.name }}" value="{{ c.value }}"
-                          {% if c.spec.type == "int" or c.spec.type == "number" %}inputmode="numeric" placeholder="number"
-                          {% elif c.spec.type == "datetime" %}placeholder="2026-11-05 14:30"{% endif %}>
+                        {% if c.spec.type == "datetime" %}
+                          <input type="datetime-local" name="col_{{ c.name }}" value="{{ c.value }}">
+                        {% else %}
+                          <input type="text" name="col_{{ c.name }}" value="{{ c.value }}"
+                            {% if c.spec.type == "int" or c.spec.type == "number" %}inputmode="numeric" placeholder="number"{% endif %}>
+                        {% endif %}
                       {% endif %}
                     </label>
                   {% endfor %}

@@ -266,7 +266,8 @@
 
     f.querySelectorAll('input[name=value], select[name=value]').forEach(function (c) {
       var instant = c.tagName === 'SELECT' || c.type === 'checkbox' ||
-                    c.type === 'month' || c.type === 'date' || c.type === 'number';
+                    c.type === 'month' || c.type === 'date' || c.type === 'number' ||
+                    c.type === 'datetime-local';
       if (instant) {
         c.addEventListener('change', send);
       } else {
