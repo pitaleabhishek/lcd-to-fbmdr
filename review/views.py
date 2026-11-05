@@ -726,7 +726,7 @@ def save_field(request, pk: int):
         return JsonResponse({"ok": False, "error": "unknown field"}, status=400)
 
     item = review.items.filter(field_key=key).first()
-    corrected = bool(item and item.origin in ("reused", "derived"))
+    corrected = bool(item and item.origin in ("reused", "derived", "corrected"))
 
     if field.type == "block" and request.POST.get("place"):
         spec = (field.block_schema or {}).get("fields", {})
@@ -777,6 +777,16 @@ def save_field(request, pk: int):
             value = _coerce(field, raw)
         except ValidationError as exc:
             return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
+
+    if (
+        item
+        and item.answer_state == ReviewItem.AnswerState.ANSWERED
+        and item.value_json == value
+        and not (request.POST.get("reason") or "").strip()
+    ):
+        return JsonResponse(
+            {"ok": True, "mark": chip(item.origin), "display": fmt(item.value_json)}
+        )
 
     if key == "f4.background.fbmdr_year" and not 1900 <= value <= 2100:
         return JsonResponse(

@@ -300,13 +300,25 @@
     });
   }, 1000);
 
+  function snapshot(f) {
+    var parts = [];
+    f.querySelectorAll('input, select, textarea').forEach(function (c) {
+      if (c.name === 'csrfmiddlewaretoken') return;
+      if (c.type === 'checkbox') parts.push(c.name + '=' + (c.checked ? c.value : ''));
+      else parts.push(c.name + '=' + (c.value || ''));
+    });
+    return parts.join('|');
+  }
+
   function wireAutosave(f, hasValue) {
     var state = f.querySelector('.save-state');
     if (!state) return;
     var timer = null, inflight = false, dirty = false;
+    var last = snapshot(f);
 
     function post() {
       if (!hasValue()) return;
+      if (snapshot(f) === last) return;   // nothing changed: do not rewrite the row
       if (inflight) { dirty = true; return; }
       inflight = true;
       state.className = 'save-state';
@@ -321,6 +333,7 @@
           state.textContent = res.j.error || 'not saved';
           return;
         }
+        last = snapshot(f);
         state.dataset.at = Date.now();
         state.textContent = 'saved just now';
         var chipEl = f.querySelector('.chip');

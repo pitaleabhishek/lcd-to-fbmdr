@@ -531,3 +531,43 @@ def test_history_is_visible_to_resident_and_fno(client, case_a, django_user_mode
 
     client.force_login(fno)
     assert client.get(f"/review/{case_a.pk}/history/").status_code == 200
+
+
+def test_resaving_the_same_value_does_not_change_origin(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    key = "f4.background.name"
+    proposal = case_a.proposals.get(field_key=key)
+    item = services.accept_proposal(case_a, proposal, user)
+    assert item.origin == ReviewItem.Origin.REUSED
+
+    services.set_answer(case_a, key, item.value_json, user, corrected=True)
+    item.refresh_from_db()
+    assert item.origin == ReviewItem.Origin.CORRECTED  # first correction
+
+    services.set_answer(case_a, key, "Sunita D.", user, corrected=True)
+    item.refresh_from_db()
+    assert item.origin == ReviewItem.Origin.CORRECTED  # stays corrected, never flips to entered
+
+    services.set_answer(case_a, key, "Sunita Devi", user, corrected=True)
+    item.refresh_from_db()
+    assert item.origin == ReviewItem.Origin.CORRECTED
+
+
+def test_endpoint_ignores_an_unchanged_value(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    user = User.objects.get(username="resident")
+    key = "f4.background.name"
+    proposal = case_a.proposals.get(field_key=key)
+    item = services.accept_proposal(case_a, proposal, user)
+    assert item.origin == ReviewItem.Origin.REUSED
+
+    client.force_login(user)
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": key, "value": "Sunita Devi"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["mark"] == "R"
+    item.refresh_from_db()
+    assert item.origin == ReviewItem.Origin.REUSED  # no phantom correction
