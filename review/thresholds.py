@@ -8,6 +8,7 @@ immutable observations each time it is needed.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from datetime import timedelta
 from typing import Any, Callable
 
@@ -69,11 +70,19 @@ def _value(obs) -> Any:
     return obs.value_text if obs.variable.type in ("enum", "text", "bool") else obs.value_num
 
 
+def _display(value) -> str:
+    if isinstance(value, Decimal):
+        return str(int(value)) if value == value.to_integral_value() else f"{value:g}"
+    return "" if value is None else str(value)
+
+
 def _crossing(obs, text: str) -> dict:
+    raw = obs.value_text if obs.value_text not in ("", None) else obs.value_num
     return {
         "variable": obs.variable.key,
         "label": obs.variable.label,
-        "value": obs.value_text if obs.value_text not in ("", None) else obs.value_num,
+        "value": _display(raw),
+        "unit": obs.variable.unit,
         "at": obs.observed_at,
         "when": timezone.localtime(obs.observed_at).strftime("%d %b %H:%M")
         if obs.observed_at else "",

@@ -207,7 +207,7 @@
                     <span class="muted">· computed, not an answer</span></div>
                   {% for c in row.evidence %}
                     <div class="ev-line">
-                      <b>{{ c.label }}</b> {{ c.value }} at {{ c.when }} — {{ c.text }}
+                      <b>{{ c.label }}</b> {{ c.value }}{% if c.unit %} {{ c.unit }}{% endif %} at {{ c.when }} — {{ c.text }}
                       {% if c.late %}<span class="warn">late</span>{% endif %}
                       · <a class="see-source" href="{{ c.url }}" data-url="{{ c.url }}">see source</a>
                     </div>

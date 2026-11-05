@@ -5,7 +5,8 @@ Death Review (Form 4), with provenance: nothing re-keyed, nothing claimed that
 was not recorded.
 
 Design: [`docs/design.md`](docs/design.md). To-do: [`TODO.md`](TODO.md).
-Dependencies: [`docs/dependencies.md`](docs/dependencies.md). UI principles:
+Dependencies: [`docs/dependencies.md`](docs/dependencies.md). Evidence map:
+[`docs/evidence-map.md`](docs/evidence-map.md). UI principles:
 [`docs/ui.md`](docs/ui.md). LCG storage model:
 [`docs/lcg-storage.md`](docs/lcg-storage.md). Generated overlap inventory:
 [`docs/inventory.md`](docs/inventory.md). Form 4 source text used for
