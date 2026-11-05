@@ -248,7 +248,8 @@
           <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span></h3>
           {% if row.places %}
             {% for p in row.places %}
-              <form method="post" class="place">{% csrf_token %}
+              <form method="post" class="place"
+                    data-autosave="{% url 'save_field' review.pk %}">{% csrf_token %}
                 <input type="hidden" name="action" value="block_place">
                 <input type="hidden" name="key" value="{{ row.field.key }}">
                 <input type="hidden" name="place" value="{{ p.place }}">
@@ -280,7 +281,7 @@
                   {% endfor %}
                 </div>
                 <div class="row-actions">
-                  <button class="primary">Save</button>
+                  <span class="save-state">{% if p.exists %}saved{% endif %}</span>
                   {% if p.exists %}<button name="op" value="remove" class="danger">Clear</button>{% endif %}
                 </div>
               </form>

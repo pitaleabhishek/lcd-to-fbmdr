@@ -345,3 +345,34 @@ def test_duration_accepts_days(client, case_a, django_user_model):
     assert resp.status_code == 200
     assert resp.json()["display"] == "1d 6h"
     assert case_a.items.get(field_key="f4.timing.c").value_json == {"minutes": 1800}
+
+
+def test_place_autosave_endpoint(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {
+            "key": "f4.condition.referral",
+            "place": "facility_1",
+            "col_time_to_reach": "45",
+            "col_transport": "jeep",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    rows = case_a.items.get(field_key="f4.condition.referral").value_json
+    assert rows[0]["time_to_reach"] == 45
+
+
+def test_place_autosave_reports_a_bad_number(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.condition.referral", "place": "facility_1", "col_time_to_reach": "abc"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False

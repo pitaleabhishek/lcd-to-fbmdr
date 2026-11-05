@@ -281,6 +281,43 @@
     });
   });
 
+  document.querySelectorAll('form.place[data-autosave]').forEach(function (f) {
+    var state = f.querySelector('.save-state');
+    var timer = null;
+    function send() {
+      state.className = 'save-state';
+      state.textContent = 'saving…';
+      fetch(f.dataset.autosave, {
+        method: 'POST', body: new FormData(f), credentials: 'same-origin'
+      }).then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+      }).then(function (res) {
+        if (!res.ok || !res.j.ok) {
+          state.className = 'save-state error';
+          state.textContent = res.j.error || 'not saved';
+          return;
+        }
+        state.textContent = 'saved';
+      }).catch(function () {
+        state.className = 'save-state error';
+        state.textContent = 'not saved';
+      });
+    }
+    f.querySelectorAll('input, select').forEach(function (c) {
+      if (c.type === 'hidden') return;
+      var instant = c.tagName === 'SELECT' || c.type === 'number' ||
+                    c.type === 'date' || c.type === 'datetime-local';
+      if (instant) {
+        c.addEventListener('change', send);
+      } else {
+        c.addEventListener('input', function () {
+          clearTimeout(timer); timer = setTimeout(send, 900);
+        });
+        c.addEventListener('blur', function () { clearTimeout(timer); send(); });
+      }
+    });
+  });
+
   function fitStack() {
     var h = document.querySelector('header');
     var s = document.querySelector('.sticky-top');

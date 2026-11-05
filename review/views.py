@@ -634,6 +634,25 @@ def save_field(request, pk: int):
     item = review.items.filter(field_key=key).first()
     corrected = bool(item and item.origin in ("reused", "derived"))
 
+    if field.type == "block" and request.POST.get("place"):
+        spec = (field.block_schema or {}).get("fields", {})
+        place = request.POST["place"]
+        values = {}
+        try:
+            for name, col in spec.items():
+                if name == "place":
+                    continue
+                v = _block_value(col, request.POST.get(f"col_{name}", ""))
+                if v is not None:
+                    values[name] = v
+            services.save_place_row(review, key, place, values, request.user)
+        except ValidationError as exc:
+            return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
+        saved = review.items.get(field_key=key)
+        return JsonResponse(
+            {"ok": True, "mark": chip(saved.origin), "display": fmt(saved.value_json)}
+        )
+
     if field.type == "multi":
         values = [v for v in request.POST.getlist("value") if v]
         if not values:
