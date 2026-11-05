@@ -224,6 +224,10 @@ def workspace(request, pk: int):
                     "field": f,
                     "item": item,
                     "display": fmt(item.value_json) if item else "—",
+                    "current": ""
+                    if not item or item.value_json is None
+                    else (item.value_json if isinstance(item.value_json, str)
+                          else str(item.value_json)),
                     "mark": chip(item.origin) if item else "—",
                     "proposals": [
                         {"p": p, "display": fmt(p.value_json)} for p in proposals
@@ -429,15 +433,24 @@ def save_field(request, pk: int):
     if field is None:
         return JsonResponse({"ok": False, "error": "unknown field"}, status=400)
 
-    raw = request.POST.get("value", "").strip()
-    if raw == "":
-        return JsonResponse({"ok": False, "error": "a value is required"}, status=400)
+    item = review.items.filter(field_key=key).first()
+    corrected = bool(item and item.origin in ("reused", "derived"))
+
+    if field.type == "multi":
+        values = [v for v in request.POST.getlist("value") if v]
+        if not values:
+            return JsonResponse({"ok": False, "error": "choose at least one"}, status=400)
+        value = values
+    else:
+        raw = request.POST.get("value", "").strip()
+        if raw == "":
+            return JsonResponse({"ok": False, "error": "a value is required"}, status=400)
+        value = _coerce(field, raw)
 
     try:
         services.set_answer(
-            review, key, _coerce(field, raw), request.user,
-            request.POST.get("reason", ""),
-            corrected=bool(request.POST.get("corrected")),
+            review, key, value, request.user, request.POST.get("reason", ""),
+            corrected=corrected,
         )
     except ValidationError as exc:
         return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)

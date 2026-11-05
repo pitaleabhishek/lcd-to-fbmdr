@@ -194,13 +194,24 @@ def test_autosave_rejects_an_off_form_value(client, case_a, django_user_model):
     assert resp.json()["ok"] is False
 
 
-def test_na_needs_a_reason(case_a, django_user_model):
+def test_na_does_not_need_a_reason(case_a, django_user_model):
     user = django_user_model.objects.get(username="resident")
-    with pytest.raises(ValidationError):
-        services.set_applicability(
-            case_a, "f4.delivery.phase", ReviewItem.Applicability.NOT_APPLICABLE, user, ""
-        )
     services.set_applicability(
-        case_a, "f4.delivery.phase", ReviewItem.Applicability.NOT_APPLICABLE, user,
-        "no complication recorded",
+        case_a, "f4.delivery.phase", ReviewItem.Applicability.NOT_APPLICABLE, user, ""
     )
+    item = case_a.items.get(field_key="f4.delivery.phase")
+    assert item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+
+
+def test_autosave_accepts_a_multi_value(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.antenatal_care.risks", "value": ["anaemia", "pih_pe"]},
+    )
+    assert resp.status_code == 200
+    assert case_a.items.get(field_key="f4.antenatal_care.risks").value_json == [
+        "anaemia", "pih_pe"
+    ]

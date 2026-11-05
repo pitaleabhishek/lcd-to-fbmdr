@@ -30,7 +30,7 @@
   </div>
 </div>
 
-<div class="progress" title="{{ stats.answered }} of {{ stats.fields }} answered">
+<div class="progress" title="{{ stats.resolved }} of {{ stats.fields }} resolved">
   <span style="width:{{ stats.percent }}%"></span>
 </div>
 <div class="stats">
@@ -64,7 +64,7 @@
         <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}</span>
       </h2>
       <table class="fields">
-        <thead><tr><th style="width:26%">Item</th><th style="width:22%">Answer</th><th>Reuse / entry</th></tr></thead>
+        <thead><tr><th style="width:30%">Item</th><th style="width:34%">Answer</th><th>Proposed</th></tr></thead>
         <tbody>
         {% for row in section.rows %}
           <tr id="f-{{ row.field.slug }}">
@@ -73,59 +73,52 @@
               <div class="key">{{ row.field.key }}{% if row.field.required %} · <span class="req">required</span>{% endif %}</div>
             </td>
             <td>
-              {% if row.is_answered %}
+              {% if locked or row.is_block %}
                 <span class="value">{{ row.display }}</span>
                 <span class="chip {{ row.mark }}">{{ row.mark }}</span>
-                {% if row.needs %}<span class="chip C">review</span>{% endif %}
-                {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
-                {% if row.revertible %}
-                  <form method="post" class="inline">{% csrf_token %}
-                    <input type="hidden" name="action" value="revert">
-                    <input type="hidden" name="key" value="{{ row.field.key }}">
-                    <button class="linkish" title="Undo the last change to this field">revert</button>
-                  </form>
-                {% endif %}
-              {% elif row.is_na %}
-                <span class="muted">Not applicable</span>
-                <div class="key">{{ row.item.reason }}</div>
               {% else %}
-                <span class="muted">—</span>
+                <form method="post" class="answer"
+                      data-autosave="{% url 'save_field' review.pk %}"
+                      data-key="{{ row.field.key }}">{% csrf_token %}
+                  <input type="hidden" name="key" value="{{ row.field.key }}">
+                  {% if row.field.type == "enum" %}
+                    <select name="value" class="val">
+                      <option value="">—</option>
+                      {% for opt in row.field.options %}
+                        <option value="{{ opt }}" {% if row.item.value_json == opt %}selected{% endif %}>{{ opt }}</option>
+                      {% endfor %}
+                    </select>
+                  {% elif row.field.type == "multi" %}
+                    <details class="multi">
+                      <summary>{{ row.display }}</summary>
+                      <div class="multi-list">
+                        {% for opt in row.field.options %}
+                          <label><input type="checkbox" name="value" value="{{ opt }}"
+                            {% if row.item.value_json and opt in row.item.value_json %}checked{% endif %}> {{ opt }}</label>
+                        {% endfor %}
+                      </div>
+                    </details>
+                  {% else %}
+                    <input type="text" name="value" class="val" value="{{ row.current }}">
+                  {% endif %}
+                  <span class="chip {{ row.mark }}">{{ row.mark }}</span>
+                  <span class="save-state"></span>
+                  <input type="text" name="reason" class="why-in" placeholder="note">
+                  <button name="action" value="na" class="linkish" title="Mark not applicable">N/A</button>
+                </form>
+              {% endif %}
+              {% if row.is_na %}<div class="key">not applicable{% if row.item.reason %} · {{ row.item.reason }}{% endif %}</div>{% endif %}
+              {% if row.needs %}<span class="chip C">review</span>{% endif %}
+              {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
+              {% if row.revertible %}
+                <form method="post" class="inline">{% csrf_token %}
+                  <input type="hidden" name="action" value="revert">
+                  <input type="hidden" name="key" value="{{ row.field.key }}">
+                  <button class="linkish" title="Undo the last change to this field">revert</button>
+                </form>
               {% endif %}
             </td>
             <td>
-              {% for pr in row.proposals %}
-                <div class="prop">
-                  <span class="value">{{ pr.display }}</span>
-                  <span class="chip {% if pr.p.source_kind == 'observation' or pr.p.source_kind == 'document' %}R{% else %}D{% endif %}">{% if pr.p.source_kind == 'observation' or pr.p.source_kind == 'document' %}R{% else %}D{% endif %}</span>
-                  <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
-                  <details>
-                    <summary>where it came from</summary>
-                    {% for inp in pr.p.frozen_inputs %}
-                      <div class="why">
-                        {{ inp.label }} = {{ inp.value }}
-                        {% if inp.author %} · {{ inp.author }}{% endif %}
-                        {% if inp.observed_at %} · {{ inp.observed_at }}{% endif %}
-                        {% if inp.precision != "exact" %} · {{ inp.precision }}{% endif %}
-                      </div>
-                    {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
-                  </details>
-                  {% if not locked %}
-                  <form method="post" class="inline">{% csrf_token %}
-                    <input type="hidden" name="action" value="accept">
-                    <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
-                    <button class="primary">Accept</button>
-                  </form>
-                  <form method="post" class="inline reject">{% csrf_token %}
-                    <input type="hidden" name="action" value="reject">
-                    <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
-                    <input type="text" name="reason" placeholder="why" class="why-in">
-                    <button class="danger">Reject</button>
-                  </form>
-                  {% endif %}
-                </div>
-              {% empty %}
-                <span class="muted small">not proposed</span>
-              {% endfor %}
               {% if row.is_block %}
                 <div class="block-wrap">
                   <form method="post" class="brow bhead" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">
@@ -166,20 +159,40 @@
                   </form>
                   {% endif %}
                 </div>
-              {% elif not locked %}
-              <form method="post" class="entry"
-                    data-autosave="{% url 'save_field' review.pk %}"
-                    data-key="{{ row.field.key }}">{% csrf_token %}
-                <input type="hidden" name="key" value="{{ row.field.key }}">
-                <input type="text" name="value" placeholder="value" class="val">
-                <input type="text" name="reason" placeholder="reason" class="why-in" title="note (used by N/A and corrections)">
-                {% if row.item.origin == "reused" or row.item.origin == "derived" %}
-                  <label class="why fix"><input type="checkbox" name="corrected" value="1"> correction</label>
-                {% endif %}
-                <button name="action" value="value">Save</button>
-                <button name="action" value="na" class="danger">N/A</button>
-                <span class="save-state"></span>
-              </form>
+              {% else %}
+                {% for pr in row.proposals %}
+                  <div class="prop">
+                    <span class="value">{{ pr.display }}</span>
+                    <span class="chip {% if pr.p.source_kind == 'observation' or pr.p.source_kind == 'document' %}R{% else %}D{% endif %}">{% if pr.p.source_kind == 'observation' or pr.p.source_kind == 'document' %}R{% else %}D{% endif %}</span>
+                    <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
+                    <details>
+                      <summary>where it came from</summary>
+                      {% for inp in pr.p.frozen_inputs %}
+                        <div class="why">
+                          {{ inp.label }} = {{ inp.value }}
+                          {% if inp.author %} · {{ inp.author }}{% endif %}
+                          {% if inp.observed_at %} · {{ inp.observed_at }}{% endif %}
+                          {% if inp.precision != "exact" %} · {{ inp.precision }}{% endif %}
+                        </div>
+                      {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
+                    </details>
+                    {% if not locked %}
+                    <form method="post" class="inline">{% csrf_token %}
+                      <input type="hidden" name="action" value="accept">
+                      <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
+                      <button class="primary">Accept</button>
+                    </form>
+                    <form method="post" class="inline reject">{% csrf_token %}
+                      <input type="hidden" name="action" value="reject">
+                      <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
+                      <input type="text" name="reason" placeholder="why" class="why-in">
+                      <button class="danger">Reject</button>
+                    </form>
+                    {% endif %}
+                  </div>
+                {% empty %}
+                  <span class="muted small">—</span>
+                {% endfor %}
               {% endif %}
             </td>
           </tr>

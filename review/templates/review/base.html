@@ -107,6 +107,16 @@
   .req { color:var(--warn); font-size:10px; font-weight:700; text-transform:uppercase;
          letter-spacing:.04em; }
   .label { font-size:13px; }
+  .answer { display:flex; gap:4px; flex-wrap:wrap; align-items:center; }
+  .answer .val { width:120px; }
+  .answer select.val { width:140px; }
+  .answer .why-in { width:0; padding:0; border:0; opacity:0; }
+  .answer:focus-within .why-in { width:88px; padding:2px 5px; opacity:1;
+       border:1px solid var(--line); }
+  .multi summary { cursor:pointer; color:var(--accent); font-size:12px; }
+  .multi-list { display:flex; flex-wrap:wrap; gap:3px 10px; margin:4px 0;
+       font-size:12px; max-height:120px; overflow:auto; }
+  .multi-list label { display:flex; gap:3px; align-items:center; }
   .entry { display:flex; gap:4px; flex-wrap:wrap; align-items:center; margin-top:4px; }
   .entry .val { width:132px; }
   .reject .why-in { width:96px; }
@@ -198,30 +208,34 @@
     } catch (e) {}
   });
 
-  document.querySelectorAll('form.entry[data-autosave]').forEach(function (f) {
-    var input = f.querySelector('input[name=value]');
+  document.querySelectorAll('form.answer[data-autosave]').forEach(function (f) {
     var state = f.querySelector('.save-state');
-    if (!input || !state) return;
-    var timer = null, last = '';
+    var timer = null;
     function send() {
-      var v = (input.value || '').trim();
-      if (!v || v === last) return;
+      var text = f.querySelector('input[type=text][name=value]');
+      var checked = f.querySelectorAll('input[name=value]:checked').length;
+      if (text && !(text.value || '').trim()) return;
+      if (!text && !checked) return;
       state.textContent = 'saving…';
       fetch(f.dataset.autosave, {
         method: 'POST', body: new FormData(f), credentials: 'same-origin'
       }).then(function (r) {
         return r.json().then(function (j) { return { ok: r.ok, j: j }; });
       }).then(function (res) {
-        if (!res.ok || !res.j.ok) { state.textContent = res.j.error || 'not saved'; return; }
-        last = v;
-        state.textContent = 'saved';
+        state.textContent = (res.ok && res.j.ok) ? 'saved'
+          : (res.j.error || 'not saved');
       }).catch(function () { state.textContent = 'not saved'; });
     }
-    input.addEventListener('input', function () {
-      clearTimeout(timer);
-      timer = setTimeout(send, 900);
+    f.querySelectorAll('input[name=value], select[name=value]').forEach(function (c) {
+      if (c.type === 'text') {
+        c.addEventListener('input', function () {
+          clearTimeout(timer); timer = setTimeout(send, 900);
+        });
+        c.addEventListener('blur', function () { clearTimeout(timer); send(); });
+      } else {
+        c.addEventListener('change', send);
+      }
     });
-    input.addEventListener('blur', function () { clearTimeout(timer); send(); });
   });
 
   function fitStack() {
