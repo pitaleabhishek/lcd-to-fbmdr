@@ -116,6 +116,12 @@
   .answer select.val { width:150px; }
   .answer input[type=datetime-local] { width:200px; }
   .answer input[type=date] { width:170px; }
+  textarea.val { flex:1 1 210px; min-height:28px; resize:none; overflow:hidden;
+       font:inherit; font-size:12px; padding:3px 5px; border:1px solid var(--line);
+       border-radius:4px; background:#fff; }
+  .place-grid textarea, .brow textarea { width:100%; min-height:26px; resize:none;
+       overflow:hidden; font:inherit; font-size:12px; padding:3px 5px;
+       border:1px solid var(--line); border-radius:3px; }
   .answer .why-in { width:0; padding:0; border:0; opacity:0; }
   .answer .val:focus ~ .why-in { width:88px; padding:2px 5px; opacity:1;
        border:1px solid var(--line); }
@@ -352,6 +358,15 @@
         c.addEventListener('blur', function () { clearTimeout(timer); send(); });
       }
     });
+  });
+
+  function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  }
+  document.querySelectorAll('textarea.auto').forEach(function (t) {
+    autoGrow(t);
+    t.addEventListener('input', function () { autoGrow(t); });
   });
 
   function fitStack() {

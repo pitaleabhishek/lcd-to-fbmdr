@@ -249,6 +249,7 @@ def workspace(request, pk: int):
                     "item": item,
                     "display": fmt(item.value_json) if item else "—",
                     "widget": f.widget,
+                    "multiline": f.key in LONG_TEXT,
                     "example": EXAMPLES.get(f.key, "e.g. 1"),
                     "current": _current(item, f),
                     "mark": chip(item.origin) if item else "—",
@@ -508,6 +509,25 @@ REFERRAL_LABELS = {
     "money_treatment": "Money on treatment (Rs.)",
     "time_in_facility": "Time in facility (min)",
 }
+LONG_TEXT = {
+    "f4.background.address",
+    "f4.background.facility_address",
+    "f4.admission.complaints",
+    "f4.abortion.centres",
+    "f4.delivery.complications_other",
+    "f4.delivery.mode_indication",
+    "f4.delivery.anaesthesia_reaction",
+    "f4.delivery.neonatal_cause_other",
+    "f4.delivery.postnatal_cause_other",
+    "f4.primary_diagnosis.dx",
+    "f4.cause_of_death.a_antecedent",
+    "f4.cause_of_death.b_antecedent",
+    "f4.cause_of_death.c_antecedent",
+    "f4.autopsy.diagnosis",
+    "f4.summary.text",
+}
+BLOCK_LONG = {"reason", "treatment", "detail", "underlying_cause", "note"}
+
 PLACE_LABELS = {
     "home_village": "Home / Village",
     "facility_1": "Facility 1",
@@ -550,7 +570,8 @@ def _block_rows(field, item):
             {
                 "index": i,
                 "cells": [
-                    {"name": name, "spec": spec, "value": row.get(name, "")}
+                    {"name": name, "spec": spec,
+                     "multiline": name in BLOCK_LONG, "value": row.get(name, "")}
                     for name, spec in (field.block_schema or {}).get("fields", {}).items()
                 ],
             }

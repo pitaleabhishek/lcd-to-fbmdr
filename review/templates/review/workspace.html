@@ -125,6 +125,9 @@
                         {% endfor %}
                       </div>
                     </details>
+                  {% elif row.multiline %}
+                    <textarea name="value" rows="1" class="val auto"
+                              placeholder="{{ row.field.slug|cut:"_" }}">{{ row.current }}</textarea>
                   {% else %}
                     <input type="text" name="value" class="val"
                            {% if row.field.type == "duration" %}placeholder="e.g. 1d 6h"
@@ -269,6 +272,8 @@
                       {% else %}
                         {% if c.spec.type == "datetime" %}
                           <input type="datetime-local" name="col_{{ c.name }}" value="{{ c.value }}">
+                        {% elif c.multiline %}
+                          <textarea name="col_{{ c.name }}" rows="1" class="auto">{{ c.value }}</textarea>
                         {% elif c.spec.type == "duration" %}
                           <input type="text" name="col_{{ c.name }}" value="{{ c.value }}"
                                  placeholder="e.g. 30 or 1h 15m"
@@ -307,6 +312,8 @@
                           <option value="{{ opt }}" {% if c.value == opt %}selected{% endif %}>{{ opt }}</option>
                         {% endfor %}
                       </select>
+                    {% elif c.multiline %}
+                      <textarea name="col_{{ c.name }}" rows="1" class="auto">{{ c.value }}</textarea>
                     {% else %}
                       <input type="text" name="col_{{ c.name }}" value="{{ c.value }}">
                     {% endif %}
