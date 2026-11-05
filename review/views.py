@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from django.contrib import messages
@@ -21,10 +22,18 @@ def fmt(value) -> str:
     if value is None or value == "":
         return "—"
     if isinstance(value, dict) and "minutes" in value:
-        m = int(value["minutes"])
-        sign = "-" if m < 0 else ""
-        m = abs(m)
-        return f"{sign}{m // 60}h {m % 60:02d}m"
+        total = int(value["minutes"])
+        sign = "-" if total < 0 else ""
+        days, rest = divmod(abs(total), 1440)
+        hours, minutes = divmod(rest, 60)
+        parts = []
+        if days:
+            parts.append(f"{days}d")
+        if hours:
+            parts.append(f"{hours}h")
+        if minutes or not parts:
+            parts.append(f"{minutes}m")
+        return sign + " ".join(parts)
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, list):
@@ -570,21 +579,26 @@ def _block_value(spec, raw: str):
     return raw
 
 
+DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$")
+
+
 def _minutes(raw: str) -> int:
     text = raw.strip().lower().replace(" ", "")
-    try:
-        if ":" in text:
+    if not text:
+        raise ValidationError("enter a duration, e.g. 1d 6h or 7h 30m")
+    if ":" in text and "d" not in text:
+        try:
             h, m = text.split(":", 1)
             return int(h) * 60 + int(m)
-        if "h" in text:
-            h, m = text.split("h", 1)
-            m = m.rstrip("m") or "0"
-            return int(float(h) * 60 + float(m))
-        if text.endswith("m"):
-            return int(float(text[:-1]))
-        return int(float(text))
-    except ValueError:
-        raise ValidationError("enter a duration, e.g. 7h 30m or 450")
+        except ValueError:
+            raise ValidationError("enter a duration, e.g. 1d 6h or 7h 30m")
+    if text.isdigit():
+        return int(text)
+    match = DURATION_RE.match(text)
+    if match and any(match.groups()):
+        d, h, m = (int(g or 0) for g in match.groups())
+        return d * 1440 + h * 60 + m
+    raise ValidationError("enter a duration, e.g. 1d 6h or 7h 30m")
 
 
 def _coerce(field, raw: str):

@@ -332,3 +332,16 @@ def test_referral_times_accept_hours_and_minutes(client, case_a, django_user_mod
     assert rows[0]["time_to_reach"] == 75
     assert rows[0]["time_in_facility"] == 45
     assert rows[0]["money_treatment"] == 500
+
+
+def test_duration_accepts_days(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.timing.c", "value": "1d 6h"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["display"] == "1d 6h"
+    assert case_a.items.get(field_key="f4.timing.c").value_json == {"minutes": 1800}

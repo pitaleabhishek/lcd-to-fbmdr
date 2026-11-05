@@ -127,8 +127,8 @@
                     </details>
                   {% else %}
                     <input type="text" name="value" class="val"
-                           {% if row.field.type == "duration" %}placeholder="7h 30m"
-                           title="Duration, e.g. 7h 30m or 450 minutes"
+                           {% if row.field.type == "duration" %}placeholder="e.g. 1d 6h"
+                           title="Days / hours / minutes, e.g. 1d 6h, 7h 30m or 450"
                            {% elif row.field.type == "datetime" %}placeholder="2026-11-05 14:30"
                            title="Date and time, 24-hour clock"
                            {% else %}placeholder="{{ row.field.slug|cut:"_" }}"{% endif %}
