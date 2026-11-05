@@ -905,8 +905,17 @@ def history(request, pk: int):
     review = get_object_or_404(
         Review.objects.select_related("pregnancy__patient"), pk=pk
     )
+    from django.core.paginator import Paginator
+
+    qs = review.audit_events.select_related("actor").order_by("-at", "-id")
+    field = request.GET.get("field", "")
+    if field:
+        qs = qs.filter(entity_id=field)
+    paginator = Paginator(qs, 100)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
     events = []
-    for e in review.audit_events.select_related("actor").order_by("-at", "-id")[:400]:
+    for e in page_obj:
         action, detail = _describe(e)
         events.append(
             {"at": e.at, "actor": e.actor, "action": action, "detail": detail}
@@ -941,6 +950,9 @@ def history(request, pk: int):
             "events": events,
             "versions": versions,
             "returns": returns,
+            "page_obj": page_obj,
+            "total": paginator.count,
+            "field": field,
         },
     )
 

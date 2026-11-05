@@ -70,6 +70,10 @@
 </table>
 
 <h2>Activity</h2>
+<p class="muted small">
+  {{ total }} event{{ total|pluralize }}{% if field %} for <span class="key">{{ field }}</span> · <a href="{% url 'history' review.pk %}">clear filter</a>{% endif %}
+  · one row per save, newest first
+</p>
 <table>
   <thead><tr><th style="width:16%">When</th><th style="width:16%">Who</th><th style="width:18%">What</th><th>Detail</th></tr></thead>
   <tbody>
@@ -85,4 +89,15 @@
   {% endfor %}
   </tbody>
 </table>
+{% if page_obj.has_previous or page_obj.has_next %}
+  <div class="bar">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if field %}&field={{ field }}{% endif %}">← newer</a>
+    {% endif %}
+    <span class="muted">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if field %}&field={{ field }}{% endif %}">older →</a>
+    {% endif %}
+  </div>
+{% endif %}
 {% endblock %}
