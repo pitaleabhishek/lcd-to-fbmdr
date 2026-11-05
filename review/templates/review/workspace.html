@@ -154,7 +154,7 @@
                         {% endfor %}
                       </div>
                     </details>
-                  {% elif row.multiline %}
+                  {% elif row.field.type == "text" %}
                     <textarea name="value" rows="1" class="val auto"
                               placeholder="{{ row.field.slug|cut:"_" }}">{{ row.current }}</textarea>
                   {% else %}
