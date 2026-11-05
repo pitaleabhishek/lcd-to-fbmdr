@@ -1,5 +1,6 @@
 {% extends "review/base.html" %}
 {% block title %}{{ review.pregnancy.patient.name }} · Review{% endblock %}
+{% block bodyclass %}{% if hide_entered %}approver{% endif %}{% endblock %}
 {% block content %}
 <div class="sticky-top">
 <div class="review-head">
@@ -32,6 +33,9 @@
         <button class="primary">Submit</button></form>
     {% endif %}
 
+    {% if hide_entered %}
+      <button type="button" id="toggle-origins">Show entered</button>
+    {% endif %}
     <a class="button" href="{% url 'history' review.pk %}">History</a>
     {% if review.current_version %}
       <a class="button" href="{% url 'output' review.pk %}">Output</a>

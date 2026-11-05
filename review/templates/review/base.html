@@ -41,6 +41,8 @@
   .chip.R { color:var(--ok); } .chip.D { color:var(--accent); }
   .chip.E { color:var(--ink); } .chip.C { color:var(--warn); }
   .chip.N { color:var(--muted); }
+  body.approver .chip.E { display:none; }
+  body.approver.show-origins .chip.E { display:inline-block; }
   .value { font-weight:600; }
   .prop { border:1px dashed var(--line); border-radius:5px; padding:4px 7px;
           margin:4px 0; background:#fcfdfd; }
@@ -270,7 +272,7 @@
   }
 </style>
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
 <header>
   <a href="/">MDR Reuse</a>
   <span class="muted">Form 4 from labour documentation</span>
@@ -474,6 +476,14 @@
     m.addEventListener('click', function () { m.remove(); });
     setTimeout(function () { m.remove(); }, 6000);
   });
+
+  var originBtn = document.getElementById('toggle-origins');
+  if (originBtn) {
+    originBtn.addEventListener('click', function () {
+      var on = document.body.classList.toggle('show-origins');
+      originBtn.textContent = on ? 'Hide entered' : 'Show entered';
+    });
+  }
 
   var approveBtn = document.getElementById('approve-btn');
   if (approveBtn) {
