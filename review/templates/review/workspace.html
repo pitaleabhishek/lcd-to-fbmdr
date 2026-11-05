@@ -54,7 +54,9 @@
     <b>Returned by {{ open_return.by.username }}</b> · {{ open_return.at|date:"d M H:i" }}
     {% if open_return.overall_comment %}<div>{{ open_return.overall_comment }}</div>{% endif %}
     {% if open_return.comments %}
-      <div class="key">{{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }} below</div>
+      <div class="key">{{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }} below
+        {% if first_comment_slug %}· <a href="#f-{{ first_comment_slug }}">go to the first ↓</a>{% endif %}
+      </div>
     {% endif %}
   </div>
 {% endif %}
@@ -76,7 +78,7 @@
   </div>
 {% endif %}
 
-{% if is_fno and review.status == "submitted" %}<form method="post" class="review-form">{% csrf_token %}{% endif %}
+{% if fno_can_comment %}<form method="post" class="review-form">{% csrf_token %}{% endif %}
 <div class="layout">
   <nav class="secnav">
     {% for s in sections %}
@@ -99,7 +101,7 @@
         <tbody>
         {% for row in section.rows %}
           {% if not row.is_block %}
-          <tr id="f-{{ row.field.slug }}"{% if not row.is_answered and not row.is_na %} class="remaining"{% endif %}>
+          <tr id="f-{{ row.field.slug }}" class="{% if not row.is_answered and not row.is_na %}remaining {% endif %}{% if row.fno_comment %}{% if row.addressed %}addressed{% else %}commented{% endif %}{% endif %}">
             <td>
               <div class="label">{{ row.field.label_printed }}</div>
               <div class="key">{{ row.field.key }}{% if row.field.required %} · <span class="req">required</span>{% endif %}</div>
@@ -184,11 +186,11 @@
                   {% if row.addressed %}<span class="count">addressed</span>{% endif %}
                 </div>
               {% endif %}
-              {% if is_fno and review.status == "submitted" %}
+              {% if fno_can_comment %}
                 <details class="fc">
                   <summary>comment</summary>
                   <textarea name="fc_{{ row.field.key }}" rows="1" class="auto"
-                            placeholder="what needs to change here"></textarea>
+                            placeholder="what needs to change here">{{ row.fno_comment }}</textarea>
                 </details>
               {% endif %}
               {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
@@ -296,8 +298,15 @@
 
       {% for row in section.rows %}
         {% if row.is_block %}
-        <div class="block-card{% if not row.is_answered and not row.is_na %} remaining{% endif %}" id="b-{{ row.field.slug }}">
+        <div class="block-card{% if not row.is_answered and not row.is_na %} remaining{% endif %}{% if row.fno_comment %}{% if row.addressed %} addressed{% else %} commented{% endif %}{% endif %}" id="b-{{ row.field.slug }}">
           <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span></h3>
+          {% if fno_can_comment %}
+            <details class="fc">
+              <summary>comment on this block</summary>
+              <textarea name="fc_{{ row.field.key }}" rows="1" class="auto"
+                        placeholder="what needs to change here">{{ row.fno_comment }}</textarea>
+            </details>
+          {% endif %}
           {% if locked %}
             <div class="readonly-block">
               {% if row.places %}

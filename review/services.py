@@ -541,5 +541,37 @@ def return_review(review: Review, user, comment: str, comments: dict | None = No
     return review
 
 
+@transaction.atomic
+def update_return(review: Review, user, comment: str, comments: dict | None = None) -> ReviewReturn:
+    """An FNO adds to or changes a return that has not been answered yet."""
+    review = Review.objects.select_for_update().get(pk=review.pk)
+    if review.status != Review.Status.RETURNED:
+        raise ValidationError("only an open return can be changed")
+
+    comments = comments or {}
+    if not (comment or "").strip() and not comments:
+        raise ValidationError("comment on at least one field, or add an overall comment")
+
+    ret = (
+        ReviewReturn.objects.filter(review=review, resolved_at__isnull=True)
+        .order_by("-at")
+        .first()
+    )
+    if ret is None:
+        raise ValidationError("there is no open return to change")
+
+    ret.overall_comment = (comment or "").strip()
+    ret.comments = comments
+    ret.save(update_fields=["overall_comment", "comments"])
+
+    review.return_comment = ret.overall_comment
+    review.returned_by = user
+    review.returned_at = timezone.now()
+    review.last_saved_at = review.returned_at
+    review.save(update_fields=["return_comment", "returned_by", "returned_at", "last_saved_at"])
+    audit(review, user, "return_updated", "ReviewReturn", ret.pk, {"comments": len(comments)})
+    return ret
+
+
 def latest_version(review: Review) -> ReviewVersion | None:
     return review.versions.order_by("-version_no").first()

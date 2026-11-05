@@ -85,6 +85,12 @@
   .drawer-head { display:flex; justify-content:space-between; align-items:center;
             gap:8px; border-bottom:1px solid var(--line); padding-bottom:6px;
             margin-bottom:8px; font-size:13px; }
+  tr.commented td { background:#fff8e1; }
+  tr.commented td:first-child { box-shadow:inset 3px 0 0 #e0a52a; }
+  tr.addressed td { background:#f4faf6; }
+  .block-card.commented { border-left:3px solid #e0a52a; background:#fff8e1; }
+  .block-card.addressed { border-left:3px solid var(--ok); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
   .fno-note { margin-top:4px; padding:4px 6px; border-left:3px solid var(--warn);
               background:#fffaf2; font-size:12px; }
   .fno-note.done { border-left-color:var(--ok); background:#f4faf6; }
@@ -412,6 +418,21 @@
     autoGrow(t);
     t.addEventListener('input', function () { autoGrow(t); });
   });
+
+  var approveBtn = document.getElementById('approve-btn');
+  if (approveBtn) {
+    var commentFields = document.querySelectorAll(
+      '.decision-bar input[name=comment], textarea[name^="fc_"]'
+    );
+    var syncApprove = function () {
+      var any = false;
+      commentFields.forEach(function (f) { if ((f.value || '').trim()) any = true; });
+      approveBtn.disabled = any;
+      approveBtn.title = any ? 'You have comments: return the review instead' : '';
+    };
+    commentFields.forEach(function (f) { f.addEventListener('input', syncApprove); });
+    syncApprove();
+  }
 
   var remaining = document.getElementById('toggle-remaining');
   if (remaining) {

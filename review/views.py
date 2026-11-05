@@ -212,6 +212,16 @@ def workspace(request, pk: int):
     death = review.pregnancy.deaths.order_by("-died_at").first()
     open_return = services.latest_return(review, open_only=True)
     last_return = services.latest_return(review)
+    fno_can_comment = is_fno(request.user) and (
+        review.status == Review.Status.SUBMITTED
+        or (review.status == Review.Status.RETURNED and open_return is not None)
+    )
+    first_comment_slug = ""
+    if open_return and open_return.comments:
+        order = {f.key: i for i, f in enumerate(registry.all())}
+        keys = sorted(open_return.comments, key=lambda k: order.get(k, 9999))
+        if keys[0] in registry:
+            first_comment_slug = registry[keys[0]].slug
     field_comments = (open_return.comments or {}) if open_return else {}
 
     items = {i.field_key: i for i in review.items.all()}
@@ -342,6 +352,8 @@ def workspace(request, pk: int):
             ],
             "is_fno": is_fno(request.user),
             "open_return": open_return,
+            "fno_can_comment": fno_can_comment,
+            "first_comment_slug": first_comment_slug,
             "last_return": last_return,
             "is_author": review.submitted_by_id == request.user.pk,
             "can_author": can_author,
@@ -449,6 +461,18 @@ def _handle_action(request, review: Review):
         messages.success(request, "Submitted for approval")
         return
 
+    if action == "return_update":
+        if not is_fno(user):
+            raise ValidationError("only an FNO can change a return")
+        comments = {
+            k[3:]: v.strip()
+            for k, v in request.POST.items()
+            if k.startswith("fc_") and v and v.strip()
+        }
+        services.update_return(review, user, request.POST.get("comment", ""), comments)
+        messages.success(request, "Return updated")
+        return
+
     if action == "return":
         if not is_fno(user):
             raise ValidationError("only an FNO can return a review")
@@ -466,6 +490,10 @@ def _handle_action(request, review: Review):
     if action == "approve":
         if not is_fno(user):
             raise ValidationError("only an FNO can approve")
+        if (request.POST.get("comment") or "").strip() or any(
+            k.startswith("fc_") and v.strip() for k, v in request.POST.items()
+        ):
+            raise ValidationError("you have comments: return the review instead of approving")
         services.approve(review, user)
         messages.success(request, "Approved")
         return

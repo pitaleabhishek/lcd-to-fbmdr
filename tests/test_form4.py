@@ -571,3 +571,40 @@ def test_endpoint_ignores_an_unchanged_value(client, case_a, django_user_model):
     assert resp.json()["mark"] == "R"
     item.refresh_from_db()
     assert item.origin == ReviewItem.Origin.REUSED  # no phantom correction
+
+
+def test_fno_can_update_an_open_return(case_a, django_user_model):
+    resident = django_user_model.objects.get(username="resident")
+    fno = django_user_model.objects.get(username="fno")
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(case_a, fno, "first pass", {"f4.primary_diagnosis.dx": "clarify"})
+
+    services.update_return(
+        case_a, fno, "first pass + more",
+        {"f4.primary_diagnosis.dx": "clarify", "f4.timing.b": "check the time"},
+    )
+    ret = case_a.returns.get()
+    assert ret.overall_comment == "first pass + more"
+    assert set(ret.comments) == {"f4.primary_diagnosis.dx", "f4.timing.b"}
+
+
+def test_approve_is_refused_when_comments_are_present(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+
+    client.force_login(fno)
+    resp = client.post(
+        f"/review/{case_a.pk}/",
+        {"action": "approve", "comment": "", "fc_f4.primary_diagnosis.dx": "check this"},
+    )
+    assert resp.status_code == 302
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.SUBMITTED  # not approved
