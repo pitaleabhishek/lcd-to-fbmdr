@@ -235,6 +235,21 @@ def workspace(request, pk: int):
         review.status == Review.Status.SUBMITTED
         or (review.status == Review.Status.RETURNED and open_return is not None)
     )
+    last_return_comments = []
+    if last_return:
+        last_items = {i.field_key: i for i in review.items.all()}
+        for key, text in (last_return.comments or {}).items():
+            f = registry._fields.get(key)
+            item = last_items.get(key)
+            last_return_comments.append(
+                {
+                    "label": f.label_printed if f else key,
+                    "text": text,
+                    "addressed": bool(
+                        item and item.decided_at and item.decided_at > last_return.at
+                    ),
+                }
+            )
     first_comment_slug = ""
     if open_return and open_return.comments:
         order = {f.key: i for i, f in enumerate(registry.all())}
@@ -384,6 +399,10 @@ def workspace(request, pk: int):
             "fno_can_comment": fno_can_comment,
             "first_comment_slug": first_comment_slug,
             "last_return": last_return,
+            "last_return_comments": last_return_comments,
+            "last_return_addressed": sum(
+                1 for c in last_return_comments if c["addressed"]
+            ),
             "is_author": review.submitted_by_id == request.user.pk,
             "can_author": can_author,
             "locked": locked,

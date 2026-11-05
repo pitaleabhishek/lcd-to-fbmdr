@@ -54,6 +54,26 @@
     </div>
   </div>
 {% endif %}
+{% if is_fno and review.status == "submitted" and last_return %}
+  <details class="prev-return">
+    <summary>
+      Previously returned {{ last_return.at|date:"d M H:i" }} ·
+      {{ last_return_comments|length }} field comment{{ last_return_comments|length|pluralize }} ·
+      {{ last_return_addressed }}/{{ last_return_comments|length }} addressed
+    </summary>
+    {% if last_return.overall_comment %}
+      <div class="rb-overall">“{{ last_return.overall_comment }}”</div>
+    {% endif %}
+    <ul class="comment-list">
+      {% for c in last_return_comments %}
+        <li><b>{{ c.label }}</b> — {{ c.text }}
+          {% if c.addressed %}<span class="count">addressed</span>{% endif %}</li>
+      {% empty %}
+        <li class="muted">no field comments</li>
+      {% endfor %}
+    </ul>
+  </details>
+{% endif %}
 {% if open_return %}
   <div class="returnbar" id="returnbar">
     <div class="rb-main">
@@ -82,9 +102,6 @@
 
 
 {% if locked %}
-  {% if is_fno and review.status == "submitted" and last_return %}
-    <div class="lastreturn">Previously returned {{ last_return.at|date:"d M H:i" }} · {{ last_return.comments|length }} field comment{{ last_return.comments|length|pluralize }} · {% if last_return.resolved_at %}addressed and resubmitted{% else %}open{% endif %}</div>
-  {% endif %}
   <div class="statebox">
     {% if review.status == "draft" or review.status == "returned" %}
       View only — this review belongs to another author.

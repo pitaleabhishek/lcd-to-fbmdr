@@ -117,6 +117,9 @@
   a.primary-link { background:var(--accent); color:#fff; border-color:var(--accent);
        padding:4px 10px; }
   .resident-note { background:#f4f7f9; border-color:var(--line); }
+  .prev-return { background:#f4f7f9; border:1px solid var(--line); border-radius:5px;
+                 padding:4px 8px; margin-top:6px; font-size:12px; }
+  .prev-return summary { cursor:pointer; color:var(--accent); }
   .returnbar { display:flex; justify-content:space-between; gap:10px; align-items:center;
                 background:#fffaf2; border:1px solid #f0d3a8; border-radius:5px;
                 padding:5px 8px; margin:6px 0 0; font-size:12px; }
@@ -526,6 +529,10 @@
       if (e.key === 'Escape') drawer.hidden = true;
     });
   }
+
+  document.querySelectorAll('.prev-return').forEach(function (d) {
+    d.addEventListener('toggle', function () { fitStack(); });
+  });
 
   function fitStack() {
     var h = document.querySelector('header');
