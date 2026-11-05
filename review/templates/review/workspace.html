@@ -43,7 +43,7 @@
 {% if open_return %}
   <div class="returned">
     <b>Returned by {{ open_return.by.username }}</b> · {{ open_return.at|date:"d M H:i" }}
-    <div>{{ open_return.overall_comment }}</div>
+    {% if open_return.overall_comment %}<div>{{ open_return.overall_comment }}</div>{% endif %}
     {% if open_return.comments %}
       <div class="key">{{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }} below</div>
     {% endif %}
@@ -51,6 +51,9 @@
 {% endif %}
 
 {% if locked %}
+  {% if is_fno and review.status == "submitted" and last_return %}
+    <div class="key" style="margin:6px 0">Previously returned {{ last_return.at|date:"d M H:i" }} · {{ last_return.comments|length }} field comment{{ last_return.comments|length|pluralize }} · {% if last_return.resolved_at %}addressed and resubmitted{% else %}open{% endif %}</div>
+  {% endif %}
   <div class="locked">
     {% if review.status == "draft" or review.status == "returned" %}
       View only — this review belongs to another author. Only the author or assignee can change it.

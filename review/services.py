@@ -511,8 +511,11 @@ def return_review(review: Review, user, comment: str, comments: dict | None = No
     review = Review.objects.select_for_update().get(pk=review.pk)
     if review.status != Review.Status.SUBMITTED:
         raise ValidationError("only a submitted review can be returned")
-    if not (comment or "").strip():
-        raise ValidationError("a comment is required when returning a review")
+    comments = comments or {}
+    if not (comment or "").strip() and not comments:
+        raise ValidationError(
+            "comment on at least one field, or add an overall comment"
+        )
     if review.submitted_by_id == user.pk:
         raise ValidationError("no self-return: another FNO must review this")
 

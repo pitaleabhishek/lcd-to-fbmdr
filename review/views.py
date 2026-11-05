@@ -209,6 +209,7 @@ def workspace(request, pk: int):
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
     open_return = services.latest_return(review, open_only=True)
+    last_return = services.latest_return(review)
     field_comments = (open_return.comments or {}) if open_return else {}
 
     items = {i.field_key: i for i in review.items.all()}
@@ -338,6 +339,7 @@ def workspace(request, pk: int):
             ],
             "is_fno": is_fno(request.user),
             "open_return": open_return,
+            "last_return": last_return,
             "is_author": review.submitted_by_id == request.user.pk,
             "can_author": can_author,
             "locked": locked,

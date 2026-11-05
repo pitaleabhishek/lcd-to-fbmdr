@@ -459,3 +459,21 @@ def test_fno_cannot_author_someone_elses_review(case_a, django_user_model):
         services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", fno)
     with pytest.raises(ValidationError):
         services.submit(case_a, fno)
+
+
+def test_return_accepts_a_field_comment_without_an_overall(case_a, django_user_model):
+    resident = django_user_model.objects.get(username="resident")
+    fno = django_user_model.objects.get(username="fno")
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+
+    services.return_review(
+        case_a, fno, "", {"f4.cause_of_death.a_antecedent": "This is the mechanism, not the cause."}
+    )
+    ret = case_a.returns.get()
+    assert ret.overall_comment == ""
+    assert ret.comments
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.RETURNED
