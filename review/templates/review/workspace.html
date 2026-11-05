@@ -21,8 +21,12 @@
         <button class="primary">Submit</button></form>
     {% endif %}
     {% if review.status == "submitted" and is_fno %}
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve">
-        <button class="primary">Approve</button></form>
+      <form method="post" class="review-decision">{% csrf_token %}
+        <input type="text" name="comment" placeholder="why return (required to return)"
+               class="return-comment">
+        <button name="action" value="return" class="danger">Return</button>
+        <button name="action" value="approve" class="primary">Approve</button>
+      </form>
     {% endif %}
     {% if review.current_version %}
       <a class="button" href="{% url 'output' review.pk %}">Output</a>
@@ -42,6 +46,14 @@
 </div>
 <div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected</div>
 </div>
+
+{% if review.status == "returned" and review.return_comment %}
+  <div class="returned">
+    <b>Returned by {{ review.returned_by.username|default:"FNO" }}</b>
+    {% if review.returned_at %} · {{ review.returned_at|date:"d M H:i" }}{% endif %}
+    <div>{{ review.return_comment }}</div>
+  </div>
+{% endif %}
 
 {% if locked %}
   <div class="locked">This review is {{ review.get_status_display|lower }} and locked. A change would be an attributed amendment.</div>

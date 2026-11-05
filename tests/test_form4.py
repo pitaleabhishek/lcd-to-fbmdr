@@ -397,3 +397,28 @@ def test_block_row_autosave(client, case_a, django_user_model):
     rows = case_a.items.get(field_key="f4.diagnosis.rows").value_json
     assert rows[0]["category"] == "incidental"
     assert rows[0]["detail"] == "ergge"
+
+
+def test_return_with_comment_then_resubmit(case_a, django_user_model):
+    resident = django_user_model.objects.get(username="resident")
+    fno = django_user_model.objects.get(username="fno")
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+
+    with pytest.raises(ValidationError):
+        services.return_review(case_a, fno, "   ")  # comment required
+
+    services.return_review(case_a, fno, "Please state the underlying cause.")
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.RETURNED
+    assert case_a.return_comment.startswith("Please state")
+
+    services.set_answer(case_a, "f4.cause_of_death.b_antecedent", "Atonic uterus", resident)
+    second = services.submit(case_a, resident)
+    assert second.version_no == 2
+    assert list(case_a.versions.values_list("version_no", "kind")) == [
+        (1, "submission"),
+        (2, "submission"),
+    ]

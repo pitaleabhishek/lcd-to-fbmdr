@@ -430,6 +430,13 @@ def _handle_action(request, review: Review):
         messages.success(request, "Submitted for approval")
         return
 
+    if action == "return":
+        if not is_fno(user):
+            raise ValidationError("only an FNO can return a review")
+        services.return_review(review, user, request.POST.get("comment", ""))
+        messages.success(request, "Returned to the author with your comment")
+        return
+
     if action == "approve":
         if not is_fno(user):
             raise ValidationError("only an FNO can approve")

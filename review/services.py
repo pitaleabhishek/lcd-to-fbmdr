@@ -477,5 +477,28 @@ def approve(review: Review, user) -> ReviewVersion:
     return version
 
 
+@transaction.atomic
+def return_review(review: Review, user, comment: str) -> Review:
+    """Send a submitted review back to the author with a comment."""
+    review = Review.objects.select_for_update().get(pk=review.pk)
+    if review.status != Review.Status.SUBMITTED:
+        raise ValidationError("only a submitted review can be returned")
+    if not (comment or "").strip():
+        raise ValidationError("a comment is required when returning a review")
+    if review.submitted_by_id == user.pk:
+        raise ValidationError("no self-return: another FNO must review this")
+
+    review.status = Review.Status.RETURNED
+    review.returned_by = user
+    review.returned_at = timezone.now()
+    review.return_comment = comment.strip()
+    review.last_saved_at = review.returned_at
+    review.save(
+        update_fields=["status", "returned_by", "returned_at", "return_comment", "last_saved_at"]
+    )
+    audit(review, user, "returned", "Review", review.pk, {"comment": review.return_comment})
+    return review
+
+
 def latest_version(review: Review) -> ReviewVersion | None:
     return review.versions.order_by("-version_no").first()
