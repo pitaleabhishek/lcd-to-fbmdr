@@ -60,6 +60,8 @@
          border-radius:5px; font-size:13px; box-shadow:0 4px 14px rgba(0,0,0,.08); }
   .msg.ok { background:#eef7f1; border-color:#c9e3d2; }
   .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
+  body.has-decision .toasts { bottom:74px; }
+  .toasts .msg { cursor:pointer; }
   .decision-bar { position:fixed; left:0; right:0; bottom:0; z-index:30;
                   background:#fff; border-top:1px solid var(--line);
                   padding:8px 16px; display:flex; gap:8px; justify-content:flex-end;
@@ -462,6 +464,14 @@
     });
     if (rbCount) rbCount.textContent = marks.length + ' marked';
   }
+
+  if (document.querySelector('.decision-bar')) {
+    document.body.classList.add('has-decision');
+  }
+  document.querySelectorAll('.toasts .msg').forEach(function (m) {
+    m.addEventListener('click', function () { m.remove(); });
+    setTimeout(function () { m.remove(); }, 6000);
+  });
 
   var approveBtn = document.getElementById('approve-btn');
   if (approveBtn) {
