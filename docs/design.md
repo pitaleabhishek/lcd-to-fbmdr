@@ -38,8 +38,7 @@ SourceDocument(id, pregnancy, admission?, kind, source_format, origin_facility,
   kind: lcg | partograph | admission_note | referral_slip | anc_card | death_summary
 Observation(id, document, kind, value_num, value_text, value_code, unit,
           observed_at?, observed_at_precision, documented_at?, entered_at,
-          entered_by, author, author_role, raw_label, raw_value,
-          supersedes_id, note)
+          entered_by, author, author_role, supersedes_id, note)
 CareContact(id, pregnancy, sequence, place_type, facility_name, date, onset_at,
           transport, time_to_reach, money_transport, attended_by,
           reason_for_referral, referral_slip, treatment_given, money_treatment,

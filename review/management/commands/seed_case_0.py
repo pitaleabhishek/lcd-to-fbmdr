@@ -99,7 +99,6 @@ class Command(BaseCommand):
                 documented_at=documented or at,
                 entered_by=author, author=author,
                 author_role="nurse" if author.startswith("Nurse") else "resident",
-                raw_label=v.label, raw_value=text,
             )
             rows += 1
 

@@ -11,7 +11,7 @@ clinical interpretation except the alert column, which is application code.
 | `review_lcgsection` | reference | the 7 printed sections: order, key, label |
 | `review_lcgvariable` | reference | each printed row: key, section, label, order, type, unit, allowed values, numeric bounds, alert text |
 | `review_sourcedocument` | 1 | the chart as an object: `kind=lcg`, format, author, entered_by, documented_at, received_at, entered_at, time precision, `header_json` |
-| `review_observation` | one per cell | variable, stage, value, unit, observed_at, observed_at_precision, documented_at, entered_at, author, author_role, raw_label, raw_value, supersedes |
+| `review_observation` | one per cell | variable, stage, value, unit, observed_at, observed_at_precision, documented_at, entered_at, author, author_role, supersedes |
 
 Two reference tables (the form), two instance tables (a filled chart). No column
 entity: time columns are derived by grouping observations on `observed_at`.
@@ -36,7 +36,7 @@ variable 1 ── N observation
 - **Three timestamps**: `observed_at` (clinical time), `documented_at` (what the
   chart says), `entered_at` (server). `author` ≠ `entered_by`; transcription never
   transfers authorship.
-- **`raw_label` / `raw_value`** keep the notation as written (`P1`, `2+`, `M+++`).
+- **The enum value is the value.** No parsing and no second copy: `clear`, `meconium_3`, `2+`, `supine` are stored in the form's own vocabulary, and anything else is rejected by the trigger. The printed marks (`C`, `M+++`, `P 2+`) are a one-to-one reading of these codes, not a separate field.
 - **Gaps are absent rows.** A missed observation is found by comparing observed
   times against the cadence a rule set requires; the paper chart's time axis is
   blank, so there is no printed empty cell to store.

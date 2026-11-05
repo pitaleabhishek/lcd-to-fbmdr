@@ -179,8 +179,6 @@ class Observation(models.Model):
     entered_by = models.CharField(max_length=200, blank=True)
     author = models.CharField(max_length=200, blank=True)
     author_role = models.CharField(max_length=50, blank=True)
-    raw_label = models.CharField(max_length=200, blank=True)
-    raw_value = models.CharField(max_length=200, blank=True)
     supersedes = models.ForeignKey(
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
     )
