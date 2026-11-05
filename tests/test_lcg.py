@@ -181,3 +181,14 @@ def test_labour_record_view_renders_the_chart(client, case_0):
     assert "Systolic BP" in body
     assert "second" in body        # stage band
     assert "Cervix" in body
+
+
+def test_case_0_has_no_physiological_crossings(case_0):
+    from review import thresholds
+
+    urgent = {
+        "systolic_bp", "diastolic_bp", "pulse", "temperature", "fhr", "baseline_fhr",
+        "contractions", "contraction_duration", "cervix", "urine_protein", "urine_acetone",
+    }
+    hits = thresholds.crossings(case_0, None)
+    assert not [h for h in hits if h["variable"] in urgent]

@@ -759,3 +759,55 @@ def test_previous_comment_is_shown_but_not_prefilled_on_resubmission(client, cas
     )
     assert box is not None
     assert box.group(1).strip() == ""  # but the new comment box is empty
+
+
+def test_case_a_has_the_two_blood_pressure_crossings(case_a):
+    from review import thresholds
+    from review.models import SourceDocument
+
+    doc = SourceDocument.objects.get(kind="lcg", pregnancy=case_a.pregnancy)
+    death = case_a.pregnancy.deaths.first()
+    hits = thresholds.crossings(doc, death)
+    variables = {h["variable"] for h in hits}
+    assert {"systolic_bp", "diastolic_bp"} <= variables
+    assert all(h["rule_set"] == "lcg_2021" and h["version"] == 1 for h in hits)
+
+
+def test_evidence_is_shown_beside_the_diagnosis_without_filling_it(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "Evidence from the labour record" in page
+    assert "crossed" not in page  # wording is the threshold text, not a claim
+    assert "150" in page
+    assert not case_a.items.filter(field_key="f4.primary_diagnosis.dx").exists()
+
+
+def test_cervical_lag_is_detected(db):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from review.models import (
+        Facility, LCGVariable, Observation, Patient, Pregnancy, SourceDocument,
+        TimePrecision,
+    )
+
+    ist = ZoneInfo("Asia/Kolkata")
+    facility = Facility.objects.create(name="PHC")
+    patient = Patient.objects.create(name="Lag case")
+    pregnancy = Pregnancy.objects.create(patient=patient)
+    doc = SourceDocument.objects.create(
+        pregnancy=pregnancy, kind=SourceDocument.Kind.LCG, source_format="lcg_2021"
+    )
+    cervix = LCGVariable.objects.get(key="cervix")
+    for hours in (0, 6):
+        Observation.objects.create(
+            document=doc, variable=cervix, value_num=6, unit="cm", stage="first",
+            observed_at=datetime(2026, 11, 1, 8 + hours, 0, tzinfo=ist),
+            observed_at_precision=TimePrecision.EXACT,
+        )
+    from review import thresholds
+
+    hits = thresholds.crossings(doc, None)
+    assert any(h["variable"] == "cervix" for h in hits)

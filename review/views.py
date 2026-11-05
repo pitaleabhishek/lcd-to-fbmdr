@@ -20,9 +20,12 @@ from .models import (
     Review,
     ReviewItem,
     ReviewVersion,
+    SourceDocument,
 )
 from .registry import CATEGORIES, registry
+from .evidence import EVIDENCE
 from .rules import RULES
+from . import thresholds
 from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
 
 
@@ -223,6 +226,15 @@ def workspace(request, pk: int):
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
     death = review.pregnancy.deaths.order_by("-died_at").first()
+    lcg = (
+        SourceDocument.objects.filter(
+            pregnancy=review.pregnancy, kind=SourceDocument.Kind.LCG
+        ).first()
+    )
+    crossing_list = thresholds.crossings(lcg, death) if lcg else []
+    crossings_by_var: dict[str, list] = {}
+    for c in crossing_list:
+        crossings_by_var.setdefault(c["variable"], []).append(c)
     submission = (
         review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
         .order_by("-version_no")
@@ -298,6 +310,11 @@ def workspace(request, pk: int):
                     "item": item,
                     "display": fmt(item.value_json) if item else "—",
                     "widget": f.widget,
+                    "evidence": [
+                        c
+                        for var in EVIDENCE.get(f.key, ((), ""))[0]
+                        for c in crossings_by_var.get(var, [])
+                    ],
                     "multiline": f.key in LONG_TEXT,
                     "example": EXAMPLES.get(f.key, "e.g. 1"),
                     "current": _current(item, f),

@@ -201,6 +201,19 @@
                   <button name="action" value="na" class="linkish" title="Mark not applicable">N/A</button>
                 </form>
               {% endif %}
+              {% if row.evidence %}
+                <div class="evidence">
+                  <div class="ev-head">Evidence from the labour record
+                    <span class="muted">· computed, not an answer</span></div>
+                  {% for c in row.evidence %}
+                    <div class="ev-line">
+                      <b>{{ c.label }}</b> {{ c.value }} at {{ c.when }} — {{ c.text }}
+                      {% if c.late %}<span class="warn">late</span>{% endif %}
+                      · <a class="see-source" href="{{ c.url }}" data-url="{{ c.url }}">see source</a>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
               {% if row.is_na %}<div class="key">not applicable{% if row.item.reason %} · {{ row.item.reason }}{% endif %}</div>{% endif %}
               {% if row.needs %}<span class="chip C">review</span>{% endif %}
               {% if row.fno_comment %}
