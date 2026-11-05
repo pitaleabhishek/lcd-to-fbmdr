@@ -158,7 +158,8 @@
                     {% for name, spec in row.block_cols %}<span>{{ name|cut:"_"|title }}</span>{% endfor %}<span></span>
                   </form>
                   {% for r in row.block_rows %}
-                    <form method="post" class="brow" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">{% csrf_token %}
+                    <form method="post" class="brow" data-autosave="{% url 'save_field' review.pk %}"
+                      style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 150px">{% csrf_token %}
                       <input type="hidden" name="action" value="block_row">
                       <input type="hidden" name="key" value="{{ row.field.key }}">
                       <input type="hidden" name="index" value="{{ r.index }}">
@@ -292,7 +293,8 @@
                 {% for name, spec in row.block_cols %}<span>{{ name|cut:"_"|title }}</span>{% endfor %}<span></span>
               </form>
               {% for r in row.block_rows %}
-                <form method="post" class="brow" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">{% csrf_token %}
+                <form method="post" class="brow" data-autosave="{% url 'save_field' review.pk %}"
+                      style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 150px">{% csrf_token %}
                   <input type="hidden" name="action" value="block_row">
                   <input type="hidden" name="key" value="{{ row.field.key }}">
                   <input type="hidden" name="index" value="{{ r.index }}">
@@ -311,7 +313,7 @@
                     </span>
                   {% endfor %}
                   <span class="row-actions">
-                    <button class="primary">Save</button>
+                    <span class="save-state"></span>
                     <button name="op" value="remove" class="danger" title="Remove row">×</button>
                   </span>
                 </form>

@@ -653,6 +653,23 @@ def save_field(request, pk: int):
             {"ok": True, "mark": chip(saved.origin), "display": fmt(saved.value_json)}
         )
 
+    if field.type == "block" and request.POST.get("index", "") != "":
+        spec = (field.block_schema or {}).get("fields", {})
+        index = int(request.POST["index"])
+        values = {}
+        try:
+            for name, col in spec.items():
+                v = _block_value(col, request.POST.get(f"col_{name}", ""))
+                if v is not None:
+                    values[name] = v
+            services.set_block_row(review, key, index, values, request.user)
+        except ValidationError as exc:
+            return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
+        saved = review.items.get(field_key=key)
+        return JsonResponse(
+            {"ok": True, "mark": chip(saved.origin), "display": fmt(saved.value_json)}
+        )
+
     if field.type == "multi":
         values = [v for v in request.POST.getlist("value") if v]
         if not values:

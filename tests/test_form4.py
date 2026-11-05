@@ -376,3 +376,24 @@ def test_place_autosave_reports_a_bad_number(client, case_a, django_user_model):
     )
     assert resp.status_code == 400
     assert resp.json()["ok"] is False
+
+
+def test_block_row_autosave(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    services.add_block_row(case_a, "f4.diagnosis.rows", User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {
+            "key": "f4.diagnosis.rows",
+            "index": "0",
+            "col_category": "incidental",
+            "col_detail": "ergge",
+            "col_underlying_cause": "erger",
+        },
+    )
+    assert resp.status_code == 200
+    rows = case_a.items.get(field_key="f4.diagnosis.rows").value_json
+    assert rows[0]["category"] == "incidental"
+    assert rows[0]["detail"] == "ergge"
