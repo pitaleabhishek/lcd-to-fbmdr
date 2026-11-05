@@ -503,3 +503,10 @@ ________________________________________________________________________________
 hospital stay and the death of the patient)
 Form filled by the MO on duty nodal Officer of the Hospital:
 Name & Signature Name& Signature
+
+# --- Sign-off block ---
+# Transcribed from the printed form: the PDF text layer stops after the two names.
+Form filled by the MO on duty            Nodal Officer of the Hospital:
+Name & Signature                         Name & Signature
+Designation                              Address of the Institution
+Stamp & Date

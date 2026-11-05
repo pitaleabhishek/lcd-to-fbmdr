@@ -1,14 +1,14 @@
 # Form 4 overlap inventory
 
-93 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
+96 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
 
-**Direct reuse from the LCG: 2 of 93 fields (2.2%).** Everything else is entered by the clinician or copied from another recorded fact.
+**Direct reuse from the LCG: 2 of 96 fields (2.1%).** Everything else is entered by the clinician or copied from another recorded fact.
 
 ## By category
 
 | Category | Fields |
 |---|---|
-| 1. Patient info and admin records | 19 |
+| 1. Patient info and admin records | 22 |
 | 2. Clinical and OBS information | 45 |
 | 3. Mx and interventions | 9 |
 | 4. Death ix and review | 20 |
@@ -17,7 +17,7 @@
 
 | Source | Fields |
 |---|---|
-| clinician | 75 |
+| clinician | 78 |
 | admin | 4 |
 | patient_record | 3 |
 | admission | 3 |
@@ -33,7 +33,7 @@
 |---|---|
 | reused | 14 |
 | derived | 4 |
-| none | 75 |
+| none | 78 |
 
 ## Fields
 
@@ -132,3 +132,6 @@
 | `f4.summary.text` | 4 | clinician | 10. Case summary | none | yes |
 | `f4.summary.mo_name` | 1 | clinician | Form filled by the MO on duty - name | none | yes |
 | `f4.summary.fno_name` | 1 | clinician | Nodal Officer - name | none | yes |
+| `f4.summary.designation` | 1 | clinician | Designation | none | yes |
+| `f4.summary.institution_address` | 1 | clinician | Address of the Institution | none | yes |
+| `f4.summary.signed_on` | 1 | clinician | Stamp & Date | none | yes |

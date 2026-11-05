@@ -22,7 +22,7 @@ def test_form4_has_every_printed_section(db):
 
 
 def test_form4_has_every_printed_field(db):
-    assert Form4Field.objects.count() == 93
+    assert Form4Field.objects.count() == 96
     keys = set(Form4Field.objects.values_list("key", flat=True))
     assert keys == {f.key for f in registry.all()}
 

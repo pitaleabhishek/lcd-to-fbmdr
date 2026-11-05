@@ -39,7 +39,7 @@ CATEGORIES: dict[int, str] = {
 }
 
 HANDLING = ("propose", "derive", "prompt", "manual", "evidence")
-TYPES = ("text", "int", "bool", "datetime", "duration", "enum", "multi", "block")
+TYPES = ("text", "int", "bool", "datetime", "date", "duration", "enum", "multi", "block")
 
 
 @dataclass(frozen=True)
@@ -374,6 +374,10 @@ F("diagnosis", "autopsy", "9. Autopsy final diagnosis", "text", 4)
 F("text", "summary", "10. Case summary", "text", 4)
 F("mo_name", "summary", "Form filled by the MO on duty - name", "text", 1)
 F("fno_name", "summary", "Nodal Officer - name", "text", 1)
+F("designation", "summary", "Designation", "text", 1)
+F("institution_address", "summary", "Address of the Institution", "text", 1)
+F("signed_on", "summary", "Stamp & Date", "date", 1,
+  precision_note="one date for the sign-off block")
 
 
 KEY_RE = re.compile(r"^f4\.(?P<section>[a-z_]+)\.(?P<slug>[a-z][a-z0-9_]*)$")

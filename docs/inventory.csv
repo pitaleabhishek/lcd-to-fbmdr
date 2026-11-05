@@ -92,3 +92,6 @@ f4.autopsy.diagnosis,autopsy,4,Death ix and review,9. Autopsy final diagnosis,te
 f4.summary.text,summary,4,Death ix and review,10. Case summary,text,manual,none,clinician,,Not recorded during labour; the clinician enters it and owns the answer.,same,same,yes,case summary
 f4.summary.mo_name,summary,1,Patient info and admin records,Form filled by the MO on duty - name,text,manual,none,clinician,,Not recorded during labour; the clinician enters it and owns the answer.,same,same,yes,filled duty
 f4.summary.fno_name,summary,1,Patient info and admin records,Nodal Officer - name,text,manual,none,clinician,,Not recorded during labour; the clinician enters it and owns the answer.,same,same,yes,nodal officer
+f4.summary.designation,summary,1,Patient info and admin records,Designation,text,manual,none,clinician,,Not recorded during labour; the clinician enters it and owns the answer.,same,same,yes,designation
+f4.summary.institution_address,summary,1,Patient info and admin records,Address of the Institution,text,manual,none,clinician,,Not recorded during labour; the clinician enters it and owns the answer.,same,same,yes,address institution
+f4.summary.signed_on,summary,1,Patient info and admin records,Stamp & Date,date,manual,none,clinician,,Not recorded during labour; the clinician enters it and owns the answer.,same,one date for the sign-off block,yes,stamp
