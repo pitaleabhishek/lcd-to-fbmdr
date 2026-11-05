@@ -173,6 +173,14 @@ def workspace(request, pk: int):
                     "is_answered": is_answered,
                     "is_na": is_na,
                     "needs": needs,
+                    "is_block": f.type == "block",
+                    "block_cols": list((f.block_schema or {}).get("fields", {}).items()),
+                    "block_rows": _block_rows(f, item),
+                    "can_add": bool(
+                        f.type == "block"
+                        and len(_block_rows(f, item))
+                        < (f.block_schema or {}).get("max_rows", 99)
+                    ),
                 }
             )
         sections.append(
@@ -252,6 +260,35 @@ def _handle_action(request, review: Review):
         messages.success(request, f"Saved {key}")
         return
 
+    if action == "block_add":
+        services.add_block_row(review, request.POST["key"], user)
+        messages.success(request, "Row added")
+        return
+
+    if action == "block_remove":
+        services.remove_block_row(review, request.POST["key"], int(request.POST["index"]), user)
+        messages.success(request, "Row removed")
+        return
+
+    if action == "block_row":
+        key = request.POST["key"]
+        index_raw = request.POST.get("index", "")
+        if request.POST.get("op") == "remove":
+            services.remove_block_row(review, key, int(index_raw), user)
+            messages.success(request, "Row removed")
+            return
+        field = registry[key]
+        spec = (field.block_schema or {}).get("fields", {})
+        values = {}
+        for name, col in spec.items():
+            v = _block_value(col, request.POST.get(f"col_{name}", ""))
+            if v is not None:
+                values[name] = v
+        index = int(index_raw) if index_raw != "" else None
+        services.set_block_row(review, key, index, values, user)
+        messages.success(request, "Row saved")
+        return
+
     if action == "na":
         services.set_applicability(
             review, request.POST["key"], ReviewItem.Applicability.NOT_APPLICABLE, user,
@@ -273,6 +310,34 @@ def _handle_action(request, review: Review):
         return
 
     raise ValidationError(f"unknown action {action!r}")
+
+
+def _block_rows(field, item):
+    rows = item.value_json if item and isinstance(item.value_json, list) else []
+    out = []
+    for i, row in enumerate(rows):
+        out.append(
+            {
+                "index": i,
+                "cells": [
+                    {"name": name, "spec": spec, "value": row.get(name, "")}
+                    for name, spec in (field.block_schema or {}).get("fields", {}).items()
+                ],
+            }
+        )
+    return out
+
+
+def _block_value(spec, raw: str):
+    raw = (raw or "").strip()
+    if raw == "":
+        return None
+    if spec["type"] in ("int", "number"):
+        try:
+            return int(raw)
+        except ValueError:
+            raise ValidationError(f"expected a number, got {raw!r}")
+    return raw
 
 
 def _coerce(field, raw: str):

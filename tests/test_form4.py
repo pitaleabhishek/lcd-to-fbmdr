@@ -94,3 +94,32 @@ def test_required_fields_gate_submission(case_a, django_user_model):
 
     services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", user)
     services.submit(case_a, user)
+
+
+def test_block_rows_round_trip(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    key = "f4.condition.referral"
+
+    services.add_block_row(case_a, key, user)
+    item = case_a.items.get(field_key=key)
+    assert item.value_json == [{"place": "home_village"}]
+
+    services.set_block_row(
+        case_a, key, 0,
+        {"place": "facility_1", "time_to_reach": 45, "referral_slip": "given"}, user,
+    )
+    item.refresh_from_db()
+    assert item.value_json[0]["time_to_reach"] == 45
+
+    services.add_block_row(case_a, key, user)
+    item.refresh_from_db()
+    assert len(item.value_json) == 2
+    assert item.value_json[1]["place"] == "home_village"  # next free place
+
+    services.remove_block_row(case_a, key, 1, user)
+    item.refresh_from_db()
+    assert len(item.value_json) == 1
+
+    services.remove_block_row(case_a, key, 0, user)
+    item.refresh_from_db()
+    assert item.answer_state == ReviewItem.AnswerState.UNANSWERED

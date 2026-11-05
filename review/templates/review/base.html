@@ -100,6 +100,15 @@
   .entry { margin-top:5px; }
   a.button { border:1px solid var(--line); border-radius:4px; padding:4px 9px;
              font-size:12px; text-decoration:none; color:var(--ink); background:#fff; }
+  .block-wrap { margin-top:6px; border:1px solid var(--line); border-radius:5px;
+                background:#fcfdfd; overflow-x:auto; padding:4px; }
+  .brow { display:grid; gap:4px; align-items:center; padding:3px 2px; }
+  .brow.bhead { border-bottom:1px solid var(--line); color:var(--muted);
+                font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  .brow input, .brow select { width:100%; font:inherit; font-size:12px; padding:2px 4px;
+                border:1px solid var(--line); border-radius:3px; background:#fff; }
+  .row-actions { display:flex; gap:4px; }
+  .row-actions button { padding:2px 7px; }
   @media (max-width:860px) {
     .layout { grid-template-columns:1fr; }
     .secnav { position:static; display:flex; overflow-x:auto; }

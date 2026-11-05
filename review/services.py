@@ -229,6 +229,78 @@ def set_applicability(review: Review, key: str, state: str, user, reason: str = 
     return item
 
 
+@transaction.atomic
+def set_block_row(review: Review, key: str, index: int | None, values: dict, user,
+                  reason: str = ""):
+    """Append or replace one row of a declared block. Validation is in set_answer."""
+    from .registry import registry
+
+    field = registry[key]
+    item = review.items.filter(field_key=key).first()
+    rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
+
+    if index is None:
+        rows.append(values)
+    else:
+        if index < 0 or index >= len(rows):
+            raise ValidationError("that row no longer exists")
+        rows[index] = values
+
+    limit = (field.block_schema or {}).get("max_rows")
+    if limit and len(rows) > limit:
+        raise ValidationError(f"{key}: at most {limit} rows")
+
+    return set_answer(review, key, rows, user, reason)
+
+
+@transaction.atomic
+def add_block_row(review: Review, key: str, user):
+    from .registry import registry
+
+    field = registry[key]
+    item = review.items.filter(field_key=key).first()
+    rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
+    spec = (field.block_schema or {}).get("fields", {})
+
+    row = {}
+    for name, col in spec.items():
+        if col.get("required") and col["type"] == "enum":
+            used = {r.get(name) for r in rows}
+            choice = next((o for o in col.get("options", []) if o not in used), None)
+            if choice is None:
+                raise ValidationError(f"{key}: no {name} left to add")
+            row[name] = choice
+    return set_block_row(review, key, None, row, user)
+
+
+@transaction.atomic
+def remove_block_row(review: Review, key: str, index: int, user):
+    item = review.items.filter(field_key=key).first()
+    rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
+    if index < 0 or index >= len(rows):
+        raise ValidationError("that row no longer exists")
+    rows.pop(index)
+    if not rows:
+        return set_answer(review, key, None, user) if False else _clear_item(review, key, user)
+    return set_answer(review, key, rows, user)
+
+
+def _clear_item(review: Review, key: str, user):
+    from django.utils import timezone
+
+    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
+    item.value_json = None
+    item.answer_state = ReviewItem.AnswerState.UNANSWERED
+    item.origin = ReviewItem.Origin.NONE
+    item.decided_by = user
+    item.decided_at = timezone.now()
+    item.save()
+    review.edit_revision += 1
+    review.save(update_fields=["edit_revision"])
+    audit(review, user, "block_cleared", "ReviewItem", key)
+    return item
+
+
 def missing_required(review: Review) -> list[str]:
     answered = {
         i.field_key
