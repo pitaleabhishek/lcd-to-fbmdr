@@ -477,3 +477,22 @@ def test_return_accepts_a_field_comment_without_an_overall(case_a, django_user_m
     assert ret.comments
     case_a.refresh_from_db()
     assert case_a.status == Review.Status.RETURNED
+
+
+def test_author_who_is_an_fno_can_reopen_their_own_submission(case_a, django_user_model):
+    fno = django_user_model.objects.get(username="fno")
+    case_a.created_by = fno
+    case_a.assigned_to = fno
+    case_a.save(update_fields=["created_by", "assigned_to"])
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", fno)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", fno)
+    services.submit(case_a, fno)
+
+    services.return_review(case_a, fno, "", {"f4.primary_diagnosis.dx": "recheck"})
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.RETURNED
+
+    with pytest.raises(ValidationError):  # self-approval is still refused
+        services.submit(case_a, fno)
+        services.approve(case_a, fno)

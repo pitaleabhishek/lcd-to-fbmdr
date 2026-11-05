@@ -516,9 +516,6 @@ def return_review(review: Review, user, comment: str, comments: dict | None = No
         raise ValidationError(
             "comment on at least one field, or add an overall comment"
         )
-    if review.submitted_by_id == user.pk:
-        raise ValidationError("no self-return: another FNO must review this")
-
     submission = (
         review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
         .order_by("-version_no")
