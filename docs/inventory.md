@@ -1,23 +1,23 @@
 # Form 4 overlap inventory
 
-53 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
+93 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
 
-**Direct reuse from the LCG: 2 of 53 fields (3.8%).** Everything else is entered by the clinician or copied from another recorded fact.
+**Direct reuse from the LCG: 2 of 93 fields (2.2%).** Everything else is entered by the clinician or copied from another recorded fact.
 
 ## By category
 
 | Category | Fields |
 |---|---|
-| 1. Patient info and admin records | 12 |
-| 2. Clinical and OBS information | 19 |
-| 3. Mx and interventions | 2 |
+| 1. Patient info and admin records | 19 |
+| 2. Clinical and OBS information | 45 |
+| 3. Mx and interventions | 9 |
 | 4. Death ix and review | 20 |
 
 ## By source of the value
 
 | Source | Fields |
 |---|---|
-| clinician | 35 |
+| clinician | 75 |
 | admin | 4 |
 | patient_record | 3 |
 | admission | 3 |
@@ -33,7 +33,7 @@
 |---|---|
 | reused | 14 |
 | derived | 4 |
-| none | 35 |
+| none | 75 |
 
 ## Fields
 
@@ -42,13 +42,20 @@
 | `f4.background.facility_name` | 1 | admin | Name of health facility | reused | yes |
 | `f4.background.facility_type` | 1 | clinician | Type of health facility | none | yes |
 | `f4.background.facility_address` | 1 | clinician | Address | none | yes |
+| `f4.background.nodal_name` | 1 | clinician | Name of Nodal Person | none | yes |
+| `f4.background.nodal_contact` | 1 | clinician | Nodal contact No. | none | yes |
 | `f4.background.fbmdr_no` | 1 | admin | FBMDR No. (specific to the place) | reused | yes |
 | `f4.background.mcts_no` | 1 | patient_record | MCTS No. | reused | yes |
+| `f4.background.fbmdr_month` | 1 | clinician | Month | none | yes |
+| `f4.background.fbmdr_year` | 1 | clinician | Year | none | yes |
 | `f4.background.name` | 1 | patient_record | Full name of deceased mother | reused | yes |
 | `f4.background.age` | 1 | patient_record | Age | reused | yes |
 | `f4.background.inpatient_no` | 1 | admin | Inpatient No. | reused | yes |
 | `f4.background.medico_legal` | 1 | admin | Medico-legal admission | reused | yes |
+| `f4.background.address` | 1 | clinician | Complete address | none | yes |
 | `f4.background.contact` | 1 | clinician | Contact / mobile No. | none | yes |
+| `f4.background.education` | 1 | clinician | Education | none | yes |
+| `f4.background.bpl` | 1 | clinician | Below Poverty Line | none | yes |
 | `f4.timing.a` | 2 | admission | 1.a Date and time of admission | reused | yes |
 | `f4.timing.b` | 2 | death | 1.b Date and time of death | reused | yes |
 | `f4.timing.c` | 2 | admission | 1.c Duration of hospital stay | derived | yes |
@@ -62,14 +69,47 @@
 | `f4.admission.abortions` | 2 | clinician | 2.b Abortions | none | yes |
 | `f4.admission.living_children` | 2 | clinician | 2.b No. of living children | none | yes |
 | `f4.admission.gestation` | 2 | clinician | 2.c Period of gestation | none | yes |
+| `f4.condition.status` | 2 | clinician | 3. Condition on admission | none | yes |
+| `f4.condition.referred` | 2 | clinician | 3.a Referred from outside | none | yes |
+| `f4.condition.places` | 2 | clinician | 3.a.i No. of places visited prior | none | yes |
+| `f4.condition.referral` | 2 | clinician | 3.b Referral table (13 attributes per place) | none | yes |
+| `f4.diagnosis.rows` | 2 | clinician | 4. Diagnosis table (diagnosis + underlying cause) | none | yes |
+| `f4.abortion.type` | 2 | clinician | 2.a Spontaneous / Induced | none | yes |
+| `f4.abortion.spontaneous_type` | 2 | clinician | 2.a.i Complete / Incomplete | none | yes |
+| `f4.abortion.induced_legality` | 2 | clinician | 2.a.ii Legal / Illegal | none | yes |
+| `f4.abortion.procedure` | 2 | clinician | 2.b Procedure adopted | none | yes |
+| `f4.abortion.post_abortal` | 2 | clinician | 2.c Post-abortal period | none | yes |
+| `f4.abortion.multiple_centres` | 2 | clinician | 2.d Procedure in more than one centre | none | yes |
+| `f4.abortion.centres` | 2 | clinician | 2.d Centres visited | none | yes |
+| `f4.antenatal_care.received` | 2 | clinician | 3.a Did she receive ANC | none | yes |
+| `f4.antenatal_care.facility` | 2 | clinician | 3.b Type of facility | none | yes |
+| `f4.antenatal_care.facility_other` | 2 | clinician | 3.b Other facility, specify | none | yes |
+| `f4.antenatal_care.provider` | 2 | clinician | 3.c Services provided by | none | yes |
+| `f4.antenatal_care.provider_other` | 2 | clinician | 3.c Other specialist, specify | none | yes |
+| `f4.antenatal_care.counselled` | 2 | clinician | 3.d Told about a disorder / complication | none | yes |
+| `f4.antenatal_care.risks` | 2 | clinician | 3.e Risk factor identified | none | yes |
 | `f4.delivery.labour_pains` | 2 | lcg | 4.a Did she have labour pains | reused | yes |
-| `f4.delivery.partograph_used` | 2 | clinician | 4.b Was a partograph used | none | yes |
+| `f4.delivery.partograph_past` | 2 | clinician | 4.b.i Partograph used - past facility | none | yes |
+| `f4.delivery.partograph_current` | 2 | clinician | 4.b.ii Partograph used - current facility | none | yes |
 | `f4.delivery.complications` | 2 | clinician | 4.c Complications during labour | none | yes |
+| `f4.delivery.complications_other` | 2 | clinician | 4.c Others, specify | none | yes |
 | `f4.delivery.mode` | 3 | delivery | 4.d Mode of delivery | reused | yes |
+| `f4.delivery.mode_indication` | 3 | clinician | 4.d Indication (CS / instrumental) | none | yes |
+| `f4.delivery.anaesthesia` | 3 | clinician | 4.e Anaesthesia | none | yes |
+| `f4.delivery.anaesthesia_reaction` | 3 | clinician | 4.e Any adverse reaction | none | yes |
 | `f4.delivery.phase` | 2 | clinician | 4.f Phase of labour at complication | none | yes |
 | `f4.delivery.neonatal_outcome` | 2 | neonate | 4.g Neonatal outcome | reused | yes |
+| `f4.delivery.neonatal_death_time` | 2 | clinician | 4.h Time of neonatal death | none | yes |
+| `f4.delivery.neonatal_cause` | 2 | clinician | 4.h Probable cause of neonatal death | none | yes |
+| `f4.delivery.neonatal_cause_other` | 2 | clinician | 4.h Others, specify | none | yes |
 | `f4.delivery.postnatal` | 2 | clinician | 4.i Postnatal period | none | yes |
-| `f4.interventions.performed` | 3 | clinician | 5. Interventions (phase x procedure matrix) | none | yes |
+| `f4.delivery.postnatal_cause` | 2 | clinician | 4.i Probable cause if eventful | none | yes |
+| `f4.delivery.postnatal_cause_other` | 2 | clinician | 4.i Others, specify | none | yes |
+| `f4.interventions.matrix` | 3 | clinician | 5. Interventions matrix (phase x procedure) | none | yes |
+| `f4.interventions.transfusion_given` | 3 | clinician | 5. Blood transfusion given | none | yes |
+| `f4.interventions.transfusion_units` | 3 | clinician | 5. No. of units | none | yes |
+| `f4.interventions.transfusion_components` | 3 | clinician | 5. If yes, No of units (Cryo / Whole Blood / PRBC / FFP / Platelets) | none | yes |
+| `f4.interventions.transfusion_reaction` | 3 | clinician | 5. Transfusion reaction | none | yes |
 | `f4.primary_diagnosis.dx` | 4 | clinician | 6. Primary diagnosis / condition leading to death | none | yes |
 | `f4.cause_of_death.a_antecedent` | 4 | clinician | 7. Part 1 a. Due to or as a consequence of | none | yes |
 | `f4.cause_of_death.b_antecedent` | 4 | clinician | 7. Part 1 b. Due to or as a consequence of | none | yes |

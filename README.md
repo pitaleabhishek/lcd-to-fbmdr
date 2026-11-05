@@ -93,8 +93,9 @@ of the registry, never hand-maintained.
 
 - All domain models, migrations, and Postgres triggers that make recorded facts
   append-only (`Observation`, `SourceDocument`, `Delivery`, `Death`, `CareContact`).
-- Registry with full-word section keys and `f4.<section>.<label>` grammar
-  (53 fields in the first slice).
+- Form 4 registry: 14 sections, 93 fields, three block schemas (referral,
+  diagnosis, interventions). Unknown keys and off-form enum/multi answers are
+  rejected by a Postgres trigger; block rows are checked in `ReviewItem.clean()`.
 - LCG registry: 7 sections, 34 variables, ordered and typed; observations FK to a
   variable and carry `stage` on the row. `lcg_chart` and `lcg_cells` views render
   the grid.

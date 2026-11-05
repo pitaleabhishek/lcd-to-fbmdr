@@ -22,6 +22,10 @@ def fmt(value) -> str:
         return f"{sign}{m // 60}h {m % 60:02d}m"
     if isinstance(value, bool):
         return "Yes" if value else "No"
+    if isinstance(value, list):
+        if value and isinstance(value[0], dict):
+            return f"{len(value)} row{'s' if len(value) != 1 else ''}"
+        return ", ".join(str(v) for v in value) if value else "—"
     if isinstance(value, str):
         return value.replace("_", " ")
     return str(value)

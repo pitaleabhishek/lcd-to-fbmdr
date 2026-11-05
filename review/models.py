@@ -158,6 +158,49 @@ class LCGVariable(models.Model):
         return f"{self.section.label} / {self.label}"
 
 
+class Form4Section(models.Model):
+    """One printed section of the FBMDR Form 4."""
+
+    ord = models.PositiveSmallIntegerField(unique=True)
+    key = models.CharField(max_length=50, unique=True)
+    label = models.CharField(max_length=200)
+
+    class Meta:
+        ordering = ["ord"]
+
+    def __str__(self) -> str:
+        return self.label
+
+
+class Form4Field(models.Model):
+    """One printed answer position. Repeating groups carry a row schema."""
+
+    key = models.CharField(max_length=120, unique=True)
+    section = models.ForeignKey(Form4Section, on_delete=models.PROTECT, related_name="fields")
+    ord = models.PositiveSmallIntegerField()
+    label_printed = models.CharField(max_length=300)
+    type = models.CharField(max_length=20)
+    options = models.JSONField(default=list, blank=True)
+    required = models.BooleanField(default=False)
+    applicability = models.CharField(max_length=50, blank=True)
+    category = models.PositiveSmallIntegerField()
+    source = models.CharField(max_length=50, blank=True)
+    handling = models.CharField(max_length=20, blank=True)
+    rule = models.CharField(max_length=120, blank=True)
+    terminology_note = models.TextField(blank=True)
+    precision_note = models.TextField(blank=True)
+    block_schema = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["section__ord", "ord"]
+        constraints = [
+            models.UniqueConstraint(fields=["section", "ord"], name="uniq_form4_section_ord")
+        ]
+
+    def __str__(self) -> str:
+        return self.key
+
+
 class Observation(models.Model):
     document = models.ForeignKey(SourceDocument, on_delete=models.PROTECT, related_name="observations")
     variable = models.ForeignKey(LCGVariable, on_delete=models.PROTECT, related_name="observations")
@@ -436,6 +479,79 @@ class ReviewItem(models.Model):
         "Proposal", on_delete=models.SET_NULL, null=True, blank=True, related_name="accepted_by"
     )
     needs_reconsideration = models.BooleanField(default=False)
+
+    def clean(self):
+        """An answer must be a value Form 4 allows. Blocks are checked row by row."""
+        from django.core.exceptions import ValidationError
+
+        from .registry import registry
+
+        super().clean()
+        f = registry._fields.get(self.field_key)
+        if f is None:
+            raise ValidationError(f"unknown Form 4 field {self.field_key!r}")
+
+        if self.answer_state != self.AnswerState.ANSWERED:
+            return
+        if self.applicability_state != self.Applicability.APPLICABLE:
+            return
+        value = self.value_json
+        if value is None:
+            return
+
+        if f.type == "enum":
+            if value not in f.options:
+                raise ValidationError(f"{f.key}: {value!r} is not one of {f.options}")
+        elif f.type == "multi":
+            if not isinstance(value, list):
+                raise ValidationError(f"{f.key}: a list is required")
+            bad = [v for v in value if v not in f.options]
+            if bad:
+                raise ValidationError(f"{f.key}: {bad} not on the form")
+        elif f.type == "int":
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValidationError(f"{f.key}: a whole number is required")
+        elif f.type == "bool":
+            if not isinstance(value, bool):
+                raise ValidationError(f"{f.key}: true or false is required")
+        elif f.type == "block":
+            self._clean_block(f, value)
+
+    def _clean_block(self, f, rows):
+        from django.core.exceptions import ValidationError
+
+        if not isinstance(rows, list):
+            raise ValidationError(f"{f.key}: a list of rows is required")
+        schema = f.block_schema or {}
+        limit = schema.get("max_rows")
+        if limit and len(rows) > limit:
+            raise ValidationError(f"{f.key}: at most {limit} rows")
+        fields = schema.get("fields", {})
+        for i, row in enumerate(rows):
+            if not isinstance(row, dict):
+                raise ValidationError(f"{f.key}#{i}: a row must be an object")
+            unknown = set(row) - set(fields)
+            if unknown:
+                raise ValidationError(f"{f.key}#{i}: unknown columns {sorted(unknown)}")
+            for name, spec in fields.items():
+                if spec.get("required") and row.get(name) in (None, ""):
+                    raise ValidationError(f"{f.key}#{i}: {name} is required")
+                if name not in row:
+                    continue
+                if spec["type"] == "enum" and row[name] not in spec.get("options", []):
+                    raise ValidationError(
+                        f"{f.key}#{i}: {name}={row[name]!r} is not one of {spec.get('options')}"
+                    )
+                if spec["type"] in ("int", "number"):
+                    v = row[name]
+                    if not isinstance(v, (int, float)) or isinstance(v, bool):
+                        raise ValidationError(f"{f.key}#{i}: {name} must be numeric")
+                    if spec.get("min") is not None and v < spec["min"]:
+                        raise ValidationError(f"{f.key}#{i}: {name} below minimum")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     class Meta:
         constraints = [
