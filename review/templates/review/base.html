@@ -401,6 +401,7 @@
 
     addEventListener('pagehide', function () {
       if (!hasValue()) return;
+      if (snapshot(f) === last) return;   // nothing unsaved; do not re-post on navigation
       try { navigator.sendBeacon(f.dataset.autosave, new FormData(f)); } catch (e) {}
     });
   }

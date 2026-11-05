@@ -917,13 +917,26 @@ def history(request, pk: int):
     events = []
     for e in page_obj:
         action, detail = _describe(e)
+        key = e.entity_id if e.action.startswith(
+            ("answer", "proposal", "applicability")
+        ) else ""
+        if (
+            events
+            and key
+            and events[-1]["key"] == key
+            and events[-1]["action"] == action
+            and (events[-1]["at"] - e.at).total_seconds() <= 120
+        ):
+            events[-1]["count"] += 1
+            continue
         events.append(
             {
                 "at": e.at,
                 "actor": e.actor,
                 "action": action,
                 "detail": detail,
-                "key": e.entity_id if e.action.startswith(("answer", "proposal", "applicability")) else "",
+                "key": key,
+                "count": 1,
             }
         )
     versions = review.versions.select_related("created_by").order_by("-version_no")

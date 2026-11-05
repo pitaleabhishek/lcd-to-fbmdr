@@ -72,14 +72,14 @@
 <h2>Activity</h2>
 <p class="muted small">
   {{ total }} event{{ total|pluralize }}{% if field %} for <b>{{ field_label }}</b> · <a href="{% url 'history' review.pk %}">clear filter</a>{% endif %}
-  · one row per save, newest first
+  · repeated edits to one field within 2 minutes are counted, not repeated
 </p>
 <table>
   <thead><tr><th style="width:16%">When</th><th style="width:16%">Who</th><th style="width:18%">What</th><th>Detail</th></tr></thead>
   <tbody>
   {% for e in events %}
     <tr>
-      <td>{{ e.at|date:"d M H:i:s" }}</td>
+      <td>{{ e.at|date:"d M H:i:s" }}{% if e.count > 1 %}<div class="count">×{{ e.count }} in 2 min</div>{% endif %}</td>
       <td>{{ e.actor.username|default:"—" }}</td>
       <td>{{ e.action }}</td>
       <td>{{ e.detail }}

@@ -273,6 +273,9 @@ def set_block_row(review: Review, key: str, index: int | None, values: dict, use
     if limit and len(rows) > limit:
         raise ValidationError(f"{key}: at most {limit} rows")
 
+    if item and item.value_json == rows and item.answer_state == ReviewItem.AnswerState.ANSWERED:
+        return item  # identical content: no revision, no audit row
+
     return set_answer(review, key, rows, user, reason)
 
 
@@ -368,6 +371,8 @@ def save_place_row(review: Review, key: str, place: str, values: dict, user):
         rows.append(values)
     else:
         rows[index] = values
+    if item and item.value_json == rows and item.answer_state == ReviewItem.AnswerState.ANSWERED:
+        return item
     return set_answer(review, key, rows, user)
 
 

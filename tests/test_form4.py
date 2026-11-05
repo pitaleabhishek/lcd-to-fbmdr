@@ -700,3 +700,17 @@ def test_resident_note_is_per_version_and_not_printed(client, case_a, django_use
     page = client.get(f"/review/{case_a.pk}/output/?format=json").content.decode() \
         if case_a.current_version else ""
     assert "Resident note" not in page
+
+
+def test_repeating_a_block_save_does_not_add_history(case_a, django_user_model):
+    from review.models import AuditEvent
+
+    user = django_user_model.objects.get(username="resident")
+    key = "f4.condition.referral"
+    values = {"time_to_reach": 45, "transport": "jeep"}
+
+    services.save_place_row(case_a, key, "facility_1", values, user)
+    services.save_place_row(case_a, key, "facility_1", values, user)
+    services.save_place_row(case_a, key, "facility_1", values, user)
+
+    assert AuditEvent.objects.filter(review=case_a, entity_id=key).count() == 1
