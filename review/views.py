@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 from . import services
 from .models import Proposal, Review, ReviewItem
 from .registry import CATEGORIES, registry
+from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
 
 
 def fmt(value) -> str:
@@ -48,6 +49,80 @@ def index(request):
         .order_by("-created_at")
     )
     return render(request, "review/index.html", {"reviews": reviews, "is_fno": is_fno(request.user)})
+
+
+def _num(value) -> str:
+    if value is None:
+        return ""
+    d = float(value)
+    return str(int(d)) if d == int(d) else f"{d:g}"
+
+
+@login_required
+def labour(request, pk: int):
+    from django.utils import timezone
+
+    from .models import SourceDocument
+
+    doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    obs = list(
+        doc.observations.select_related("variable__section").order_by("observed_at")
+    )
+    death = doc.pregnancy.deaths.order_by("-died_at").first()
+    times = sorted({o.observed_at for o in obs})
+
+    columns = [
+        {
+            "at": t,
+            "label": timezone.localtime(t).strftime("%d %b %H:%M"),
+            "clock": timezone.localtime(t).strftime("%H:%M"),
+            "stage": next((o.stage for o in obs if o.observed_at == t), "first"),
+        }
+        for t in times
+    ]
+
+    def cell(o):
+        late = bool(death and o.documented_at and death.died_at and o.documented_at > death.died_at)
+        return {
+            "value": o.value_text if o.value_text not in ("", None) else _num(o.value_num),
+            "author": o.author,
+            "observed": timezone.localtime(o.observed_at).strftime("%H:%M")
+            if o.observed_at else "",
+            "documented": timezone.localtime(o.documented_at).strftime("%H:%M")
+            if o.documented_at else "",
+            "late": late,
+        }
+
+    index = {(o.variable.key, o.observed_at): cell(o) for o in obs}
+    sections = []
+    for order, key, label in LCG_SECTIONS:
+        variables = [v for v in VARIABLES if v.section == key]
+        if not variables:
+            continue
+        sections.append(
+            {
+                "key": key,
+                "label": label,
+                "rows": [
+                    {"variable": v, "cells": [index.get((v.key, t)) for t in times]}
+                    for v in variables
+                ],
+            }
+        )
+
+    return render(
+        request,
+        "review/labour.html",
+        {
+            "document": doc,
+            "pregnancy": doc.pregnancy,
+            "patient": doc.pregnancy.patient,
+            "header": doc.header_json,
+            "columns": columns,
+            "sections": sections,
+            "death": death,
+        },
+    )
 
 
 @login_required

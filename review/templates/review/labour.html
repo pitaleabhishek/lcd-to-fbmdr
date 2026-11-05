@@ -1,0 +1,65 @@
+{% extends "review/base.html" %}
+{% block title %}{{ patient.name }} · Labour record{% endblock %}
+{% block content %}
+<h1>{{ patient.name }} — labour record</h1>
+<p class="muted">
+  {{ document.source_format }} · written by {{ document.author|default:"—" }}
+  {% if death %} · died {{ death.died_at|date:"d M H:i" }}{% endif %}
+</p>
+
+<div class="stats">
+  {% for key, value in header.items %}
+    <div class="stat"><span class="muted">{{ key|cut:"_"|title }}</span> <b>{{ value }}</b></div>
+  {% endfor %}
+</div>
+
+<div class="bar">
+  {% with review=pregnancy.reviews.first %}
+    {% if review %}<a href="{% url 'workspace' review.pk %}">Open the review</a>{% endif %}
+  {% endwith %}
+  <a href="/">All cases</a>
+</div>
+
+<div class="chart-wrap">
+<table class="chart">
+  <thead>
+    <tr>
+      <th class="sticky">Item</th>
+      {% for c in columns %}
+        <th>
+          {{ c.clock }}
+          <div class="stage">{{ c.stage }}</div>
+        </th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for section in sections %}
+      <tr class="sec"><th class="sticky" colspan="{{ columns|length|add:1 }}">{{ section.label }}</th></tr>
+      {% for row in section.rows %}
+        <tr>
+          <th class="sticky">
+            {{ row.variable.label }}
+            {% if row.variable.unit %}<span class="unit">{{ row.variable.unit }}</span>{% endif %}
+            {% if row.variable.alert %}<div class="alert-ref">alert {{ row.variable.alert }}</div>{% endif %}
+          </th>
+          {% for cell in row.cells %}
+            <td>
+              {% if cell %}
+                <span class="cell {% if cell.late %}late{% endif %}"
+                      title="{{ cell.author }} · observed {{ cell.observed }} · documented {{ cell.documented }}{% if cell.late %} · late entry{% endif %}">
+                  {{ cell.value }}{% if cell.late %}<sup>late</sup>{% endif %}
+                </span>
+              {% else %}
+                <span class="empty">·</span>
+              {% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted small">Hover a value for its author and timestamps. “late” means documented after the time of death.</p>
+{% endblock %}

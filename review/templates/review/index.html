@@ -13,7 +13,10 @@
       <td>{{ r.get_status_display }}</td>
       <td>{{ r.current_version }}</td>
       <td>
-        <a href="{% url 'workspace' r.pk %}">Open</a>
+        <a href="{% url 'workspace' r.pk %}">Open review</a>
+        {% with doc=r.pregnancy.documents.first %}
+          {% if doc %} · <a href="{% url 'labour' doc.pk %}">Labour record</a>{% endif %}
+        {% endwith %}
         {% if r.current_version %} · <a href="{% url 'output' r.pk %}">Output</a>{% endif %}
       </td>
     </tr>

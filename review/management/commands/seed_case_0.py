@@ -10,10 +10,14 @@ from datetime import datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
+from review import services
 from review.models import (
     Admission,
+    Death,
+    Review,
     Delivery,
     Facility,
     LCGVariable,
@@ -185,7 +189,24 @@ class Command(BaseCommand):
             status_context="at birth",
         )
 
+        # The record is complete; the death is unexplained.
+        Death.objects.create(
+            pregnancy=pregnancy, admission=admission,
+            died_at=dt(1, 30, day=13), time_precision=TimePrecision.EXACT,
+            place="Postnatal ward", brought_dead=False, certified_by="Dr A. Rane",
+        )
+        resident, created = User.objects.get_or_create(username="resident")
+        if created:
+            resident.set_password("resident123")
+            resident.save()
+        review = Review.objects.create(
+            pregnancy=pregnancy, reporting_facility=facility,
+            reporting_admission=admission, fbmdr_no="0001",
+            created_by=resident, assigned_to=resident,
+        )
+        proposals = services.reevaluate(review, resident)
+
         self.stdout.write(self.style.SUCCESS(
-            f"seeded case 0: patient {patient.pk}, {rows} observations, "
-            f"{len(series)} first-stage variables x 10 columns + second stage"
+            f"seeded case 0: review {review.pk}, {rows} observations, "
+            f"{len(proposals)} proposals"
         ))

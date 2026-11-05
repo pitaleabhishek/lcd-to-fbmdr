@@ -166,3 +166,16 @@ def test_database_trigger_rejects_invalid_values():
     with pytest.raises(DatabaseError):
         with transaction.atomic():
             Observation.objects.bulk_create([bad])  # bypasses save()/clean()
+
+
+def test_labour_record_view_renders_the_chart(client, case_0):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.get(f"/labour/{case_0.pk}/")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Care of the woman" in body
+    assert "Systolic BP" in body
+    assert "second" in body        # stage band
+    assert "Cervix" in body

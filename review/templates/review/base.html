@@ -57,6 +57,25 @@
   .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
   .locked { background:#fff; border:1px solid var(--line); border-radius:6px;
             padding:10px; color:var(--warn); }
+  .chart-wrap { overflow-x:auto; border:1px solid var(--line); border-radius:6px;
+                background:#fff; }
+  table.chart { border:0; border-radius:0; min-width:100%; }
+  table.chart th.sticky, table.chart td.sticky { position:sticky; left:0; background:#fff;
+                z-index:2; min-width:190px; max-width:190px; }
+  table.chart thead th { position:sticky; top:0; background:#f2f5f7; z-index:1;
+                white-space:nowrap; font-size:12px; }
+  table.chart thead th.sticky { z-index:3; }
+  table.chart td { text-align:center; min-width:62px; white-space:nowrap; }
+  table.chart tr.sec th { background:#eef3f5; color:var(--accent); text-align:left;
+                font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .chart .stage { color:var(--muted); font-weight:400; font-size:10px;
+                text-transform:none; letter-spacing:0; }
+  .chart .unit { color:var(--muted); font-size:10px; font-weight:400; }
+  .chart .alert-ref { color:var(--muted); font-size:10px; font-weight:400; }
+  .chart .empty { color:#c4ccd3; }
+  .chart .late { color:var(--warn); font-weight:700; }
+  .chart .late sup { font-size:9px; margin-left:2px; }
+  .small { font-size:12px; }
 </style>
 </head>
 <body>
