@@ -9,6 +9,7 @@
       {{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }}
       · <span class="status">{{ review.get_status_display }}</span>
       · edits {{ review.edit_revision }}
+      {% if review.last_saved_at %} · saved {{ review.last_saved_at|timesince }} ago{% endif %}
       {% if review.deadline_at %} · deadline {{ review.deadline_at|date:"d M H:i" }}{% endif %}
     </p>
   </div>
@@ -33,8 +34,8 @@
   <span style="width:{{ stats.percent }}%"></span>
 </div>
 <div class="stats">
-  <div class="stat"><b>{{ stats.answered }}</b> / {{ stats.fields }} answered</div>
-  <div class="stat"><b>{{ stats.na }}</b> not applicable</div>
+  <div class="stat"><b>{{ stats.resolved }}</b> / {{ stats.fields }} resolved</div>
+  <div class="stat"><b>{{ stats.to_enter }}</b> to enter</div>
   <div class="stat"><b>{{ stats.proposed }}</b> open proposals</div>
   <div class="stat"><b>{{ stats.needs }}</b> need review</div>
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
@@ -77,6 +78,13 @@
                 <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                 {% if row.needs %}<span class="chip C">review</span>{% endif %}
                 {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
+                {% if row.revertible %}
+                  <form method="post" class="inline">{% csrf_token %}
+                    <input type="hidden" name="action" value="revert">
+                    <input type="hidden" name="key" value="{{ row.field.key }}">
+                    <button class="linkish" title="Undo the last change to this field">revert</button>
+                  </form>
+                {% endif %}
               {% elif row.is_na %}
                 <span class="muted">Not applicable</span>
                 <div class="key">{{ row.item.reason }}</div>

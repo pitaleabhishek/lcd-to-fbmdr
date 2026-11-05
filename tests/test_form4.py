@@ -123,3 +123,36 @@ def test_block_rows_round_trip(case_a, django_user_model):
     services.remove_block_row(case_a, key, 0, user)
     item.refresh_from_db()
     assert item.answer_state == ReviewItem.AnswerState.UNANSWERED
+
+
+def test_last_saved_is_stamped(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    before = case_a.last_saved_at
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", user)
+    case_a.refresh_from_db()
+    assert case_a.last_saved_at is not None
+    assert before is None or case_a.last_saved_at >= before
+
+
+def test_revert_restores_the_previous_value(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    key = "f4.primary_diagnosis.dx"
+
+    services.set_answer(case_a, key, "First", user)
+    services.set_answer(case_a, key, "Second", user)
+
+    services.revert_last(case_a, key, user)
+    item = case_a.items.get(field_key=key)
+    assert item.value_json == "First"
+    assert item.answer_state == ReviewItem.AnswerState.ANSWERED
+
+    # revert is single-step, not a stack: a second revert restores the same value
+    services.revert_last(case_a, key, user)
+    item.refresh_from_db()
+    assert item.value_json == "First"
+
+
+def test_revert_on_an_untouched_field_fails(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    with pytest.raises(ValidationError):
+        services.revert_last(case_a, "f4.primary_diagnosis.dx", user)

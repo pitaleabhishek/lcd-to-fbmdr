@@ -123,7 +123,8 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
                 item.save(update_fields=["needs_reconsideration"])
 
     review.edit_revision += 1
-    review.save(update_fields=["edit_revision"])
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
     return created
 
 
@@ -156,7 +157,8 @@ def accept_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
     ProposalDecision.objects.create(proposal=proposal, decision="accepted", by=user, reason=reason)
 
     review.edit_revision += 1
-    review.save(update_fields=["edit_revision"])
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
     audit(review, user, "proposal_accepted", "Proposal", proposal.pk,
           {"field_key": proposal.field_key, "value": proposal.value_json})
     return item
@@ -180,7 +182,8 @@ def reject_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
         item.save(update_fields=["accepted_proposal"])
 
     review.edit_revision += 1
-    review.save(update_fields=["edit_revision"])
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
     audit(review, user, "proposal_rejected", "Proposal", proposal.pk,
           {"field_key": proposal.field_key, "reason": reason})
 
@@ -192,7 +195,12 @@ def set_answer(review: Review, key: str, value, user, reason: str = "", correcte
         raise ValidationError("review is locked")
 
     item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
-    previous = item.value_json
+    previous = {
+        "from": item.value_json,
+        "from_origin": item.origin,
+        "from_state": item.answer_state,
+        "from_accepted": item.accepted_proposal_id,
+    }
     item.value_json = value
     item.answer_state = ReviewItem.AnswerState.ANSWERED
     item.applicability_state = ReviewItem.Applicability.APPLICABLE
@@ -204,9 +212,10 @@ def set_answer(review: Review, key: str, value, user, reason: str = "", correcte
     item.save()
 
     review.edit_revision += 1
-    review.save(update_fields=["edit_revision"])
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
     audit(review, user, "answer_set", "ReviewItem", key,
-          {"from": previous, "to": value, "corrected": corrected, "reason": reason})
+          {**previous, "to": value, "corrected": corrected, "reason": reason})
     return item
 
 
@@ -296,8 +305,41 @@ def _clear_item(review: Review, key: str, user):
     item.decided_at = timezone.now()
     item.save()
     review.edit_revision += 1
-    review.save(update_fields=["edit_revision"])
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
     audit(review, user, "block_cleared", "ReviewItem", key)
+    return item
+
+
+@transaction.atomic
+def revert_last(review: Review, key: str, user) -> ReviewItem:
+    """Undo the most recent answer change for one field, from the audit trail."""
+    review = Review.objects.select_for_update().get(pk=review.pk)
+    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
+        raise ValidationError("review is locked")
+
+    event = (
+        AuditEvent.objects.filter(review=review, action="answer_set", entity_id=key)
+        .order_by("-at", "-id")
+        .first()
+    )
+    if event is None:
+        raise ValidationError("this field has not been changed yet")
+
+    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
+    item.value_json = event.payload.get("from")
+    item.origin = event.payload.get("from_origin") or ReviewItem.Origin.NONE
+    item.answer_state = event.payload.get("from_state") or ReviewItem.AnswerState.UNANSWERED
+    item.accepted_proposal_id = event.payload.get("from_accepted")
+    item.decided_by = user
+    item.decided_at = timezone.now()
+    item.needs_reconsideration = False
+    item.save()
+
+    review.edit_revision += 1
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
+    audit(review, user, "answer_reverted", "ReviewItem", key, {"to": item.value_json})
     return item
 
 
@@ -373,6 +415,7 @@ def submit(review: Review, user) -> ReviewVersion:
     review.current_version = version_no
     review.submitted_by = user
     review.submitted_at = timezone.now()
+    review.last_saved_at = review.submitted_at
     death = review.pregnancy.deaths.order_by("-died_at").first()
     if death and death.died_at and death.time_precision == TimePrecision.EXACT:
         review.deadline_at = death.died_at + timedelta(hours=24)
@@ -404,6 +447,7 @@ def approve(review: Review, user) -> ReviewVersion:
     review.current_version = version_no
     review.approved_by = user
     review.approved_at = timezone.now()
+    review.last_saved_at = review.approved_at
     review.save()
     audit(review, user, "approved", "ReviewVersion", version.pk, {"version_no": version_no})
     return version

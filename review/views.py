@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from . import services
-from .models import Proposal, Review, ReviewItem
+from .models import AuditEvent, Proposal, Review, ReviewItem
 from .registry import CATEGORIES, registry
 from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
 
@@ -139,6 +139,9 @@ def workspace(request, pk: int):
         return redirect("workspace", pk=review.pk)
 
     items = {i.field_key: i for i in review.items.all()}
+    last_change = {}
+    for ev in AuditEvent.objects.filter(review=review, action="answer_set").order_by("at", "id"):
+        last_change[ev.entity_id] = ev
     open_proposals: dict[str, list[Proposal]] = {}
     for p in review.proposals.filter(status=Proposal.Status.PROPOSED).order_by("-id"):
         open_proposals.setdefault(p.field_key, []).append(p)
@@ -176,6 +179,7 @@ def workspace(request, pk: int):
                     "is_block": f.type == "block",
                     "block_cols": list((f.block_schema or {}).get("fields", {}).items()),
                     "block_rows": _block_rows(f, item),
+                    "revertible": f.key in last_change and not locked,
                     "can_add": bool(
                         f.type == "block"
                         and len(_block_rows(f, item))
@@ -198,14 +202,18 @@ def workspace(request, pk: int):
     answered_total = sum(
         1 for i in items.values() if i.answer_state == ReviewItem.AnswerState.ANSWERED
     )
+    na_total = sum(
+        1
+        for i in items.values()
+        if i.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+    )
+    resolved = answered_total + na_total
     stats = {
         "fields": len(registry.all()),
         "answered": answered_total,
-        "na": sum(
-            1
-            for i in items.values()
-            if i.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
-        ),
+        "resolved": resolved,
+        "to_enter": len(registry.all()) - resolved,
+        "na": na_total,
         "proposed": sum(len(v) for v in open_proposals.values()),
         "needs": sum(1 for i in items.values() if i.needs_reconsideration),
         "gaps": sum(
@@ -213,7 +221,7 @@ def workspace(request, pk: int):
             for f in registry.all()
             if f.required and (f.key not in items or items[f.key].answer_state != "answered")
         ),
-        "percent": round(100 * answered_total / max(1, len(registry.all()))),
+        "percent": round(100 * resolved / max(1, len(registry.all()))),
     }
     return render(
         request,
@@ -235,6 +243,11 @@ def _handle_action(request, review: Review):
     if action == "reevaluate":
         services.reevaluate(review, user)
         messages.success(request, "Proposals refreshed")
+        return
+
+    if action == "revert":
+        services.revert_last(review, request.POST["key"], user)
+        messages.success(request, "Reverted the last change")
         return
 
     if action == "accept":

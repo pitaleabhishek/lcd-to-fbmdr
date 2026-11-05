@@ -72,7 +72,9 @@ and a late-entry flag. This is "what he already filled".
 
 **Review workspace** — the main screen.
 
-- Header: patient, facility, status, `answered / total`, deadline, one primary action.
+- Header: patient, facility, status, **resolved / total**, "to enter", last saved,
+  deadline, one primary action. Resolved counts answers plus not-applicable, so the
+  bar can actually reach 100%.
 - Left: the 14 sections with counts and badges for *needs review* and *gap*.
 - Rows: printed label, current answer with a source chip (`R` reused, `D` derived,
   `E` entered, `C` corrected), proposals with their inputs, accept / reject / edit,
@@ -103,6 +105,11 @@ and its author, which is what the brief asks for.
 ## Interaction rules
 
 - Autosave on change; visible *saving / saved / error*; explicit Save fallback.
+- The header shows **last saved** ("saved 4 minutes ago"), because a resident who
+  was interrupted needs to know their work survived.
+- Every edited field offers **revert last change**, read from the audit trail. It is
+  single-step, not an undo stack: one click restores the value that was there
+  before the last edit. Restoring an accepted proposal is the same mechanism.
 - Submit waits for in-flight saves and sends `edit_revision`; stale tabs get a
   recoverable message, never a silent overwrite.
 - Keyboard-first: tab order follows the form, Enter saves, no traps.

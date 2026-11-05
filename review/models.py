@@ -389,6 +389,7 @@ class Review(models.Model):
         related_name="reviews_assigned",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    last_saved_at = models.DateTimeField(null=True, blank=True)
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
         related_name="reviews_submitted",
