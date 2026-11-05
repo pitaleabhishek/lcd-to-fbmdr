@@ -65,6 +65,14 @@ class Command(BaseCommand):
             origin_facility=facility.name,
             author="Nurse S. Bhoyar", entered_by="Nurse S. Bhoyar",
             documented_at=dt(18, 0), time_precision=TimePrecision.EXACT,
+            header_json={
+                "name": patient.name,
+                "parity": 0,
+                "labour_onset": "spontaneous",
+                "active_labour_dx": dt(18, 0).isoformat(),
+                "ruptured_membranes": dt(19, 30).isoformat(),
+                "risk_factors": "none",
+            },
         )
 
         variables = {v.key: v for v in LCGVariable.objects.all()}
@@ -95,14 +103,7 @@ class Command(BaseCommand):
             )
             rows += 1
 
-        # --- Section 1: header, once per chart -------------------------------
-        obs("name", dt(18, 0), patient.name)
-        obs("parity", dt(18, 0), "P0")
-        obs("labour_onset", dt(18, 0), "spontaneous")
-        obs("active_labour_dx", dt(18, 0), dt(18, 0).isoformat())
-        obs("ruptured_membranes", dt(19, 30), dt(19, 30).isoformat())
-        obs("risk_factors", dt(18, 0), "none")
-
+        # Section 1 lives on the document (header_json), not on the time axis.
         # --- Active first stage: ten columns, every variable ----------------
         series = {
             "companion": ["yes"] * 10,
@@ -110,6 +111,7 @@ class Command(BaseCommand):
             "oral_fluid": ["yes"] * 10,
             "posture": ["mobile", "mobile", "mobile", "upright", "upright",
                         "upright", "lateral", "lateral", "mobile", "mobile"],
+            "baseline_fhr": [140] * 10,
             "fhr": [140, 142, 138, 140, 136, 140, 142, 138, 140, 136],
             "fhr_deceleration": ["none"] * 10,
             "amniotic_fluid": ["clear"] * 10,
@@ -122,12 +124,10 @@ class Command(BaseCommand):
             "temperature": [37.0] * 10,
             "urine_protein": ["0"] * 10,
             "urine_acetone": ["0"] * 10,
-            "urine_volume": [200, 200, 250, 250, 250, 300, 300, 300, 250, 250],
             "contractions": [3, 3, 4, 4, 4, 5, 5, 4, 4, 3],
             "contraction_duration": [40, 40, 45, 45, 50, 50, 50, 45, 45, 40],
             "cervix": [4, 5, 5, 6, 6, 7, 8, 9, 10, 10],
             "descent": [2, 2, 2, 3, 3, 3, 3, 4, 4, 4],
-            "pushing": [0] * 10,
             "oxytocin": [0] * 10,
             "medicine": ["none"] * 10,
             "iv_fluids": ["RL 500 ml"] * 10,
@@ -148,6 +148,7 @@ class Command(BaseCommand):
             "pain_relief": ["yes", "yes"],
             "oral_fluid": ["no", "no"],
             "posture": ["lateral", "upright"],
+            "baseline_fhr": [140, 138],
             "fhr": [136, 130],
             "fhr_deceleration": ["none", "early"],
             "amniotic_fluid": ["clear", "clear"],
@@ -160,11 +161,9 @@ class Command(BaseCommand):
             "temperature": [37.1, 37.1],
             "urine_protein": ["0", "0"],
             "urine_acetone": ["0", "0"],
-            "urine_volume": [100, 0],
             "contractions": [5, 5],
             "contraction_duration": [60, 60],
             "descent": [4, 5],
-            "pushing": [1, 1],
             "oxytocin": [2.5, 2.5],
             "medicine": ["none", "none"],
             "iv_fluids": ["RL 500 ml", "RL 500 ml"],

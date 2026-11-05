@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+# Reconciled against the printed chart (WHO Labour Care Guide, 2021).
+# Deliberately absent: urine volume (not a row on the chart) and pushing
+# (a plotted "P" marker on the descent line; stage already records it).
 SECTIONS = [
     (1, "identifying", "Identifying information and labour characteristics at admission"),
     (2, "supportive_care", "Supportive care"),
@@ -54,16 +57,18 @@ VARIABLES: list[Variable] = [
       options=("supine", "mobile", "upright", "lateral")),
 
     # --- 3. Care of the baby ---
-    V("fhr", "baby", "FHR", "num", 1, unit="/min", alert="<110 or >=160"),
-    V("fhr_deceleration", "baby", "FHR deceleration", "enum", 2,
+    V("baseline_fhr", "baby", "Baseline", "num", 1, unit="/min",
+      alert="<110 or >=160"),
+    V("fhr", "baby", "FHR", "num", 2, unit="/min", alert="<110 or >=160"),
+    V("fhr_deceleration", "baby", "FHR deceleration", "enum", 3,
       options=("none", "early", "late", "variable"), alert="late"),
-    V("amniotic_fluid", "baby", "Amniotic fluid", "enum", 3,
+    V("amniotic_fluid", "baby", "Amniotic fluid", "enum", 4,
       options=("intact", "clear", "meconium", "blood"), alert="meconium or blood"),
-    V("fetal_position", "baby", "Fetal position", "enum", 4,
+    V("fetal_position", "baby", "Fetal position", "enum", 5,
       options=("anterior", "posterior", "transverse")),
-    V("caput", "baby", "Caput", "enum", 5,
+    V("caput", "baby", "Caput", "enum", 6,
       options=("0", "+", "++", "+++"), alert="+++"),
-    V("moulding", "baby", "Moulding", "enum", 6,
+    V("moulding", "baby", "Moulding", "enum", 7,
       options=("0", "+", "++", "+++"), alert="+++"),
 
     # --- 4. Care of the woman ---
@@ -75,7 +80,6 @@ VARIABLES: list[Variable] = [
       options=("0", "+", "++", "+++"), alert=">=++"),
     V("urine_acetone", "woman", "Urine acetone", "enum", 6,
       options=("0", "+", "++", "+++"), alert=">=++"),
-    V("urine_volume", "woman", "Urine volume", "num", 7, unit="ml"),
 
     # --- 5. Labour progress ---
     V("contractions", "progress", "Contractions per 10 min", "num", 1,
@@ -85,7 +89,6 @@ VARIABLES: list[Variable] = [
     V("cervix", "progress", "Cervix", "num", 3, unit="cm",
       alert="lag time exceeded for current dilatation"),
     V("descent", "progress", "Descent", "num", 4, unit="station"),
-    V("pushing", "progress", "Pushing", "bool", 5),
 
     # --- 6. Medication ---
     V("oxytocin", "medication", "Oxytocin", "num", 1, unit="U/L"),

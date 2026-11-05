@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from .models import (
     AuditEvent,
+    SourceDocument,
     Observation,
     Proposal,
     ProposalDecision,
@@ -46,9 +47,15 @@ def build_context(review: Review) -> Context:
         .select_related("variable")
         .order_by("observed_at", "pk")
     )
+    document = (
+        SourceDocument.objects.filter(pregnancy=pregnancy, kind=SourceDocument.Kind.LCG)
+        .order_by("id")
+        .first()
+    )
     return Context(
         pregnancy=pregnancy,
         review=review,
+        document=document,
         admission=admission,
         delivery=pregnancy.deliveries.order_by("-delivered_at").first(),
         death=pregnancy.deaths.order_by("-died_at").first(),

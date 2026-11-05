@@ -4,6 +4,7 @@
 after every migrate/flush. It is idempotent.
 """
 
+from django.db.models import F
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 
@@ -20,6 +21,10 @@ def ensure_lcg_registry(using="default") -> None:
         )
         sections[key] = section
 
+    # ord is unique per section; move existing rows out of the way first so a
+    # variable can be inserted in the middle of a section without colliding.
+    LCGVariable.objects.using(using).update(ord=F("ord") + 1000)
+
     for v in VARIABLES:
         LCGVariable.objects.using(using).update_or_create(
             key=v.key,
@@ -33,6 +38,12 @@ def ensure_lcg_registry(using="default") -> None:
                 "options": list(v.options),
             },
         )
+
+    keep = {v.key for v in VARIABLES}
+    for stale in LCGVariable.objects.using(using).exclude(key__in=keep):
+        if stale.observations.exists():
+            continue  # data still points at it; leave it rather than lose facts
+        stale.delete()
 
 
 @receiver(post_migrate)

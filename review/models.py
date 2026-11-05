@@ -106,6 +106,10 @@ class SourceDocument(models.Model):
     entered_by = models.CharField(max_length=200, blank=True)
     documented_at = models.DateTimeField(null=True, blank=True)
     received_at = models.DateTimeField(null=True, blank=True)
+    header_json = models.JSONField(
+        default=dict, blank=True,
+        help_text="Section 1 of the LCG: one value per chart, not a time series.",
+    )
     entered_at = models.DateTimeField(auto_now_add=True)
     time_precision = models.CharField(
         max_length=20, choices=TimePrecision.choices, default=TimePrecision.EXACT

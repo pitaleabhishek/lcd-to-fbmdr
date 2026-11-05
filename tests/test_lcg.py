@@ -37,9 +37,12 @@ def test_case_0_has_every_grid_variable(case_0):
         Observation.objects.filter(document=case_0).values_list("variable__key", flat=True)
     )
     assert set(GRID_KEYS) <= present
-    # header is stored too, once each
-    assert {"name", "parity", "labour_onset", "active_labour_dx",
-            "ruptured_membranes", "risk_factors"} <= present
+    # section 1 lives on the document, not on the time axis
+    assert set(case_0.header_json) == {
+        "name", "parity", "labour_onset", "active_labour_dx",
+        "ruptured_membranes", "risk_factors",
+    }
+    assert isinstance(case_0.header_json["parity"], int)
 
 
 def test_case_0_first_stage_is_complete_and_second_stage_omits_cervix(case_0):
@@ -56,7 +59,7 @@ def test_case_0_first_stage_is_complete_and_second_stage_omits_cervix(case_0):
     for t in times[10:]:
         keys = set(obs.filter(observed_at=t).values_list("variable__key", flat=True))
         assert "cervix" not in keys  # dilatation ends at full dilatation
-        assert "pushing" in keys
+        assert "baseline_fhr" in keys
 
 
 def test_chart_view_renders_one_row_per_variable(case_0):
@@ -66,14 +69,14 @@ def test_chart_view_renders_one_row_per_variable(case_0):
         cur.execute(
             "select count(*) from lcg_chart where patient = %s", ["Meena Kulkarni"]
         )
-        assert cur.fetchone()[0] == len(VARIABLES)
+        assert cur.fetchone()[0] == len(GRID_KEYS)
 
 
 def test_stage_is_stamped_on_each_row(case_0):
     from django.utils import timezone
 
     second = Observation.objects.filter(document=case_0, stage="second")
-    assert second.count() == 54  # 27 variables x 2 second-stage columns
+    assert second.count() == 52  # 26 variables x 2 second-stage columns (no cervix)
     times = sorted({timezone.localtime(o.observed_at).hour for o in second})
     assert times == [23]
 
@@ -105,7 +108,7 @@ def test_lcg_cells_view_labels_stage_per_cell(case_0):
             "select count(*) from lcg_cells where patient = %s and stage = 'second'",
             ["Meena Kulkarni"],
         )
-        assert cur.fetchone()[0] == 54
+        assert cur.fetchone()[0] == 52
 
         cur.execute(
             "select count(distinct col) from lcg_cells where patient = %s",

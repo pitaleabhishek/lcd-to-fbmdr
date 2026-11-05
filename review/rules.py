@@ -41,6 +41,7 @@ class Rule:
 class Context:
     pregnancy: Any
     review: Any
+    document: Any = None
     admission: Any = None
     delivery: Any = None
     death: Any = None
@@ -71,6 +72,21 @@ def obs_input(o: Observation) -> dict:
         "author": o.author,
         "entered_by": o.entered_by,
         "precision": o.observed_at_precision,
+    }
+
+
+def header_input(doc, label: str, value: Any) -> dict:
+    return {
+        "kind": "document",
+        "ref": f"sourcedocument:{doc.pk}",
+        "label": label,
+        "value": value,
+        "observed_at": None,
+        "documented_at": _iso(doc.documented_at),
+        "entered_at": _iso(doc.entered_at),
+        "author": doc.author,
+        "entered_by": doc.entered_by,
+        "precision": doc.time_precision,
     }
 
 
@@ -283,22 +299,33 @@ def timing_g(ctx: Context):
 
 # --- on admission ------------------------------------------------------------
 
-@rule("f4.admission.para.from_lcg", "f4.admission.para", source_kind="observation")
+@rule("f4.admission.para.from_lcg", "f4.admission.para", source_kind="document")
 def para(ctx: Context):
-    o = ctx.obs("parity")
-    if not o or o.value_num is None:
+    doc = ctx.document
+    if doc is None:
+        return NotComputable("no labour record", "missing")
+    value = doc.header_json.get("parity")
+    if value in (None, ""):
         return NotComputable("parity not recorded on the labour record", "missing")
-    return Value(int(o.value_num), [obs_input(o)])
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        pass
+    return Value(value, [header_input(doc, "Parity", value)])
 
 
 # --- delivery ----------------------------------------------------------------
 
-@rule("f4.delivery.labour_pains.from_lcg", "f4.delivery.labour_pains", source_kind="observation")
+@rule("f4.delivery.labour_pains.from_lcg", "f4.delivery.labour_pains", source_kind="document")
 def labour_pains(ctx: Context):
-    o = ctx.obs("labour_onset")
-    if not o:
+    doc = ctx.document
+    if doc is None:
+        return NotComputable("no labour record", "missing")
+    onset = doc.header_json.get("labour_onset")
+    if not onset:
         return NotComputable("labour onset not recorded", "missing")
-    return Value("yes", [obs_input(o)])
+    return Value("yes" if onset in ("spontaneous", "induced") else "no",
+                 [header_input(doc, "Labour onset", onset)])
 
 
 @rule("f4.delivery.mode.from_delivery", "f4.delivery.mode")

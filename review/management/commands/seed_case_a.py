@@ -88,6 +88,13 @@ class Command(BaseCommand):
             entered_by="Nurse P. Meshram",
             documented_at=dt(12, 18, 0),
             time_precision=TimePrecision.EXACT,
+            header_json={
+                "name": patient.name,
+                "parity": 1,
+                "labour_onset": "spontaneous",
+                "active_labour_dx": dt(12, 18, 30).isoformat(),
+                "risk_factors": "none",
+            },
         )
 
         variables = {v.key: v for v in LCGVariable.objects.all()}
@@ -110,11 +117,7 @@ class Command(BaseCommand):
                 raw_value=raw_value or (str(num) if num is not None else text),
             )
 
-        # Section 1: header values, including parity
-        obs("parity", dt(12, 18, 0), num=1, raw_label="Parity", raw_value="P1")
-        obs("labour_onset", dt(12, 18, 0), text="spontaneous", raw_label="Labour onset")
-        obs("active_labour_dx", dt(12, 18, 30), text="4 cm", raw_label="Active labour diagnosis")
-
+        # Section 1 lives on the document (header_json), not on the time axis.
         # Observations across labour. Gap between 21:00 and 23:00.
         for hh, mm in [(18, 0), (18, 30), (19, 0), (19, 30), (20, 0), (20, 30)]:
             obs("systolic_bp", dt(12, hh, mm), num=118 + (hh - 18) * 6, unit="mmHg", raw_label="Systolic BP")

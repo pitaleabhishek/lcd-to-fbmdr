@@ -46,7 +46,7 @@ image; the compose image is built without them).
 
 ## The LCG as data
 
-The guide itself is registered: **7 sections, 34 variables**, in printed order, with
+The guide itself is registered: **7 sections, 33 variables**, in printed order, with
 type, unit and the ALERT rule for each (`review/registry_lcg.py`). Observations
 reference a variable — never a free-text kind — so a typo fails at insert time.
 
@@ -57,10 +57,11 @@ docker compose exec db psql -U mdr -d mdr \
   -c "select section, variable, cells from lcg_chart where patient = 'Meena Kulkarni' order by section_ord, row_ord;"
 ```
 
-Two views render the chart:
+Three views render the chart:
 
 - `lcg_chart` — one row per variable, cells across time in IST.
 - `lcg_cells` — one row per cell with a computed column number and stage.
+- `lcg_header` — Section 1 expanded from `SourceDocument.header_json`.
 
 Every observation carries `stage` (`first` / `second`) on the row itself, alongside
 `variable`, `observed_at`, `author` and the three timestamps. Case 0 has 54
@@ -90,7 +91,7 @@ of the registry, never hand-maintained.
   variable and carry `stage` on the row. `lcg_chart` and `lcg_cells` views render
   the grid.
 - Case 0: a complete, normal labour — every grid variable across ten first-stage
-  columns and two second-stage columns, 340 observations, no death.
+  columns and two second-stage columns, 322 observations, no death.
 - 18 rules producing proposals with frozen inputs; `NotComputable` keeps
   missing / unknown / not-applicable apart.
 - Case A seeded: charted labour, an alert crossing, one missed observation, a
