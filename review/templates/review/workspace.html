@@ -25,8 +25,7 @@
     {% if not locked %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reevaluate">
         <button>Refresh proposals</button></form>
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="submit">
-        <button class="primary">Submit</button></form>
+      <a class="button primary-link" href="#sec-note">Review &amp; submit</a>
     {% endif %}
 
     <a class="button" href="{% url 'history' review.pk %}">History</a>
@@ -108,6 +107,12 @@
         <span class="count">{{ s.answered }}/{{ s.total }}</span>
       </a>
     {% endfor %}
+    {% if not locked %}
+      <a href="#sec-note">
+        <span>Note for the FNO</span>
+        <span class="count">submit</span>
+      </a>
+    {% endif %}
   </nav>
 
   <div>
@@ -431,6 +436,21 @@
       {% endfor %}
       </section>
     {% endfor %}
+
+    {% if not locked %}
+      <section class="form-section" id="sec-note">
+        <h2>Note for the FNO <span class="count">not printed</span></h2>
+        <form method="post" class="note-panel">{% csrf_token %}
+          <input type="hidden" name="action" value="submit">
+          <textarea name="note" rows="3" class="auto"
+                    placeholder="Anything the reviewer should know before deciding — for example where a time came from. Not printed on Form 4."></textarea>
+          <div class="bar">
+            <button class="primary">Submit for review</button>
+            <span class="muted small">Optional. Included with this submission only.</span>
+          </div>
+        </form>
+      </section>
+    {% endif %}
   </div>
 </div>
 {% if fno_can_comment %}
