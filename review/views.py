@@ -7,7 +7,6 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from . import services
@@ -191,10 +190,7 @@ def workspace(request, pk: int):
             _handle_action(request, review)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
-        url = reverse("workspace", args=[review.pk])
-        if anchor and anchor in registry:
-            url += f"#f-{registry[anchor].slug}"
-        return redirect(url)
+        return redirect("workspace", pk=review.pk)
 
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED)
     items = {i.field_key: i for i in review.items.all()}

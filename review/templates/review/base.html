@@ -54,8 +54,10 @@
   button.danger { color:var(--warn); }
   input[type=text], input[type=number] { font:inherit; padding:2px 5px; width:120px;
            border:1px solid var(--line); border-radius:4px; }
+  .toasts { position:fixed; right:16px; bottom:16px; z-index:50;
+            display:flex; flex-direction:column; gap:6px; max-width:360px; }
   .msg { background:#fff4e5; border:1px solid #f0d3a8; padding:8px 10px;
-         border-radius:5px; margin:10px 0; font-size:13px; }
+         border-radius:5px; font-size:13px; box-shadow:0 4px 14px rgba(0,0,0,.08); }
   .msg.ok { background:#eef7f1; border-color:#c9e3d2; }
   .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
   .locked { background:#fff; border:1px solid var(--line); border-radius:6px;
@@ -116,8 +118,7 @@
   a.button { border:1px solid var(--line); border-radius:4px; padding:4px 9px;
              font-size:12px; text-decoration:none; color:var(--ink); background:#fff; }
   .form-section { scroll-margin-top:calc(var(--stack-h) + 6px); }
-  tr[id] { scroll-margin-top:calc(var(--stack-h) + 50px); }
-  tr[id]:target { background:#fdf9e8; }
+
   .form-section h2 { position:sticky; top:var(--stack-h); z-index:4;
        background:var(--bg); padding:6px 0 5px; margin:0 0 4px;
        border-bottom:1px solid var(--line); }
@@ -168,10 +169,29 @@
   {% endif %}
 </header>
 <main>
-  {% for m in messages %}<div class="msg {% if m.tags == 'success' %}ok{% endif %}">{{ m }}</div>{% endfor %}
+  <div class="toasts">
+    {% for m in messages %}<div class="msg {% if m.tags == 'success' %}ok{% endif %}">{{ m }}</div>{% endfor %}
+  </div>
   {% block content %}{% endblock %}
 </main>
 <script>
+  // keep the page exactly where it was across a form post
+  document.addEventListener('submit', function () {
+    try {
+      sessionStorage.setItem('mdr:scroll:' + location.pathname, String(window.scrollY));
+    } catch (e) {}
+  }, true);
+  addEventListener('load', function () {
+    try {
+      var k = 'mdr:scroll:' + location.pathname;
+      var y = sessionStorage.getItem(k);
+      if (y !== null) {
+        window.scrollTo(0, parseInt(y, 10));
+        sessionStorage.removeItem(k);
+      }
+    } catch (e) {}
+  });
+
   function fitStack() {
     var h = document.querySelector('header');
     var s = document.querySelector('.sticky-top');
