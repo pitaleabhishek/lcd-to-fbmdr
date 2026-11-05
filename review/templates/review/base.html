@@ -117,6 +117,19 @@
   .form-section h2 { position:sticky; top:var(--stack-h); z-index:4;
        background:var(--bg); padding:6px 0 5px; margin:0 0 4px;
        border-bottom:1px solid var(--line); }
+  .lcg-head { display:grid; grid-template-columns:repeat(6,minmax(0,1fr));
+              gap:6px 14px; background:#fff; border:1px solid var(--line);
+              border-radius:6px; padding:8px 10px; margin:8px 0; }
+  .lcg-head .hitem { display:flex; flex-direction:column; }
+  .lcg-head .wide { grid-column:span 2; }
+  .hlabel { font-size:10px; text-transform:uppercase; color:var(--muted);
+            letter-spacing:.04em; }
+  .hvalue { font-size:13px; font-weight:600; }
+  table.chart tr.band th { text-align:center; font-size:10px; letter-spacing:.06em;
+            background:#eef3f5; border-left:1px solid var(--line); }
+  table.chart tr.band th.first { color:var(--accent); }
+  table.chart tr.band th.second { color:var(--warn); }
+  table.chart th.birth { background:#fff4e5; }
   table.fields { table-layout:fixed; }
   table.fields td:first-child { padding-right:10px; }
   .block-wrap { margin-top:6px; border:1px solid var(--line); border-radius:5px;

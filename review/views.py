@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
@@ -74,12 +76,32 @@ def labour(request, pk: int):
     columns = [
         {
             "at": t,
-            "label": timezone.localtime(t).strftime("%d %b %H:%M"),
             "clock": timezone.localtime(t).strftime("%H:%M"),
             "stage": next((o.stage for o in obs if o.observed_at == t), "first"),
         }
         for t in times
     ]
+
+    # the printed chart marks the birth between the second-stage columns
+    delivery = doc.pregnancy.deliveries.order_by("-delivered_at").first()
+    if delivery and delivery.delivered_at and (not times or delivery.delivered_at > times[-1]):
+        columns.append(
+            {
+                "at": delivery.delivered_at,
+                "clock": timezone.localtime(delivery.delivered_at).strftime("%H:%M"),
+                "stage": "second",
+                "birth": True,
+            }
+        )
+
+    groups = []
+    for c in columns:
+        if groups and groups[-1]["stage"] == c["stage"]:
+            groups[-1]["count"] += 1
+        else:
+            groups.append({"stage": c["stage"], "count": 1})
+    for g in groups:
+        g["label"] = "ACTIVE FIRST STAGE" if g["stage"] == "first" else "SECOND STAGE"
 
     def cell(o):
         late = bool(death and o.documented_at and death.died_at and o.documented_at > death.died_at)
@@ -94,6 +116,29 @@ def labour(request, pk: int):
         }
 
     index = {(o.variable.key, o.observed_at): cell(o) for o in obs}
+
+    header_order = [
+        ("name", "Name"),
+        ("parity", "Parity"),
+        ("labour_onset", "Labour onset"),
+        ("active_labour_dx", "Active labour diagnosis"),
+        ("ruptured_membranes", "Ruptured membranes"),
+        ("risk_factors", "Risk factors"),
+    ]
+
+    def hvalue(raw):
+        if raw in (None, ""):
+            return "—"
+        text = str(raw)
+        try:
+            return timezone.localtime(datetime.fromisoformat(text)).strftime("%d %b %Y %H:%M")
+        except ValueError:
+            return text
+
+    header_fields = [
+        {"label": label, "value": hvalue(doc.header_json.get(key))}
+        for key, label in header_order
+    ]
     sections = []
     for order, key, label in LCG_SECTIONS:
         variables = [v for v in VARIABLES if v.section == key]
@@ -104,7 +149,8 @@ def labour(request, pk: int):
                 "key": key,
                 "label": label,
                 "rows": [
-                    {"variable": v, "cells": [index.get((v.key, t)) for t in times]}
+                    {"variable": v,
+                     "cells": [index.get((v.key, c["at"])) for c in columns]}
                     for v in variables
                 ],
             }
@@ -117,8 +163,9 @@ def labour(request, pk: int):
             "document": doc,
             "pregnancy": doc.pregnancy,
             "patient": doc.pregnancy.patient,
-            "header": doc.header_json,
+            "header_fields": header_fields,
             "columns": columns,
+            "groups": groups,
             "sections": sections,
             "death": death,
         },

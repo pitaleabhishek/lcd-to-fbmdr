@@ -7,9 +7,12 @@
   {% if death %} · died {{ death.died_at|date:"d M H:i" }}{% endif %}
 </p>
 
-<div class="stats">
-  {% for key, value in header.items %}
-    <div class="stat"><span class="muted">{{ key|cut:"_"|title }}</span> <b>{{ value }}</b></div>
+<div class="lcg-head">
+  {% for h in header_fields %}
+    <div class="hitem{% if forloop.first %} wide{% endif %}">
+      <span class="hlabel">{{ h.label }}</span>
+      <span class="hvalue">{{ h.value }}</span>
+    </div>
   {% endfor %}
 </div>
 
@@ -23,12 +26,17 @@
 <div class="chart-wrap">
 <table class="chart">
   <thead>
+    <tr class="band">
+      <th class="sticky"></th>
+      {% for g in groups %}
+        <th colspan="{{ g.count }}" class="{{ g.stage }}">{{ g.label }}</th>
+      {% endfor %}
+    </tr>
     <tr>
       <th class="sticky">Item</th>
       {% for c in columns %}
-        <th>
-          {{ c.clock }}
-          <div class="stage">{{ c.stage }}</div>
+        <th class="{% if c.birth %}birth{% endif %}">
+          {{ c.clock }}{% if c.birth %}<div class="stage">birth</div>{% endif %}
         </th>
       {% endfor %}
     </tr>
