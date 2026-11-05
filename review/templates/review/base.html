@@ -181,7 +181,7 @@
        border:1px solid var(--line); }
   .entry .fix { display:none; }
   .entry:focus-within .fix { display:inline-flex; align-items:center; gap:3px; }
-  .save-state { font-size:10px; color:var(--muted); min-width:36px; }
+  .save-state { font-size:10px; color:var(--muted); }
   .save-state.error { color:var(--warn); font-weight:600; }
   .entry button, .reject button { padding:2px 8px; }
   .prop .inline { margin-right:3px; }
@@ -300,9 +300,6 @@
     document.querySelectorAll('.saved-stamp').forEach(function (el) {
       if (el.dataset.at) el.textContent = 'saved ' + human(Date.parse(el.dataset.at));
     });
-    document.querySelectorAll('.save-state[data-at]').forEach(function (el) {
-      el.textContent = 'saved ' + human(Number(el.dataset.at));
-    });
   }, 1000);
 
   function snapshot(f) {
@@ -327,7 +324,7 @@
       if (inflight) { dirty = true; return; }
       inflight = true;
       state.className = 'save-state';
-      state.textContent = 'saving…';
+      state.textContent = '';
       fetch(f.dataset.autosave, {
         method: 'POST', body: new FormData(f), credentials: 'same-origin', keepalive: true
       }).then(function (r) {
@@ -339,15 +336,17 @@
           return;
         }
         last = snapshot(f);
-        state.dataset.at = Date.now();
-        state.textContent = 'saved just now';
+        state.textContent = '';
+        var stamp = document.querySelector('.saved-stamp');
+        if (stamp) {
+          stamp.dataset.at = new Date().toISOString();
+          stamp.textContent = 'saved just now';
+        }
         var chipEl = f.querySelector('.chip');
         if (chipEl && res.j.mark) {
           chipEl.className = 'chip ' + res.j.mark;
           chipEl.textContent = res.j.mark;
         }
-        var stamp = document.querySelector('.saved-stamp');
-        if (stamp) stamp.dataset.at = new Date().toISOString();
       }).catch(function () {
         state.className = 'save-state error';
         state.textContent = 'not saved';

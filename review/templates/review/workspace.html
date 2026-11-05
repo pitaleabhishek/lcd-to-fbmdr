@@ -17,7 +17,7 @@
       {% if review.approved_at %}
         <span>approved {{ review.approved_at|date:"d M H:i" }}{% if review.approved_by %} by {{ review.approved_by.username }}{% endif %}</span>
       {% endif %}
-      <span class="muted">edits {{ review.edit_revision }}{% if review.last_saved_at %} · <span class="saved-stamp" data-at="{{ review.last_saved_at|date:'c' }}">saved {{ review.last_saved_at|timesince }} ago</span>{% endif %}{% if review.deadline_at %} · deadline {{ review.deadline_at|date:"d M H:i" }}{% endif %}</span>
+      <span class="muted">edits {{ review.edit_revision }} · <span class="saved-stamp"{% if review.last_saved_at %} data-at="{{ review.last_saved_at|date:'c' }}"{% endif %}>{% if review.last_saved_at %}saved {{ review.last_saved_at|timesince }} ago{% else %}not saved yet{% endif %}</span>{% if review.deadline_at %} · deadline {{ review.deadline_at|date:"d M H:i" }}{% endif %}</span>
     </div>
   </div>
   <div class="head-actions">
