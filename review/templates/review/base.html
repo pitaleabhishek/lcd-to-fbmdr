@@ -6,17 +6,20 @@
 <title>{% block title %}MDR Reuse{% endblock %}</title>
 <style>
   :root { --ink:#1a1f24; --muted:#5d6b78; --line:#d9e0e6; --bg:#f7f9fa;
-          --accent:#0f5c6b; --warn:#8a4b00; --ok:#1f6b3a; --chip:#eef3f5; }
+          --accent:#0f5c6b; --warn:#8a4b00; --ok:#1f6b3a; --chip:#eef3f5;
+          --header-h:38px; }
   * { box-sizing: border-box; }
   body { margin:0; font:13.5px/1.38 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
          color:var(--ink); background:var(--bg); }
   header { background:#fff; border-bottom:1px solid var(--line); padding:7px 14px;
+           position:sticky; top:0; z-index:20;
            display:flex; gap:16px; align-items:center; }
   header a { color:var(--accent); text-decoration:none; font-weight:600; }
   header .spacer { flex:1; }
   main { max-width:1320px; margin:0 auto; padding:14px; }
   h1 { font-size:17px; margin:0 0 2px; }
-  h2 { font-size:12.5px; margin:18px 0 6px; scroll-margin-top:158px;
+  h2 { font-size:12.5px; margin:18px 0 6px;
+       scroll-margin-top:calc(var(--header-h) + 134px);
        text-transform:uppercase;
        letter-spacing:.04em; color:var(--muted); }
   .muted { color:var(--muted); }
@@ -84,18 +87,19 @@
   .progress { height:6px; background:#e6ecef; border-radius:3px; overflow:hidden;
               margin:14px 0 8px; }
   .progress span { display:block; height:6px; background:var(--accent); }
-  .sticky-top { position:sticky; top:0; z-index:6; background:var(--bg);
+  .sticky-top { position:sticky; top:var(--header-h); z-index:6; background:var(--bg);
                 padding:6px 0 8px; border-bottom:1px solid var(--line); }
   .layout { display:grid; grid-template-columns:205px 1fr; gap:14px;
             align-items:start; margin-top:14px; }
-  .secnav { position:sticky; top:150px; background:#fff; border:1px solid var(--line);
+  .secnav { position:sticky; top:calc(var(--header-h) + 126px); background:#fff; border:1px solid var(--line);
             border-radius:6px; overflow:hidden; }
-  .secnav a { display:flex; justify-content:space-between; gap:8px; padding:5px 8px;
+  .secnav a { display:flex; justify-content:space-between; gap:8px; padding:6px 8px;
               border-bottom:1px solid var(--line); color:var(--ink);
-              text-decoration:none; font-size:12px; }
+              text-decoration:none; font-size:12.5px; font-weight:600; }
+  .secnav a:hover { color:var(--accent); box-shadow:inset 3px 0 0 var(--accent); }
   .secnav a:last-child { border-bottom:0; }
   .secnav a:hover { background:#f2f5f7; }
-  .count { color:var(--muted); font-size:11px; font-weight:600; white-space:nowrap; }
+  .count { color:var(--muted); font-size:11px; font-weight:700; white-space:nowrap; }
   h2 .count { float:right; font-weight:400; text-transform:none; letter-spacing:0; }
   .req { color:var(--warn); font-size:10px; font-weight:700; text-transform:uppercase;
          letter-spacing:.04em; }
