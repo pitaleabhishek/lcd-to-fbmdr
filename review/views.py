@@ -248,6 +248,8 @@ def workspace(request, pk: int):
                     "is_block": f.type == "block",
                     "block_cols": list((f.block_schema or {}).get("fields", {}).items()),
                     "block_rows": _block_rows(f, item),
+                    "places": _place_rows(f, item)
+                    if f.key == "f4.condition.referral" else None,
                     "revertible": f.key in last_change and not locked,
                     "can_add": bool(
                         f.type == "block"
@@ -351,6 +353,26 @@ def _handle_action(request, review: Review):
         messages.success(request, f"Saved {key}")
         return
 
+    if action == "block_place":
+        key = request.POST["key"]
+        place = request.POST["place"]
+        field = registry[key]
+        spec = (field.block_schema or {}).get("fields", {})
+        if request.POST.get("op") == "remove":
+            services.clear_place_row(review, key, place, user)
+            messages.success(request, "Row cleared")
+            return
+        values = {}
+        for name, col in spec.items():
+            if name == "place":
+                continue
+            v = _block_value(col, request.POST.get(f"col_{name}", ""))
+            if v is not None:
+                values[name] = v
+        services.save_place_row(review, key, place, values, user)
+        messages.success(request, "Row saved")
+        return
+
     if action == "block_add":
         services.add_block_row(review, request.POST["key"], user)
         messages.success(request, "Row added")
@@ -435,6 +457,55 @@ def _decision(item, last, mark: str):
             "reason": last.reason,
         }
     return None
+
+
+REFERRAL_LABELS = {
+    "date": "Date",
+    "onset_at": "Time of onset",
+    "transport_call_at": "Time transport called",
+    "transport": "Transport used",
+    "time_to_reach": "Time to reach",
+    "money_transport": "Money on transport",
+    "facility": "Facility / level",
+    "attended_by": "Attended by",
+    "reason": "Reason for referral",
+    "referral_slip": "Referral slip",
+    "treatment": "Treatment given",
+    "money_treatment": "Money on treatment",
+    "time_in_facility": "Time in facility",
+}
+PLACE_LABELS = {
+    "home_village": "Home / Village",
+    "facility_1": "Facility 1",
+    "facility_2": "Facility 2",
+    "facility_3": "Facility 3",
+}
+
+
+def _place_rows(field, item):
+    schema = (field.block_schema or {}).get("fields", {})
+    rows = item.value_json if item and isinstance(item.value_json, list) else []
+    out = []
+    for place in schema.get("place", {}).get("options", []):
+        row = next((r for r in rows if r.get("place") == place), {})
+        out.append(
+            {
+                "place": place,
+                "label": PLACE_LABELS.get(place, place),
+                "exists": bool(row),
+                "cells": [
+                    {
+                        "name": name,
+                        "label": REFERRAL_LABELS.get(name, name.replace("_", " ").title()),
+                        "spec": spec,
+                        "value": row.get(name, ""),
+                    }
+                    for name, spec in schema.items()
+                    if name != "place"
+                ],
+            }
+        )
+    return out
 
 
 def _block_rows(field, item):

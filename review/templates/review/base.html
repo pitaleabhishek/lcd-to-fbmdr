@@ -158,6 +158,19 @@
   table.chart th.birth { background:#fff4e5; }
   table.fields { table-layout:fixed; }
   table.fields td:first-child { padding-right:10px; }
+  .block-card { background:#fff; border:1px solid var(--line); border-radius:6px;
+                padding:8px 10px; margin:10px 0 16px; }
+  .block-card h3 { font-size:13px; margin:0 0 6px; }
+  .place { border-top:1px solid var(--line); padding:6px 0; }
+  .place:first-of-type { border-top:0; }
+  .place-head { font-size:12px; margin-bottom:4px; }
+  .place-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+                gap:6px 12px; }
+  .place-grid label { display:flex; flex-direction:column; gap:2px; }
+  .place-grid label span { font-size:10px; color:var(--muted);
+                text-transform:uppercase; letter-spacing:.03em; }
+  .place-grid input, .place-grid select { font:inherit; font-size:12px; padding:3px 5px;
+                border:1px solid var(--line); border-radius:3px; width:100%; }
   .block-wrap { margin-top:6px; border:1px solid var(--line); border-radius:5px;
                 background:#fcfdfd; overflow-x:auto; padding:4px; }
   .brow { display:grid; gap:4px; align-items:center; padding:3px 2px; }

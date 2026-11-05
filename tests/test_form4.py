@@ -273,3 +273,25 @@ def test_year_range_is_enforced(client, case_a, django_user_model):
     )
     assert resp.status_code == 400
     assert "1900" in resp.json()["error"]
+
+
+def test_referral_places_are_keyed_by_place(case_a, django_user_model):
+    user = django_user_model.objects.get(username="resident")
+    key = "f4.condition.referral"
+
+    services.save_place_row(case_a, key, "facility_1", {"time_to_reach": 45}, user)
+    item = case_a.items.get(field_key=key)
+    assert [r["place"] for r in item.value_json] == ["facility_1"]
+
+    services.save_place_row(case_a, key, "facility_1", {"time_to_reach": 60}, user)
+    item.refresh_from_db()
+    assert len(item.value_json) == 1
+    assert item.value_json[0]["time_to_reach"] == 60
+
+    services.save_place_row(case_a, key, "facility_2", {"time_to_reach": 20}, user)
+    item.refresh_from_db()
+    assert [r["place"] for r in item.value_json] == ["facility_1", "facility_2"]
+
+    services.clear_place_row(case_a, key, "facility_1", user)
+    item.refresh_from_db()
+    assert [r["place"] for r in item.value_json] == ["facility_2"]

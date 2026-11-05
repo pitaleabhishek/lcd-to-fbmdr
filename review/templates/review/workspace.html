@@ -68,6 +68,7 @@
         <thead><tr><th style="width:30%">Item</th><th style="width:34%">Answer</th><th>Proposed</th></tr></thead>
         <tbody>
         {% for row in section.rows %}
+          {% if not row.is_block %}
           <tr id="f-{{ row.field.slug }}">
             <td>
               <div class="label">{{ row.field.label_printed }}</div>
@@ -233,9 +234,91 @@
               {% endif %}
             </td>
           </tr>
+          {% endif %}
         {% endfor %}
         </tbody>
       </table>
+
+      {% for row in section.rows %}
+        {% if row.is_block %}
+        <div class="block-card" id="b-{{ row.field.slug }}">
+          <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span></h3>
+          {% if row.places %}
+            {% for p in row.places %}
+              <form method="post" class="place">{% csrf_token %}
+                <input type="hidden" name="action" value="block_place">
+                <input type="hidden" name="key" value="{{ row.field.key }}">
+                <input type="hidden" name="place" value="{{ p.place }}">
+                <div class="place-head"><b>{{ p.label }}</b>{% if p.exists %} <span class="count">saved</span>{% endif %}</div>
+                <div class="place-grid">
+                  {% for c in p.cells %}
+                    <label>
+                      <span>{{ c.label }}</span>
+                      {% if c.spec.type == "enum" %}
+                        <select name="col_{{ c.name }}">
+                          {% if not c.spec.required %}<option value="">—</option>{% endif %}
+                          {% for opt in c.spec.options %}
+                            <option value="{{ opt }}" {% if c.value == opt %}selected{% endif %}>{{ opt }}</option>
+                          {% endfor %}
+                        </select>
+                      {% else %}
+                        <input type="text" name="col_{{ c.name }}" value="{{ c.value }}"
+                          {% if c.spec.type == "int" or c.spec.type == "number" %}inputmode="numeric" placeholder="number"
+                          {% elif c.spec.type == "datetime" %}placeholder="2026-11-05 14:30"{% endif %}>
+                      {% endif %}
+                    </label>
+                  {% endfor %}
+                </div>
+                <div class="row-actions">
+                  <button class="primary">Save</button>
+                  {% if p.exists %}<button name="op" value="remove" class="danger">Clear</button>{% endif %}
+                </div>
+              </form>
+            {% endfor %}
+          {% else %}
+            <div class="block-wrap">
+              <form method="post" class="brow bhead" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">
+                {% for name, spec in row.block_cols %}<span>{{ name|cut:"_"|title }}</span>{% endfor %}<span></span>
+              </form>
+              {% for r in row.block_rows %}
+                <form method="post" class="brow" style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 118px">{% csrf_token %}
+                  <input type="hidden" name="action" value="block_row">
+                  <input type="hidden" name="key" value="{{ row.field.key }}">
+                  <input type="hidden" name="index" value="{{ r.index }}">
+                  {% for c in r.cells %}
+                    <span>
+                    {% if c.spec.type == "enum" %}
+                      <select name="col_{{ c.name }}">
+                        {% if not c.spec.required %}<option value="">—</option>{% endif %}
+                        {% for opt in c.spec.options %}
+                          <option value="{{ opt }}" {% if c.value == opt %}selected{% endif %}>{{ opt }}</option>
+                        {% endfor %}
+                      </select>
+                    {% else %}
+                      <input type="text" name="col_{{ c.name }}" value="{{ c.value }}">
+                    {% endif %}
+                    </span>
+                  {% endfor %}
+                  <span class="row-actions">
+                    <button class="primary">Save</button>
+                    <button name="op" value="remove" class="danger" title="Remove row">×</button>
+                  </span>
+                </form>
+              {% empty %}
+                <div class="why">no rows yet</div>
+              {% endfor %}
+              {% if not locked and row.can_add %}
+              <form method="post" class="inline">{% csrf_token %}
+                <input type="hidden" name="action" value="block_add">
+                <input type="hidden" name="key" value="{{ row.field.key }}">
+                <button>Add row</button>
+              </form>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
       </section>
     {% endfor %}
   </div>

@@ -343,6 +343,30 @@ def revert_last(review: Review, key: str, user) -> ReviewItem:
     return item
 
 
+@transaction.atomic
+def save_place_row(review: Review, key: str, place: str, values: dict, user):
+    """Save one place of the referral table, keyed by place rather than position."""
+    item = review.items.filter(field_key=key).first()
+    rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
+    values = {**values, "place": place}
+    index = next((i for i, r in enumerate(rows) if r.get("place") == place), None)
+    if index is None:
+        rows.append(values)
+    else:
+        rows[index] = values
+    return set_answer(review, key, rows, user)
+
+
+@transaction.atomic
+def clear_place_row(review: Review, key: str, place: str, user):
+    item = review.items.filter(field_key=key).first()
+    rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
+    rows = [r for r in rows if r.get("place") != place]
+    if not rows:
+        return _clear_item(review, key, user)
+    return set_answer(review, key, rows, user)
+
+
 def missing_required(review: Review) -> list[str]:
     answered = {
         i.field_key
