@@ -481,7 +481,10 @@ def save_field(request, pk: int):
     except ValidationError as exc:
         return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
 
-    return JsonResponse({"ok": True})
+    item = review.items.get(field_key=key)
+    return JsonResponse(
+        {"ok": True, "mark": chip(item.origin), "display": fmt(item.value_json)}
+    )
 
 
 @login_required

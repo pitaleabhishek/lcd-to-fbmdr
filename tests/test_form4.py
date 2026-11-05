@@ -178,7 +178,8 @@ def test_autosave_endpoint(client, case_a, django_user_model):
         {"key": "f4.primary_diagnosis.dx", "value": "PPH"},
     )
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True}
+    assert resp.json()["ok"] is True
+    assert resp.json()["mark"] == "E"
     assert case_a.items.get(field_key="f4.primary_diagnosis.dx").value_json == "PPH"
 
 
