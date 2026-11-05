@@ -146,9 +146,21 @@ def workspace(request, pk: int):
     sections = []
     for section, heading, fields in registry.by_section():
         rows = []
+        answered_n = needs_n = na_n = 0
         for f in fields:
             item = items.get(f.key)
             proposals = open_proposals.get(f.key, [])
+            is_answered = bool(
+                item and item.answer_state == ReviewItem.AnswerState.ANSWERED
+            )
+            is_na = bool(
+                item
+                and item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+            )
+            needs = bool(item and item.needs_reconsideration)
+            answered_n += int(is_answered)
+            na_n += int(is_na)
+            needs_n += int(needs)
             rows.append(
                 {
                     "field": f,
@@ -158,24 +170,42 @@ def workspace(request, pk: int):
                     "proposals": [
                         {"p": p, "display": fmt(p.value_json)} for p in proposals
                     ],
-                    "is_answered": bool(
-                        item and item.answer_state == ReviewItem.AnswerState.ANSWERED
-                    ),
+                    "is_answered": is_answered,
+                    "is_na": is_na,
+                    "needs": needs,
                 }
             )
-        sections.append({"key": section, "heading": heading, "rows": rows})
+        sections.append(
+            {
+                "key": section,
+                "heading": heading,
+                "rows": rows,
+                "total": len(fields),
+                "answered": answered_n,
+                "na": na_n,
+                "needs": needs_n,
+            }
+        )
 
+    answered_total = sum(
+        1 for i in items.values() if i.answer_state == ReviewItem.AnswerState.ANSWERED
+    )
     stats = {
         "fields": len(registry.all()),
-        "answered": sum(
-            1 for i in items.values() if i.answer_state == ReviewItem.AnswerState.ANSWERED
+        "answered": answered_total,
+        "na": sum(
+            1
+            for i in items.values()
+            if i.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
         ),
         "proposed": sum(len(v) for v in open_proposals.values()),
+        "needs": sum(1 for i in items.values() if i.needs_reconsideration),
         "gaps": sum(
             1
             for f in registry.all()
             if f.required and (f.key not in items or items[f.key].answer_state != "answered")
         ),
+        "percent": round(100 * answered_total / max(1, len(registry.all()))),
     }
     return render(
         request,

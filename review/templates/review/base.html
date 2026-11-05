@@ -76,6 +76,35 @@
   .chart .late { color:var(--warn); font-weight:700; }
   .chart .late sup { font-size:9px; margin-left:2px; }
   .small { font-size:12px; }
+  .review-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
+  .head-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .status { text-transform:uppercase; font-size:11px; letter-spacing:.06em;
+            color:var(--accent); font-weight:700; }
+  .progress { height:6px; background:#e6ecef; border-radius:3px; overflow:hidden;
+              margin:14px 0 8px; }
+  .progress span { display:block; height:6px; background:var(--accent); }
+  .layout { display:grid; grid-template-columns:230px 1fr; gap:18px;
+            align-items:start; margin-top:18px; }
+  .secnav { position:sticky; top:12px; background:#fff; border:1px solid var(--line);
+            border-radius:6px; overflow:hidden; }
+  .secnav a { display:flex; justify-content:space-between; gap:8px; padding:7px 10px;
+              border-bottom:1px solid var(--line); color:var(--ink);
+              text-decoration:none; font-size:13px; }
+  .secnav a:last-child { border-bottom:0; }
+  .secnav a:hover { background:#f2f5f7; }
+  .count { color:var(--muted); font-size:11px; font-weight:600; white-space:nowrap; }
+  h2 .count { float:right; font-weight:400; text-transform:none; letter-spacing:0; }
+  .req { color:var(--warn); font-size:10px; font-weight:700; text-transform:uppercase;
+         letter-spacing:.04em; }
+  .label { font-size:14px; }
+  .entry { margin-top:5px; }
+  a.button { border:1px solid var(--line); border-radius:4px; padding:4px 9px;
+             font-size:12px; text-decoration:none; color:var(--ink); background:#fff; }
+  @media (max-width:860px) {
+    .layout { grid-template-columns:1fr; }
+    .secnav { position:static; display:flex; overflow-x:auto; }
+    .secnav a { border-bottom:0; border-right:1px solid var(--line); white-space:nowrap; }
+  }
 </style>
 </head>
 <body>

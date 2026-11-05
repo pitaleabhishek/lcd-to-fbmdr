@@ -6,6 +6,13 @@ FNO uses the same screens in daylight, at a desk, deciding whether to approve.
 
 Everything below follows from those two users.
 
+## What the app holds
+
+The LCG is the only ingested document. Admission, delivery, death and neonatal
+events are facts recorded in the app at the point of care, each with its own author
+and time — not documents that arrive later. This is why a review can show values
+that the LCG never contained, and why that is not a second source.
+
 ## Principles
 
 1. **Status before detail.** The first thing on screen is what is reused, what is
