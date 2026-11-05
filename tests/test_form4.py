@@ -244,3 +244,16 @@ def test_duration_accepts_a_friendly_value(client, case_a, django_user_model):
     page = client.get(f"/review/{case_a.pk}/").content.decode()
     assert "7h 30m" in page
     assert "{&#x27;minutes&#x27;: 450}" not in page
+
+
+def test_bad_number_returns_a_message_not_a_crash(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.admission.gravida", "value": "oto"},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["ok"] is False
+    assert "whole number" in resp.json()["error"]

@@ -90,6 +90,9 @@
                     <span class="key">set by Month</span>
                   {% elif row.field.type == "date" %}
                     <input type="date" name="value" class="val" value="{{ row.current }}">
+                  {% elif row.field.type == "int" %}
+                    <input type="number" name="value" class="val" step="1" min="0"
+                           value="{{ row.current }}">
                   {% elif row.field.type == "enum" %}
                     <select name="value" class="val">
                       <option value="">—</option>

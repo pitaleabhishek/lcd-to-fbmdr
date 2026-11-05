@@ -531,7 +531,10 @@ def save_field(request, pk: int):
         raw = request.POST.get("value", "").strip()
         if raw == "":
             return JsonResponse({"ok": False, "error": "a value is required"}, status=400)
-        value = _coerce(field, raw)
+        try:
+            value = _coerce(field, raw)
+        except ValidationError as exc:
+            return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
 
     try:
         services.set_answer(
