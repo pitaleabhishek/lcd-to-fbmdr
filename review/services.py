@@ -26,6 +26,13 @@ from .registry import registry
 from .rules import RULES, Context, NotComputable, Value
 
 
+def assert_can_author(review: Review, user) -> None:
+    """Only the author or the assignee may change a review's answers."""
+    allowed = {review.created_by_id, review.assigned_to_id} - {None}
+    if allowed and user.pk not in allowed:
+        raise ValidationError("only the author or assignee can edit this review")
+
+
 def audit(review, actor, action: str, entity_type: str, entity_id="", payload=None):
     return AuditEvent.objects.create(
         actor=actor,
@@ -75,6 +82,8 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
     review = Review.objects.select_for_update().get(pk=review.pk)
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("only a draft or returned review can be reevaluated")
+    if actor is not None:
+        assert_can_author(review, actor)
 
     ctx = build_context(review)
     created: list[Proposal] = []
@@ -132,6 +141,7 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
 @transaction.atomic
 def accept_proposal(review: Review, proposal: Proposal, user, reason: str = "") -> ReviewItem:
     review = Review.objects.select_for_update().get(pk=review.pk)
+    assert_can_author(review, user)
     proposal = Proposal.objects.get(pk=proposal.pk, review=review)
     if proposal.status != Proposal.Status.PROPOSED:
         raise ValidationError("proposal is no longer open")
@@ -168,6 +178,7 @@ def accept_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
 @transaction.atomic
 def reject_proposal(review: Review, proposal: Proposal, user, reason: str = "") -> None:
     review = Review.objects.select_for_update().get(pk=review.pk)
+    assert_can_author(review, user)
     proposal = Proposal.objects.get(pk=proposal.pk, review=review)
     if proposal.status != Proposal.Status.PROPOSED:
         raise ValidationError("proposal is no longer open")
@@ -192,6 +203,7 @@ def reject_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
 @transaction.atomic
 def set_answer(review: Review, key: str, value, user, reason: str = "", corrected=False) -> ReviewItem:
     review = Review.objects.select_for_update().get(pk=review.pk)
+    assert_can_author(review, user)
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is locked")
 
@@ -223,6 +235,7 @@ def set_answer(review: Review, key: str, value, user, reason: str = "", correcte
 @transaction.atomic
 def set_applicability(review: Review, key: str, state: str, user, reason: str = "") -> ReviewItem:
     review = Review.objects.select_for_update().get(pk=review.pk)
+    assert_can_author(review, user)
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is locked")
     item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
@@ -419,6 +432,7 @@ def canonical_payload(review: Review) -> dict:
 @transaction.atomic
 def submit(review: Review, user) -> ReviewVersion:
     review = Review.objects.select_for_update().get(pk=review.pk)
+    assert_can_author(review, user)
     was_returned = review.status == Review.Status.RETURNED
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is not in a submittable state")

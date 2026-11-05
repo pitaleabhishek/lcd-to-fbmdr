@@ -51,7 +51,13 @@
 {% endif %}
 
 {% if locked %}
-  <div class="locked">This review is {{ review.get_status_display|lower }} and locked. A change would be an attributed amendment.</div>
+  <div class="locked">
+    {% if review.status == "draft" or review.status == "returned" %}
+      View only — this review belongs to another author. Only the author or assignee can change it.
+    {% else %}
+      This review is {{ review.get_status_display|lower }} and locked. A change would be an attributed amendment.
+    {% endif %}
+  </div>
 {% endif %}
 
 {% if is_fno and review.status == "submitted" %}<form method="post" class="review-form">{% csrf_token %}{% endif %}

@@ -451,3 +451,11 @@ def test_return_stores_per_field_comments(client, case_a, django_user_model):
     services.submit(case_a, resident)
     ret.refresh_from_db()
     assert ret.resolved_at is not None
+
+
+def test_fno_cannot_author_someone_elses_review(case_a, django_user_model):
+    fno = django_user_model.objects.get(username="fno")
+    with pytest.raises(ValidationError):
+        services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", fno)
+    with pytest.raises(ValidationError):
+        services.submit(case_a, fno)
