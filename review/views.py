@@ -138,6 +138,7 @@ def workspace(request, pk: int):
             messages.error(request, "; ".join(exc.messages))
         return redirect("workspace", pk=review.pk)
 
+    locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED)
     items = {i.field_key: i for i in review.items.all()}
     last_change = {}
     for ev in AuditEvent.objects.filter(review=review, action="answer_set").order_by("at", "id"):
@@ -231,7 +232,7 @@ def workspace(request, pk: int):
             "sections": sections,
             "stats": stats,
             "is_fno": is_fno(request.user),
-            "locked": review.status not in (Review.Status.DRAFT, Review.Status.RETURNED),
+            "locked": locked,
         },
     )
 

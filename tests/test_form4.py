@@ -156,3 +156,14 @@ def test_revert_on_an_untouched_field_fails(case_a, django_user_model):
     user = django_user_model.objects.get(username="resident")
     with pytest.raises(ValidationError):
         services.revert_last(case_a, "f4.primary_diagnosis.dx", user)
+
+
+def test_workspace_renders(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.get(f"/review/{case_a.pk}/")
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "resolved" in body
+    assert "to enter" in body
