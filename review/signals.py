@@ -36,6 +36,8 @@ def ensure_lcg_registry(using="default") -> None:
                 "unit": v.unit,
                 "alert_rule": v.alert,
                 "options": list(v.options),
+                "min_num": v.min_num,
+                "max_num": v.max_num,
             },
         )
 

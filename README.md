@@ -46,7 +46,7 @@ image; the compose image is built without them).
 
 ## The LCG as data
 
-The guide itself is registered: **7 sections, 33 variables**, in printed order, with
+The guide itself is registered: **7 sections, 34 variables**, in printed order, with
 type, unit and the ALERT rule for each (`review/registry_lcg.py`). Observations
 reference a variable — never a free-text kind — so a typo fails at insert time.
 
@@ -66,6 +66,13 @@ Three views render the chart:
 Every observation carries `stage` (`first` / `second`) on the row itself, alongside
 `variable`, `observed_at`, `author` and the three timestamps. Case 0 has 54
 second-stage cells (23:00 and 23:15); case A is entirely first stage.
+
+**Value rules are enforced in Postgres.** A trigger rejects an observation whose
+enum value is not on the printed chart, whose number falls outside the row's
+range, whose unit does not match, or whose stage is not first/second.
+`Observation.clean()` mirrors it for friendly form errors. Clinical thresholds
+(what counts as an alert) stay in application code, because they change with the
+guideline; what the form permits does not.
 
 ```sh
 docker compose exec db psql -U mdr -d mdr \
@@ -91,7 +98,7 @@ of the registry, never hand-maintained.
   variable and carry `stage` on the row. `lcg_chart` and `lcg_cells` views render
   the grid.
 - Case 0: a complete, normal labour — every grid variable across ten first-stage
-  columns and two second-stage columns, 322 observations, no death.
+  columns and two second-stage columns, 334 observations, no death.
 - 18 rules producing proposals with frozen inputs; `NotComputable` keeps
   missing / unknown / not-applicable apart.
 - Case A seeded: charted labour, an alert crossing, one missed observation, a

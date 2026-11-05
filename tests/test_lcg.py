@@ -76,7 +76,7 @@ def test_stage_is_stamped_on_each_row(case_0):
     from django.utils import timezone
 
     second = Observation.objects.filter(document=case_0, stage="second")
-    assert second.count() == 52  # 26 variables x 2 second-stage columns (no cervix)
+    assert second.count() == 54  # 27 variables x 2 second-stage columns (no cervix)
     times = sorted({timezone.localtime(o.observed_at).hour for o in second})
     assert times == [23]
 
@@ -108,10 +108,61 @@ def test_lcg_cells_view_labels_stage_per_cell(case_0):
             "select count(*) from lcg_cells where patient = %s and stage = 'second'",
             ["Meena Kulkarni"],
         )
-        assert cur.fetchone()[0] == 52
+        assert cur.fetchone()[0] == 54
 
         cur.execute(
             "select count(distinct col) from lcg_cells where patient = %s",
             ["Meena Kulkarni"],
         )
         assert cur.fetchone()[0] == 12
+
+
+def test_enum_value_must_be_on_the_form(case_0):
+    from django.core.exceptions import ValidationError
+
+    posture = LCGVariable.objects.get(key="posture")
+    with pytest.raises(ValidationError):
+        Observation.objects.create(
+            document=case_0, variable=posture, value_text="upright", stage="first"
+        )
+    Observation.objects.create(  # SP and MO are the only postures
+        document=case_0, variable=posture, value_text="supine", stage="first"
+    )
+
+
+def test_numeric_value_must_be_in_range(case_0):
+    from django.core.exceptions import ValidationError
+
+    cervix = LCGVariable.objects.get(key="cervix")
+    with pytest.raises(ValidationError):
+        Observation.objects.create(
+            document=case_0, variable=cervix, value_num=12, unit="cm", stage="first"
+        )
+
+
+def test_unit_must_match_the_row(case_0):
+    from django.core.exceptions import ValidationError
+
+    systolic = LCGVariable.objects.get(key="systolic_bp")
+    with pytest.raises(ValidationError):
+        Observation.objects.create(
+            document=case_0, variable=systolic, value_num=120, unit="bpm", stage="first"
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_database_trigger_rejects_invalid_values():
+    from django.db import DatabaseError, transaction
+
+    from review.models import LCGVariable, Observation
+
+    call_command("seed_case_0", verbosity=0)
+    doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Meena Kulkarni")
+    posture = LCGVariable.objects.get(key="posture")
+
+    bad = Observation(
+        document=doc, variable=posture, value_text="upright", stage="first"
+    )
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            Observation.objects.bulk_create([bad])  # bypasses save()/clean()

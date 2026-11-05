@@ -145,6 +145,8 @@ class LCGVariable(models.Model):
     unit = models.CharField(max_length=30, blank=True)
     alert_rule = models.CharField(max_length=200, blank=True)
     options = models.JSONField(default=list, blank=True)
+    min_num = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    max_num = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     class Meta:
         ordering = ["section__ord", "ord"]
@@ -183,6 +185,36 @@ class Observation(models.Model):
         "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
     )
     note = models.TextField(blank=True)
+
+    def clean(self):
+        """Mirror of the database trigger: the form decides what may be written."""
+        from django.core.exceptions import ValidationError
+
+        super().clean()
+        v = self.variable
+        if v is None:
+            return
+        if v.unit and self.unit != v.unit:
+            raise ValidationError(f"{v.key}: unit must be {v.unit!r}")
+        if v.type == "enum":
+            if self.value_text not in (v.options or []):
+                raise ValidationError(
+                    f"{v.key}: {self.value_text!r} is not one of {v.options}"
+                )
+        elif v.type == "num":
+            if self.value_num is None:
+                raise ValidationError(f"{v.key}: a number is required")
+            if v.min_num is not None and self.value_num < v.min_num:
+                raise ValidationError(f"{v.key}: below minimum {v.min_num}")
+            if v.max_num is not None and self.value_num > v.max_num:
+                raise ValidationError(f"{v.key}: above maximum {v.max_num}")
+        elif v.type == "bool":
+            if self.value_num not in (0, 1):
+                raise ValidationError(f"{v.key}: must be 0 or 1")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     class Meta:
         indexes = [

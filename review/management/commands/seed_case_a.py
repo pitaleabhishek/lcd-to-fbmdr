@@ -136,8 +136,10 @@ class Command(BaseCommand):
         obs("diastolic_bp", dt(12, 22, 30), num=96, unit="mmHg", raw_label="Diastolic BP",
             author="Dr A. Rane", documented=dt(13, 0, 15))
         obs("oxytocin", dt(12, 20, 30), num=2.5, unit="U/L", raw_label="Oxytocin")
-        obs("iv_fluids", dt(12, 19, 0), text="RL 500 ml", raw_label="IV fluids")
-        obs("urine_protein", dt(12, 20, 0), text="P+", raw_label="Urine protein")
+        obs("oxytocin_drops", dt(12, 20, 30), num=10, unit="drops/min",
+            raw_label="Oxytocin (drops/min)")
+        obs("iv_fluids", dt(12, 19, 0), text="yes", raw_label="IV fluids")
+        obs("urine_protein", dt(12, 20, 0), text="1+", raw_label="Urine protein")
 
         delivery = Delivery.objects.create(
             pregnancy=pregnancy,
