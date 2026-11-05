@@ -317,6 +317,15 @@ def workspace(request, pk: int):
                     if f.key == "f4.condition.referral" else None,
                     "revertible": f.key in last_change and not locked,
                     "fno_comment": field_comments.get(f.key, ""),
+                    "fno_comment_prefill": (
+                        draft_comments.get(f.key, "")
+                        if draft_comments is not None
+                        else (
+                            field_comments.get(f.key, "")
+                            if review.status == Review.Status.RETURNED
+                            else ""
+                        )
+                    ),
                     "addressed": bool(
                         comment_source
                         and item

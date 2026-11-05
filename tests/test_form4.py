@@ -735,3 +735,27 @@ def test_resubmitted_field_stays_highlighted_for_the_fno(client, case_a, django_
     assert "Previously returned" not in page
     assert 'class="addressed"' in page
     assert "which type?" in page
+
+
+def test_previous_comment_is_shown_but_not_prefilled_on_resubmission(client, case_a, django_user_model):
+    import re
+
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(case_a, fno, "", {"f4.primary_diagnosis.dx": "which type?"})
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "Atonic PPH", resident)
+    services.submit(case_a, resident)
+
+    client.force_login(fno)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "which type?" in page  # still shown as the previous note
+    box = re.search(
+        r'<textarea name="fc_f4\.primary_diagnosis\.dx"[^>]*>(.*?)</textarea>', page, re.S
+    )
+    assert box is not None
+    assert box.group(1).strip() == ""  # but the new comment box is empty

@@ -213,7 +213,7 @@
                 <details class="fc">
                   <summary>comment</summary>
                   <textarea name="fc_{{ row.field.key }}" rows="1" class="auto"
-                            placeholder="what needs to change here">{{ row.fno_comment }}</textarea>
+                            placeholder="what needs to change here">{{ row.fno_comment_prefill }}</textarea>
                 </details>
               {% endif %}
               {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
@@ -327,7 +327,7 @@
             <details class="fc">
               <summary>comment on this block</summary>
               <textarea name="fc_{{ row.field.key }}" rows="1" class="auto"
-                        placeholder="what needs to change here">{{ row.fno_comment }}</textarea>
+                        placeholder="what needs to change here">{{ row.fno_comment_prefill }}</textarea>
             </details>
           {% endif %}
           {% if locked %}
