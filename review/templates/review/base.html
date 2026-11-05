@@ -411,21 +411,6 @@
     t.addEventListener('input', function () { autoGrow(t); });
   });
 
-  document.addEventListener('toggle', function (e) {
-    var d = e.target;
-    if (!d.open || !d.querySelectorAll) return;
-    d.querySelectorAll('.source-slot[data-url]').forEach(function (slot) {
-      if (slot.dataset.loaded) return;
-      slot.dataset.loaded = '1';
-      slot.innerHTML = 'loading…';
-      var u = slot.dataset.url;
-      fetch(u + (u.indexOf('?') === -1 ? '?' : '&') + 'frag=1', { credentials: 'same-origin' })
-        .then(function (r) { return r.text(); })
-        .then(function (html) { slot.innerHTML = html; })
-        .catch(function () { slot.innerHTML = 'could not load the source'; });
-    });
-  }, true);
-
   var drawer = document.getElementById('source-drawer');
   var drawerBody = document.getElementById('source-body');
   if (drawer) {
