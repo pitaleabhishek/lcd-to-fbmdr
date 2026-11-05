@@ -1,0 +1,117 @@
+{% extends "review/base.html" %}
+{% block title %}{{ review.pregnancy.patient.name }} · Review{% endblock %}
+{% block content %}
+<h1>{{ review.pregnancy.patient.name }}</h1>
+<p class="muted">{{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }} · status <b>{{ review.get_status_display }}</b> · edits {{ review.edit_revision }}</p>
+<div class="stats">
+  <div class="stat"><b>{{ stats.answered }}</b> / {{ stats.fields }} answered</div>
+  <div class="stat"><b>{{ stats.proposed }}</b> open proposals</div>
+  <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
+  {% if review.deadline_at %}<div class="stat">deadline {{ review.deadline_at|date:"d M H:i" }}</div>{% endif %}
+</div>
+
+{% if locked %}
+  <div class="locked">This review is {{ review.get_status_display|lower }} and is locked. Changes would be an attributed amendment.</div>
+{% endif %}
+
+<div class="bar">
+  {% if not locked %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reevaluate">
+    <button>Refresh proposals</button></form>
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="submit">
+    <button class="primary">Submit for approval</button></form>
+  {% endif %}
+  {% if review.status == "submitted" and is_fno %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="approve">
+    <button class="primary">Approve</button></form>
+  {% endif %}
+  {% if review.current_version %}
+  <a href="{% url 'output' review.pk %}">View output</a>
+  <a href="{% url 'output' review.pk %}?format=json">JSON</a>
+  {% endif %}
+</div>
+
+{% for section in sections %}
+<h2>{{ section.heading }}</h2>
+<table>
+  <thead><tr><th style="width:34%">Item</th><th style="width:26%">Answer</th><th>Reuse / entry</th></tr></thead>
+  <tbody>
+  {% for row in section.rows %}
+    <tr>
+      <td>
+        <div>{{ row.field.label_printed }}</div>
+        <div class="key">{{ row.field.key }} · cat {{ row.field.category }}</div>
+      </td>
+      <td>
+        {% if row.is_answered %}
+          <span class="value">{{ row.display }}</span>
+          <span class="chip {{ row.mark }}">{{ row.mark }}</span>
+          {% if row.item.needs_reconsideration %}<span class="chip C">review</span>{% endif %}
+          {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
+        {% elif row.item and row.item.applicability_state == "not_applicable" %}
+          <span class="muted">Not applicable</span>
+          <div class="key">{{ row.item.reason }}</div>
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+      </td>
+      <td>
+        {% for pr in row.proposals %}
+          <div class="prop">
+            <span class="value">{{ pr.display }}</span>
+            <span class="chip {% if pr.p.source_kind == 'observation' %}R{% else %}D{% endif %}">
+              {% if pr.p.source_kind == 'observation' %}R{% else %}D{% endif %}
+            </span>
+            <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
+            <details>
+              <summary>where it came from</summary>
+              {% for inp in pr.p.frozen_inputs %}
+                <div class="why">
+                  {{ inp.label }} = {{ inp.value }}
+                  {% if inp.author %} · {{ inp.author }}{% endif %}
+                  {% if inp.observed_at %} · {{ inp.observed_at }}{% endif %}
+                  {% if inp.precision != "exact" %} · {{ inp.precision }}{% endif %}
+                  <span class="key">{{ inp.ref }}</span>
+                </div>
+              {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
+            </details>
+            {% if not locked %}
+            <form method="post" class="inline">{% csrf_token %}
+              <input type="hidden" name="action" value="accept">
+              <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
+              <button class="primary">Accept</button>
+            </form>
+            <form method="post" class="inline">{% csrf_token %}
+              <input type="hidden" name="action" value="reject">
+              <input type="hidden" name="proposal" value="{{ pr.p.pk }}">
+              <input type="text" name="reason" placeholder="why reject">
+              <button class="danger">Reject</button>
+            </form>
+            {% endif %}
+          </div>
+        {% empty %}
+          <span class="muted">nothing proposed</span>
+        {% endfor %}
+        {% if not locked %}
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="action" value="value">
+          <input type="hidden" name="key" value="{{ row.field.key }}">
+          <input type="text" name="value" placeholder="enter value">
+          <input type="text" name="reason" placeholder="reason (optional)">
+          {% if row.is_answered %}<label class="why"><input type="checkbox" name="corrected" value="1"> correction</label>{% endif %}
+          <button>Save</button>
+        </form>
+        <form method="post" class="inline">{% csrf_token %}
+          <input type="hidden" name="action" value="na">
+          <input type="hidden" name="key" value="{{ row.field.key }}">
+          <input type="text" name="reason" placeholder="why N/A">
+          <button>N/A</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endblock %}

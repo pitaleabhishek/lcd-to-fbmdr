@@ -1,0 +1,505 @@
+# Form 4 — extracted text for reconciliation
+# Source: MDSR.pdf, Annexure (pp. 64-68), Government of India
+# Extracted 2026-11-05; layout artefacts preserved deliberately.
+
+Form 4
+Confidential
+Facility Based Maternal Death Review Form
+Name and Type of Health Facility (specify)__________________________________________________
+Address________________________________________________________________________________________
+Name of Nodal Person ____________________________________ Contact No______________________
+FOR OFFICE USE ONLY
+FBMdr No. (Specific to the Place) MCts No Month Year
+Please fill up the Performa given below
+NOTE:
+•
+•
+MDR Number must be put serially 0001 & so on.
+This form must be filled for all Maternal Deaths.
+Mark with √ wherever applicable.•
+•
+For Date use Day/Month/Year format. For time use 24 hours clock format.
+•
+Complete within 24 hrs.
+Make 2 photocopies
+• & send original to MRD, a copy to DNO, and one
+retained with Nodal Officer for further action0
+Background information of deceased Mother
+Full Name___________________________________ Age ____________ Inpatient No__________________
+Medico-legal admission: Yes No
+Complete Address
+Contact/ Mobile No
+_______________________________
+Education: Illiterate Upto 5th class 6th to 12th class Beyond 12th class
+Below Poverty Line: BPL Certified Self certified BPL Not BPL
+___________________________________________________________________________
+1. a. Date and Time of admission: Day Month Yr. at Hours Min.
+b. Date and time of Death: Day Month Yr. at Hours Min.
+c. Duration of Hospital stay: Days Hours
+d. Duration of ICU stay: Days Hours if any
+64 | Guidelines for Maternal Death Surveillance & Response
+Days Hrs. N.A. dnK
+e. Admission- delivery interval:
+f. Admission – death interval
+g. Outcome of pregnancy:
+Abortion
+1) Ectopic
+2) Live birth
+3)
+Still birth
+5)
+4) Undelivered
+2. On Admission
+a. Complaints at time of admission: ________________________________________________________
+b. Obstetric formula on admission M F
+Gravida
+1. 2. Para 3. Abortions 4. No. of Living children
+c. Period of gestation:
+1) Before 22
+weeks
+2) Antenatal
+22-34 weeks
+3) Antenatal ≥34
+weeks
+4) Intrapartum
+5)
+Post- Partum up
+to 24hrs
+6)
+Post-natal
+24hrs- 1 week
+7)
+Post-natal- More than 1 week to 42 d
+ays
+3. Condition on Admission: 1) Stable 2) Semi conscious responds to verbal
+commands 3) Semi conscious responds to painful stimuli 4) Unconscious
+5) Brought dead
+a. Referral: If referred from outside: i. No. of places visited prior
+b.  Please fill the table below for the details on transport, referral and type of care
+given
+Place Home/
+Village
+Facility 1 Facility 2 Facility 3
+Date (dd/MM/yy)
+Time of onset of
+complication or onset of
+labour
+Time of calling/ arrival
+of transport
+Transport used/type
+Time to reach
+Money spent on
+transport (Rs.)
+Name of Facility/ Level
+of referral
+Attended by Doctor/
+nurse/ other staff/none
+ANNEXURES | 65
+Place Home/
+Village
+Facility 1 Facility 2 Facility 3
+Reason for referral
+Referral slip (given or
+not, if yes, attach)
+Treatment given
+Money spent on
+treatment/ medicine/
+Diagnostics
+Time spent in facility
+4.  Diagnosis at time of admission:
+(Please make sure to fill the table with underlying cause given for each condition)
+S.
+No. Diagnosis Underlying Cause
+1. Hemorrhage Abortion
+I.
+II.
+III.
+IV.
+Antepartum
+Bleeding
+Ectopic Pregnancy
+Gestational Trophoblastic Disease
+Placental causes-
+a) Placenta Previa
+- Placental abruption
+b)
+Late pregnancy Bleeding other than
+placental causes-
+- Scar dehiscence
+- Rupture uterus
+- Others,
+Specify_____________
+V.
+Intrapartum Bleeding
+VI. Atonic Traumatic Mixed
+Postpartum bleeding-
+2. Hypertensive
+disorders of
+pregnancy
+i. ii. Pre-eclampsia
+Gestational Hypertension
+iii. iv. Others
+Eclampsia
+3. Labour
+related
+Disorders
+i. Normal labour
+I
+iii. nversion of Uterus iv. Retained placenta
+v. Any other
+ii Prolonged / Obstructed labour
+4. Medical
+Disorders
+i. ii. Heart disease iii. TB
+Anaemia
+iv. v. OthersDiabetes
+66 | Guidelines for Maternal Death Surveillance & Response
+S.
+No. Diagnosis Underlying Cause
+5. Infection Post abortal
+I.
+ii.
+iii.
+iv.
+Antepartum
+Intrapartum
+Post-partum
+a)
+b)
+c)
+d)
+Viral such as
+Hepatitis/Hiv aids/
+Others,
+Malaria,
+Dengue,
+Lower Respiratory
+Tract Infection,
+e)
+Other infections,
+Specify__________________
+6. Incidental/ Accidental Disorders E.g.
+Surgical including Iatrogenic, Trauma,
+Violence, Anaesthetic complications,
+Specify
+7. Any other,
+Specify
+2. Abortion (to be filled if applicable)
+a. Spontaneous Induced
+i. If spontaneous, - Complete Incomplete
+ii. If induced
+-Legal Illegal
+b. What was the procedure adopted? Medical methods Mva D&E/ S&E
+Extra Amniotic Installation Hysterotomy Others
+c. Post Abortal Period Uneventful Sepsis Hemorrhage Others
+d. Was the termination procedure done in more than one center yes (If yes, specify the centres visited before coming to this
+facility)…………………………………………..........................................................................................................
+…………………………………………………………………………………………………………………………………
+3. Antenatal Care
+No
+a. Did she receive ANC? Yes No Don’t know
+c. Services provided by: anM MO Obstetrician ayusH
+b. If Yes, Type of Facility: SC PHC CHC sdH DH Medical College
+Private hospital Others specify_______________________________________
+No Nurse Other specialists, specify___________________
+d. If yes, was she told about any disorder/complication? Yes e. If yes, what was the risk factor identified?
+Don’t know
+1.
+Abortion
+2.
+Ectopic
+pregnancy
+Vesicular Mole
+3. APH
+4.
+5.
+Hydramnios /
+Oligohydramnios
+Short stature
+7.
+6. PIH/PE
+8.
+Previous C
+section
+ANNEXURES | 67
+9.
+Multiple
+pregnancy
+10.
+Grand multi
+11.
+Abnormal
+presentation/
+position
+12.
+Big baby
+13.
+Anemia
+14.
+4. DELIVERY , PUERPERIUM and nEOnATAL InFORMATIOn
+a. Did she have labour pains? Yes No
+b. If yes, was a partograph used to monitor labour ?
+i.) Past facility: Yes No Don’t know
+ii.) Current facility: Yes No
+c. Complications during labour:
+1.
+2.
+Prolonged
+labour
+3.
+Obstructed
+labour /Rupture
+Uterus
+d. Mode of Delivery
+Diabetes/
+GDM
+15.
+Medical conditions
+(Specify________)
+Eclampsia/
+pre-ecclampsia
+Inversion of
+Uterus
+1.
+Undelivered
+Vaginal
+2. Normal
+a.
+- With episiotomy
+b.
+Assisted
+- Forceps
+- Vacuum
+c.
+Breech
+d.
+Multiple Pregnancy
+16.
+Others
+(Specify____)
+If applicable
+4.
+Intra partum
+Hge
+5.
+6. Others
+IP sepsis
+7. Specify ___________________
+Caesarean Section
+3. Elective
+Emergency
+Laparotomy
+4. Rupture uterus
+*Ectopic Pregnancy
+5.
+Indication (CS/Instrumental)
+* although in Ectopic pregnancy woman does not deliver but fetus may be removed
+during Laparotomy
+e. Anaesthesia (any adverse reaction):
+b)
+Reg- Epidural / Spinal
+a)
+General Anaesthesia
+c)
+f. In which phase of labor did she develop complications?
+Local
+68 | Guidelines for Maternal Death Surveillance & Response
+f. In which phase of labor did she develop complications?
+a)
+First
+stage
+b)
+Second
+stage
+c)
+Third
+stage
+d)
+Post Birth
+g. Neonatal Outcome: alive
+fresh Still birth
+Macerated still birth Neonatal death
+h. If baby died, probable cause of death:
+1.
+Birth Asphxia
+5.
+Cong Anomalies
+i. Postnatal period: - Uneventful Eventful
+- If Eventful, specify probable cause of death:
+1.
+PPH
+2.
+a.
+Within
+<
+6 hrs. of
+birth
+PE /
+Eclampsia
+b.
+> 6 -
+< 24
+hrs. of
+birth
+c.
+> 24 hrs.
+after birth
+2.
+Respiratory
+distress
+3.
+Aspiration including
+Mas
+4.
+Sepsis
+6.
+Preterm
+7.
+Others
+Specify__________________
+3.
+Cva/Pulmonary
+Embolism
+4.
+Sepsis/ ards
+5.
+Anemia
+6.
+Post op
+complication
+7.
+Medical conditions
+Specify__________
+8.
+Others
+Specify______________
+5. INTERVENTIONS (Tick appropriate box), Specify other in the last row
+Early
+pregnancy Antenatal Intrapartum Postpartum Anaesthesia/
+ICU
+1.
+2.
+3.
+4.
+Evacuation
+Trans-
+fusion
+Laparotomy/
+laparo-
+scopy
+Hyster-
+ectomy
+1.
+2.
+3.
+Trans-
+fusion
+Version
+Other
+surgeries
+1.
+2.
+3.
+4.
+5.
+6.
+Instrumental
+del.
+Caesarean
+section
+Hyster-
+ectomy
+Manual
+removal of
+placenta
+Conservative
+surgery
+Trans-
+fusion
+1.
+2.
+3.
+4.
+Removal of
+retained
+POC
+Laparo-
+tomy
+Hyster-
+ectomy
+Trans-
+fusion
+1.
+2.
+3.
+4.
+5.
+Anaesthesia
+-GA
+Spinal
+Local
+Epidural
+ICU
+monitoring
+a.
+b.
+c.
+Blood transfusion given? Yes
+No
+If yes, No of units
+/Cryo
+Whole Blood
+Specify if any transfusion reaction occurred?: Yes
+/PRBC
+/ffP
+/Platelets
+No
+ANNEXURES | 69
+6.
+Primary diagnosis/condition leading to death_____________________________________
+7. CAUSE OF DEATH:________________________________________________________________________
+Part 1: Antecedent causes (Please mention the cause of death from Box below)
+a.
+Due to or as a consequence of ____________________________________________
+b.
+Due to or as a consequence of ____________________________________________
+c.
+Due to or as a consequence of ____________________________________________
+8.
+IN YOUR OPINION WERE ANY OF THESE FACTORS PRESENT?
+System Example Y N Not known
+Personal/
+Family
+Delay in woman seeking help
+Refusal of treatment
+or admission
+Refusal of admission in previous facility
+Logistical
+Problems
+Lack of transport from home to health
+care facility
+Lack of transport between health care
+facilities
+Lack of assured referral system
+FacilitiesLack of facilities, equipment or
+consumable
+Lack of blood/ blood products
+Lack of OT availability
+Health
+personnel
+problems
+Lack of human resources
+Lack of Anesthetist
+Lack of Obstetricians
+Lack of expertise, training or education
+9. AUTOPSY: Performed
+Not performed
+- If performed please report the final diagnosis and send the detailed report later
+______________________________________________________________________________________
+______________________________________________________________________________________
+70 | Guidelines for Maternal Death Surveillance & Response
+10. CASE SUMMARY
+(please supply a short summary of the events surrounding
+hospital stay and the death of the patient)
+Form filled by the MO on duty nodal Officer of the Hospital:
+Name & Signature Name& Signature

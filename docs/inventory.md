@@ -1,0 +1,94 @@
+# Form 4 overlap inventory
+
+53 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
+
+**Direct reuse from the LCG: 2 of 53 fields (3.8%).** Everything else is entered by the clinician or copied from another recorded fact.
+
+## By category
+
+| Category | Fields |
+|---|---|
+| 1. Patient info and admin records | 12 |
+| 2. Clinical and OBS information | 19 |
+| 3. Mx and interventions | 2 |
+| 4. Death ix and review | 20 |
+
+## By source of the value
+
+| Source | Fields |
+|---|---|
+| clinician | 35 |
+| admin | 4 |
+| patient_record | 3 |
+| admission | 3 |
+| death | 2 |
+| delivery | 2 |
+| lcg | 2 |
+| pregnancy | 1 |
+| neonate | 1 |
+
+## By relationship
+
+| Relationship | Fields |
+|---|---|
+| reused | 14 |
+| derived | 4 |
+| none | 35 |
+
+## Fields
+
+| Key | Category | Source | Printed item | Relationship | PDF label found |
+|---|---|---|---|---|---|
+| `f4.background.facility_name` | 1 | admin | Name of health facility | reused | yes |
+| `f4.background.facility_type` | 1 | clinician | Type of health facility | none | yes |
+| `f4.background.facility_address` | 1 | clinician | Address | none | yes |
+| `f4.background.fbmdr_no` | 1 | admin | FBMDR No. (specific to the place) | reused | yes |
+| `f4.background.mcts_no` | 1 | patient_record | MCTS No. | reused | yes |
+| `f4.background.name` | 1 | patient_record | Full name of deceased mother | reused | yes |
+| `f4.background.age` | 1 | patient_record | Age | reused | yes |
+| `f4.background.inpatient_no` | 1 | admin | Inpatient No. | reused | yes |
+| `f4.background.medico_legal` | 1 | admin | Medico-legal admission | reused | yes |
+| `f4.background.contact` | 1 | clinician | Contact / mobile No. | none | yes |
+| `f4.timing.a` | 2 | admission | 1.a Date and time of admission | reused | yes |
+| `f4.timing.b` | 2 | death | 1.b Date and time of death | reused | yes |
+| `f4.timing.c` | 2 | admission | 1.c Duration of hospital stay | derived | yes |
+| `f4.timing.d` | 2 | admission | 1.d Duration of ICU stay, if any | derived | yes |
+| `f4.timing.e` | 2 | delivery | 1.e Admission - delivery interval | derived | yes |
+| `f4.timing.f` | 2 | death | 1.f Admission - death interval | derived | yes |
+| `f4.timing.g` | 2 | pregnancy | 1.g Outcome of pregnancy | reused | yes |
+| `f4.admission.complaints` | 2 | clinician | 2.a Complaints at time of admission | none | yes |
+| `f4.admission.gravida` | 2 | clinician | 2.b Gravida | none | yes |
+| `f4.admission.para` | 2 | lcg | 2.b Para | reused | yes |
+| `f4.admission.abortions` | 2 | clinician | 2.b Abortions | none | yes |
+| `f4.admission.living_children` | 2 | clinician | 2.b No. of living children | none | yes |
+| `f4.admission.gestation` | 2 | clinician | 2.c Period of gestation | none | yes |
+| `f4.delivery.labour_pains` | 2 | lcg | 4.a Did she have labour pains | reused | yes |
+| `f4.delivery.partograph_used` | 2 | clinician | 4.b Was a partograph used | none | yes |
+| `f4.delivery.complications` | 2 | clinician | 4.c Complications during labour | none | yes |
+| `f4.delivery.mode` | 3 | delivery | 4.d Mode of delivery | reused | yes |
+| `f4.delivery.phase` | 2 | clinician | 4.f Phase of labour at complication | none | yes |
+| `f4.delivery.neonatal_outcome` | 2 | neonate | 4.g Neonatal outcome | reused | yes |
+| `f4.delivery.postnatal` | 2 | clinician | 4.i Postnatal period | none | yes |
+| `f4.interventions.performed` | 3 | clinician | 5. Interventions (phase x procedure matrix) | none | yes |
+| `f4.primary_diagnosis.dx` | 4 | clinician | 6. Primary diagnosis / condition leading to death | none | yes |
+| `f4.cause_of_death.a_antecedent` | 4 | clinician | 7. Part 1 a. Due to or as a consequence of | none | yes |
+| `f4.cause_of_death.b_antecedent` | 4 | clinician | 7. Part 1 b. Due to or as a consequence of | none | yes |
+| `f4.cause_of_death.c_antecedent` | 4 | clinician | 7. Part 1 c. Due to or as a consequence of | none | yes |
+| `f4.factors.delay_seeking_help` | 4 | clinician | 8. Delay in woman seeking help | none | yes |
+| `f4.factors.refusal_treatment` | 4 | clinician | 8. Refusal of treatment or admission | none | yes |
+| `f4.factors.refusal_previous_facility` | 4 | clinician | 8. Refusal of admission in previous facility | none | yes |
+| `f4.factors.transport_from_home` | 4 | clinician | 8. Lack of transport from home to health care facility | none | yes |
+| `f4.factors.transport_between_facilities` | 4 | clinician | 8. Lack of transport between health care facilities | none | yes |
+| `f4.factors.referral_system` | 4 | clinician | 8. Lack of assured referral system | none | yes |
+| `f4.factors.facilities_equipment` | 4 | clinician | 8. Lack of facilities, equipment or consumable | none | yes |
+| `f4.factors.facilities_blood` | 4 | clinician | 8. Lack of blood / blood products | none | yes |
+| `f4.factors.facilities_ot` | 4 | clinician | 8. Lack of OT availability | none | yes |
+| `f4.factors.human_resources` | 4 | clinician | 8. Lack of human resources | none | yes |
+| `f4.factors.anaesthetist` | 4 | clinician | 8. Lack of Anaesthetist | none | yes |
+| `f4.factors.obstetricians` | 4 | clinician | 8. Lack of Obstetricians | none | yes |
+| `f4.factors.expertise` | 4 | clinician | 8. Lack of expertise, training or education | none | yes |
+| `f4.autopsy.performed` | 4 | clinician | 9. Autopsy performed | none | yes |
+| `f4.autopsy.diagnosis` | 4 | clinician | 9. Autopsy final diagnosis | none | yes |
+| `f4.summary.text` | 4 | clinician | 10. Case summary | none | yes |
+| `f4.summary.mo_name` | 1 | clinician | Form filled by the MO on duty - name | none | yes |
+| `f4.summary.fno_name` | 1 | clinician | Nodal Officer - name | none | yes |

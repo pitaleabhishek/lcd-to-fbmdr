@@ -1,0 +1,13 @@
+{% extends "review/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<h1>Sign in</h1>
+<p class="muted">Demo accounts: <b>resident</b> / resident123 · <b>fno</b> / fno123</p>
+<form method="post" style="max-width:320px;margin-top:14px">
+  {% csrf_token %}
+  {% if form.errors %}<div class="msg">Wrong username or password.</div>{% endif %}
+  <p><label>Username<br><input type="text" name="username" style="width:100%"></label></p>
+  <p><label>Password<br><input type="password" name="password" style="width:100%"></label></p>
+  <button class="primary">Sign in</button>
+</form>
+{% endblock %}

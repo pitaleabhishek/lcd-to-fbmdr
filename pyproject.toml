@@ -1,0 +1,19 @@
+[project]
+name = "mdr-reuse"
+version = "0.1.0"
+description = "Reuse LCG labour documentation in a Facility-Based Maternal Death Review (Form 4)"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<6.0",
+    "psycopg[binary]>=3.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.9",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
