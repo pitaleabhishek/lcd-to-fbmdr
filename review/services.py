@@ -430,7 +430,7 @@ def canonical_payload(review: Review) -> dict:
 
 
 @transaction.atomic
-def submit(review: Review, user) -> ReviewVersion:
+def submit(review: Review, user, note: str = "") -> ReviewVersion:
     review = Review.objects.select_for_update().get(pk=review.pk)
     assert_can_author(review, user)
     was_returned = review.status == Review.Status.RETURNED
@@ -450,6 +450,7 @@ def submit(review: Review, user) -> ReviewVersion:
         payload_json=payload,
         payload_hash=hashlib.sha256(body.encode()).hexdigest(),
         created_by=user,
+        note=(note or "").strip(),
     )
     review.status = Review.Status.SUBMITTED
     review.current_version = version_no

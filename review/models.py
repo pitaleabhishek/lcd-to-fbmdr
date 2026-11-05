@@ -455,6 +455,7 @@ class ReviewVersion(models.Model):
     kind = models.CharField(max_length=20, choices=Kind.choices)
     payload_json = models.JSONField()
     payload_hash = models.CharField(max_length=64)
+    note = models.TextField(blank=True, help_text="Note from the author to the reviewer. Never printed.")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True
     )

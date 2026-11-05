@@ -25,7 +25,10 @@
     {% if not locked %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reevaluate">
         <button>Refresh proposals</button></form>
-      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="submit">
+      <form method="post" class="submit-form">{% csrf_token %}
+        <input type="hidden" name="action" value="submit">
+        <input type="text" name="note" class="note-for-fno"
+               placeholder="note for the FNO (not printed)">
         <button class="primary">Submit</button></form>
     {% endif %}
 
@@ -47,6 +50,14 @@
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
 </div>
 <div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected</div>
+{% if submission_note %}
+  <div class="returnbar resident-note">
+    <div class="rb-main">
+      <div class="rb-head"><b>Resident note</b><span class="muted"> · not printed</span></div>
+      <div class="rb-overall" title="{{ submission_note }}">“{{ submission_note }}”</div>
+    </div>
+  </div>
+{% endif %}
 {% if open_return %}
   <div class="returnbar" id="returnbar">
     <div class="rb-main">

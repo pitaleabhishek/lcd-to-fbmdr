@@ -15,7 +15,7 @@
 
 <h2>Versions</h2>
 <table>
-  <thead><tr><th>#</th><th>Kind</th><th>Created</th><th>By</th><th>Basis</th><th>Hash</th></tr></thead>
+  <thead><tr><th>#</th><th>Kind</th><th>Created</th><th>By</th><th>Basis</th><th>Note</th><th>Hash</th></tr></thead>
   <tbody>
   {% for v in versions %}
     <tr>
@@ -24,10 +24,11 @@
       <td>{{ v.created_at|date:"d M Y H:i" }}</td>
       <td>{{ v.created_by.username|default:"—" }}</td>
       <td>{% if v.submission_version %}from v{{ v.submission_version.version_no }}{% elif v.amends_version %}amends v{{ v.amends_version.version_no }}{% else %}—{% endif %}</td>
+      <td>{{ v.note|default:"—" }}</td>
       <td class="key">{{ v.payload_hash|slice:":10" }}</td>
     </tr>
   {% empty %}
-    <tr><td colspan="6" class="muted">Nothing submitted yet.</td></tr>
+    <tr><td colspan="7" class="muted">Nothing submitted yet.</td></tr>
   {% endfor %}
   </tbody>
 </table>

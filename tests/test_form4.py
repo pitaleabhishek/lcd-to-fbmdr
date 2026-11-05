@@ -671,3 +671,31 @@ def test_history_lists_each_field_comment(client, case_a, django_user_model):
     assert "Which type of PPH?" in page
     assert "Primary diagnosis" in page
     assert "v1" in page
+
+
+def test_resident_note_is_per_version_and_not_printed(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident, "Delivery time is from the PHC slip.")
+
+    client.force_login(fno)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "Delivery time is from the PHC slip." in page
+
+    services.return_review(case_a, fno, "", {"f4.cause_of_death.a_antecedent": "be precise"})
+    services.submit(case_a, resident, "Cause updated as asked.")
+
+    v1 = case_a.versions.get(version_no=1)
+    v2 = case_a.versions.get(version_no=2)
+    assert v1.note == "Delivery time is from the PHC slip."
+    assert v2.note == "Cause updated as asked."
+
+    client.force_login(resident)
+    page = client.get(f"/review/{case_a.pk}/output/?format=json").content.decode() \
+        if case_a.current_version else ""
+    assert "Resident note" not in page

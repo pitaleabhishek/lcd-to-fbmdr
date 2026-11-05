@@ -13,7 +13,14 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from . import services
-from .models import AuditEvent, Proposal, ProposalDecision, Review, ReviewItem
+from .models import (
+    AuditEvent,
+    Proposal,
+    ProposalDecision,
+    Review,
+    ReviewItem,
+    ReviewVersion,
+)
 from .registry import CATEGORIES, registry
 from .rules import RULES
 from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
@@ -210,6 +217,12 @@ def workspace(request, pk: int):
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
     death = review.pregnancy.deaths.order_by("-died_at").first()
+    submission = (
+        review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
+        .order_by("-version_no")
+        .first()
+    )
+    submission_note = submission.note if submission and review.status == "submitted" else ""
     open_return = services.latest_return(review, open_only=True)
     last_return = services.latest_return(review)
     fno_can_comment = is_fno(request.user) and (
@@ -352,6 +365,7 @@ def workspace(request, pk: int):
             ],
             "is_fno": is_fno(request.user),
             "open_return": open_return,
+            "submission_note": submission_note,
             "fno_can_comment": fno_can_comment,
             "first_comment_slug": first_comment_slug,
             "last_return": last_return,
@@ -457,7 +471,7 @@ def _handle_action(request, review: Review):
         return
 
     if action == "submit":
-        services.submit(review, user)
+        services.submit(review, user, request.POST.get("note", ""))
         messages.success(request, "Submitted for approval")
         return
 
