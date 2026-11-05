@@ -58,8 +58,16 @@ docker compose exec db psql -U mdr -d mdr \
 ```
 
 `lcg_chart` is a Postgres view: one row per variable, cells across time in IST.
-Case 0 has ten first-stage columns and two second-stage columns; cervical
-dilatation correctly stops at full dilatation.
+`lcg_columns` lists the chart's time columns with their stage and cell count.
+
+Case 0 has twelve columns — ten active first stage, two second stage. Stage is a
+property of the column, not the cell, so no inference from `pushing` is needed.
+Cervical dilatation correctly stops at full dilatation.
+
+```sh
+docker compose exec db psql -U mdr -d mdr \
+  -c "select ord, chart_time, stage, cells from lcg_columns order by document_id, ord;"
+```
 
 ## Regenerate the inventory
 
@@ -77,7 +85,9 @@ of the registry, never hand-maintained.
 - Registry with full-word section keys and `f4.<section>.<label>` grammar
   (53 fields in the first slice).
 - LCG registry: 7 sections, 34 variables, ordered and typed; observations FK to a
-  variable. `lcg_chart` view renders the grid.
+  variable. `LCGColumn` holds the time axis (ord, chart_time, first/second stage),
+  so stage and empty columns are data, not inference. `lcg_chart` and
+  `lcg_columns` views render the grid.
 - Case 0: a complete, normal labour — every grid variable across ten first-stage
   columns and two second-stage columns, 340 observations, no death.
 - 18 rules producing proposals with frozen inputs; `NotComputable` keeps

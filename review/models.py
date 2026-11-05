@@ -152,9 +152,35 @@ class LCGVariable(models.Model):
         return f"{self.section.label} / {self.label}"
 
 
+class LCGColumn(models.Model):
+    """One time column of the chart. Stage belongs to the column, not the cell."""
+
+    class Stage(models.TextChoices):
+        FIRST = "first", "Active first stage"
+        SECOND = "second", "Second stage"
+
+    document = models.ForeignKey(
+        SourceDocument, on_delete=models.PROTECT, related_name="columns"
+    )
+    ord = models.PositiveSmallIntegerField()
+    chart_time = models.DateTimeField()
+    stage = models.CharField(max_length=10, choices=Stage.choices, default=Stage.FIRST)
+
+    class Meta:
+        ordering = ["document", "ord"]
+        constraints = [
+            models.UniqueConstraint(fields=["document", "ord"], name="uniq_lcg_column_ord"),
+            models.UniqueConstraint(fields=["document", "chart_time"], name="uniq_lcg_column_time"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.document_id}#{self.ord} {self.chart_time:%H:%M} ({self.stage})"
+
+
 class Observation(models.Model):
     document = models.ForeignKey(SourceDocument, on_delete=models.PROTECT, related_name="observations")
     variable = models.ForeignKey(LCGVariable, on_delete=models.PROTECT, related_name="observations")
+    column = models.ForeignKey(LCGColumn, on_delete=models.PROTECT, related_name="observations")
     value_num = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     value_text = models.CharField(max_length=200, blank=True)
     value_code = models.CharField(max_length=50, blank=True)
