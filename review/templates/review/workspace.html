@@ -82,7 +82,19 @@
                       data-autosave="{% url 'save_field' review.pk %}"
                       data-key="{{ row.field.key }}">{% csrf_token %}
                   <input type="hidden" name="key" value="{{ row.field.key }}">
-                  {% if row.field.type == "enum" %}
+                  {% if row.widget == "month" %}
+                    <select name="value" class="val">
+                      <option value="">—</option>
+                      {% for m in months %}
+                        <option value="{{ m.value }}" {% if row.current == m.value|stringformat:"s" %}selected{% endif %}>{{ m.label }}</option>
+                      {% endfor %}
+                    </select>
+                  {% elif row.widget == "year" %}
+                    <input type="number" name="value" class="val" min="2000" max="2100"
+                           step="1" value="{{ row.current }}">
+                  {% elif row.field.type == "date" %}
+                    <input type="date" name="value" class="val" value="{{ row.current }}">
+                  {% elif row.field.type == "enum" %}
                     <select name="value" class="val">
                       <option value="">—</option>
                       {% for opt in row.field.options %}

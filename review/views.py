@@ -235,6 +235,7 @@ def workspace(request, pk: int):
                     "field": f,
                     "item": item,
                     "display": fmt(item.value_json) if item else "—",
+                    "widget": f.widget,
                     "current": ""
                     if not item or item.value_json is None
                     else (item.value_json if isinstance(item.value_json, str)
@@ -301,6 +302,14 @@ def workspace(request, pk: int):
             "review": review,
             "sections": sections,
             "stats": stats,
+            "months": [
+                {"value": i, "label": name}
+                for i, name in enumerate(
+                    ["January", "February", "March", "April", "May", "June",
+                     "July", "August", "September", "October", "November", "December"],
+                    start=1,
+                )
+            ],
             "is_fno": is_fno(request.user),
             "locked": locked,
         },

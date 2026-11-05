@@ -58,6 +58,7 @@ class Field:
     precision_note: str = "same"
     options: tuple[str, ...] = field(default_factory=tuple)
     block_schema: dict | None = None
+    widget: str = ""  # presentation only: month | year
 
     @property
     def slug(self) -> str:
@@ -140,8 +141,8 @@ F("fbmdr_no", "background", "FBMDR No. (specific to the place)", "text", 1,
 F("mcts_no", "background", "MCTS No.", "text", 1,
   handling="propose", source="patient_record", rule="f4.background.mcts_no.from_patient",
   precision_note="MCTS is not recorded on the LCG")
-F("fbmdr_month", "background", "Month", "int", 1)
-F("fbmdr_year", "background", "Year", "int", 1)
+F("fbmdr_month", "background", "Month", "int", 1, widget="month")
+F("fbmdr_year", "background", "Year", "int", 1, widget="year")
 F("name", "background", "Full name of deceased mother", "text", 1,
   handling="propose", source="patient_record", rule="f4.background.name.from_patient")
 F("age", "background", "Age", "int", 1, handling="propose", source="patient_record",
