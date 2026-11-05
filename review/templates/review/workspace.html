@@ -67,7 +67,7 @@
         <thead><tr><th style="width:26%">Item</th><th style="width:22%">Answer</th><th>Reuse / entry</th></tr></thead>
         <tbody>
         {% for row in section.rows %}
-          <tr>
+          <tr id="f-{{ row.field.slug }}">
             <td>
               <div class="label">{{ row.field.label_printed }}</div>
               <div class="key">{{ row.field.key }}{% if row.field.required %} · <span class="req">required</span>{% endif %}</div>
