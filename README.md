@@ -4,7 +4,8 @@ Reuse labour documentation (WHO Labour Care Guide) in a Facility-Based Maternal
 Death Review (Form 4), with provenance: nothing re-keyed, nothing claimed that
 was not recorded.
 
-Design: [`docs/design.md`](docs/design.md). UI principles:
+Design: [`docs/design.md`](docs/design.md). To-do: [`TODO.md`](TODO.md).
+Dependencies: [`docs/dependencies.md`](docs/dependencies.md). UI principles:
 [`docs/ui.md`](docs/ui.md). LCG storage model:
 [`docs/lcg-storage.md`](docs/lcg-storage.md). Generated overlap inventory:
 [`docs/inventory.md`](docs/inventory.md). Form 4 source text used for

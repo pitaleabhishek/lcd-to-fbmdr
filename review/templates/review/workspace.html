@@ -28,6 +28,7 @@
         <button class="primary">Submit</button></form>
     {% endif %}
 
+    <a class="button" href="{% url 'history' review.pk %}">History</a>
     {% if review.current_version %}
       <a class="button" href="{% url 'output' review.pk %}">Output</a>
     {% endif %}

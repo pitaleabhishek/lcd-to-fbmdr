@@ -510,3 +510,24 @@ def test_source_page_shows_the_chart_column(client, case_a, django_user_model):
     body = resp.content.decode()
     assert "Where this came from" in body
     assert "This column" in body
+
+
+def test_history_is_visible_to_resident_and_fno(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+
+    client.force_login(resident)
+    r = client.get(f"/review/{case_a.pk}/history/")
+    assert r.status_code == 200
+    body = r.content.decode()
+    assert "Activity" in body and "submitted" in body
+    assert "Primary diagnosis" in body
+
+    client.force_login(fno)
+    assert client.get(f"/review/{case_a.pk}/history/").status_code == 200

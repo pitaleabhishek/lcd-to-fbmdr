@@ -799,6 +799,65 @@ def save_field(request, pk: int):
     )
 
 
+def _describe(event):
+    from .registry import registry
+
+    field = registry._fields.get(event.entity_id)
+    label = field.label_printed if field else event.entity_id
+    p = event.payload or {}
+    action = event.action
+    if action == "answer_set":
+        detail = f"{label} → {p.get('to')}"
+        if p.get("reason"):
+            detail += f" · {p['reason']}"
+        return "answered" if not p.get("corrected") else "corrected", detail
+    if action == "answer_reverted":
+        return "reverted", f"{label} → {p.get('to')}"
+    if action == "proposal_accepted":
+        return "accepted proposal", f"{label} → {p.get('value')}"
+    if action == "proposal_rejected":
+        detail = label
+        if p.get("reason"):
+            detail += f" · {p['reason']}"
+        return "rejected proposal", detail
+    if action == "applicability_set":
+        return "marked N/A", f"{label} · {p.get('reason', '')}".strip(" ·")
+    if action == "block_cleared":
+        return "cleared block", label
+    if action == "submitted":
+        return "submitted", f"version {p.get('version_no')}"
+    if action == "approved":
+        return "approved", f"version {p.get('version_no')}"
+    if action == "returned":
+        return "returned", p.get("comment", "")
+    return action.replace("_", " "), ""
+
+
+@login_required
+def history(request, pk: int):
+    review = get_object_or_404(
+        Review.objects.select_related("pregnancy__patient"), pk=pk
+    )
+    events = []
+    for e in review.audit_events.select_related("actor").order_by("-at", "-id")[:400]:
+        action, detail = _describe(e)
+        events.append(
+            {"at": e.at, "actor": e.actor, "action": action, "detail": detail}
+        )
+    versions = review.versions.select_related("created_by").order_by("-version_no")
+    returns = review.returns.select_related("by", "submission_version").order_by("-at")
+    return render(
+        request,
+        "review/history.html",
+        {
+            "review": review,
+            "events": events,
+            "versions": versions,
+            "returns": returns,
+        },
+    )
+
+
 @login_required
 def source(request, kind: str, pk: int):
     """Show where a value came from: the chart column, or the record row."""

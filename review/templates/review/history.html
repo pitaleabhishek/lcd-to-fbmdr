@@ -1,0 +1,69 @@
+{% extends "review/base.html" %}
+{% block title %}History · {{ review.pregnancy.patient.name }}{% endblock %}
+{% block content %}
+<h1>History — {{ review.pregnancy.patient.name }}</h1>
+<p class="muted">
+  {{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }} ·
+  {{ review.get_status_display }}
+</p>
+<div class="bar">
+  <a href="{% url 'workspace' review.pk %}">Back to the review</a>
+  {% with doc=review.pregnancy.documents.first %}
+    {% if doc %}<a href="{% url 'labour' doc.pk %}">Labour record</a>{% endif %}
+  {% endwith %}
+</div>
+
+<h2>Versions</h2>
+<table>
+  <thead><tr><th>#</th><th>Kind</th><th>Created</th><th>By</th><th>Basis</th><th>Hash</th></tr></thead>
+  <tbody>
+  {% for v in versions %}
+    <tr>
+      <td>{{ v.version_no }}</td>
+      <td>{{ v.get_kind_display }}</td>
+      <td>{{ v.created_at|date:"d M Y H:i" }}</td>
+      <td>{{ v.created_by.username|default:"—" }}</td>
+      <td>{% if v.submission_version %}from v{{ v.submission_version.version_no }}{% elif v.amends_version %}amends v{{ v.amends_version.version_no }}{% else %}—{% endif %}</td>
+      <td class="key">{{ v.payload_hash|slice:":10" }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="muted">Nothing submitted yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Returns</h2>
+<table>
+  <thead><tr><th>When</th><th>By</th><th>Overall comment</th><th>Field comments</th><th>State</th></tr></thead>
+  <tbody>
+  {% for r in returns %}
+    <tr>
+      <td>{{ r.at|date:"d M Y H:i" }}</td>
+      <td>{{ r.by.username }}</td>
+      <td>{{ r.overall_comment|default:"—" }}</td>
+      <td>{{ r.comments|length }}</td>
+      <td>{% if r.resolved_at %}addressed{% else %}open{% endif %}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="5" class="muted">Never returned.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Activity</h2>
+<table>
+  <thead><tr><th style="width:16%">When</th><th style="width:16%">Who</th><th style="width:18%">What</th><th>Detail</th></tr></thead>
+  <tbody>
+  {% for e in events %}
+    <tr>
+      <td>{{ e.at|date:"d M H:i:s" }}</td>
+      <td>{{ e.actor.username|default:"—" }}</td>
+      <td>{{ e.action }}</td>
+      <td>{{ e.detail }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4" class="muted">No activity recorded.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
