@@ -386,7 +386,6 @@ def workspace(request, pk: int):
             "last_return": last_return,
             "is_author": review.submitted_by_id == request.user.pk,
             "can_author": can_author,
-            "hide_entered": is_fno(request.user) and not can_author,
             "locked": locked,
         },
     )
