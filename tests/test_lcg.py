@@ -69,37 +69,48 @@ def test_chart_view_renders_one_row_per_variable(case_0):
         assert cur.fetchone()[0] == len(VARIABLES)
 
 
-def test_case_0_has_twelve_columns_split_by_stage(case_0):
-    cols = list(case_0.columns.order_by("ord"))
-    assert len(cols) == 12
-    assert [c.ord for c in cols] == list(range(1, 13))
-    assert [c.stage for c in cols] == ["first"] * 10 + ["second"] * 2
+def test_second_stage_boundary_is_stored_on_the_document(case_0):
     from django.utils import timezone
 
-    assert [timezone.localtime(c.chart_time).hour for c in cols] == [
-        18, 18, 19, 19, 20, 20, 21, 21, 22, 22, 23, 23,
-    ]
-    assert len({c.chart_time for c in cols}) == 12
+    assert case_0.second_stage_at is not None
+    assert timezone.localtime(case_0.second_stage_at).hour == 23
+
+    before = Observation.objects.filter(
+        document=case_0, observed_at__lt=case_0.second_stage_at
+    ).first()
+    after = Observation.objects.filter(
+        document=case_0, observed_at__gte=case_0.second_stage_at
+    ).first()
+    assert before.stage == "first"
+    assert after.stage == "second"
 
 
-def test_stage_is_a_column_property_not_a_cell(case_0):
-    second = case_0.columns.filter(stage="second")
-    assert second.count() == 2
-    cells = Observation.objects.filter(column__in=second)
-    assert set(cells.values_list("variable__key", flat=True)).issuperset({"pushing", "descent"})
-    assert not cells.filter(variable__key="cervix").exists()
-    assert all(o.value_num >= 1 for o in cells.filter(variable__key="pushing"))
+def test_cervix_does_not_exist_after_second_stage_starts(case_0):
+    assert not Observation.objects.filter(
+        document=case_0,
+        variable__key="cervix",
+        observed_at__gte=case_0.second_stage_at,
+    ).exists()
 
 
-def test_lcg_columns_view(case_0):
+def test_case_a_has_no_second_stage(db):
+    call_command("seed_case_a", verbosity=0)
+    doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Sunita Devi")
+    assert doc.second_stage_at is None
+
+
+def test_lcg_cells_view_labels_stage_per_cell(case_0):
     from django.db import connection
 
     with connection.cursor() as cur:
-        cur.execute("select count(*) from lcg_columns where patient = %s", ["Meena Kulkarni"])
-        assert cur.fetchone()[0] == 12
         cur.execute(
-            "select ord, stage, cells from lcg_columns where patient = %s and ord = 11",
+            "select count(*) from lcg_cells where patient = %s and stage = 'second'",
             ["Meena Kulkarni"],
         )
-        ord_, stage, cells = cur.fetchone()
-        assert (ord_, stage, cells) == (11, "second", 27)
+        assert cur.fetchone()[0] == 54  # 27 cells x 2 second-stage columns
+
+        cur.execute(
+            "select count(distinct col) from lcg_cells where patient = %s",
+            ["Meena Kulkarni"],
+        )
+        assert cur.fetchone()[0] == 12

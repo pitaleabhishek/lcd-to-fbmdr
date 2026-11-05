@@ -15,7 +15,6 @@ from review.models import (
     Death,
     Delivery,
     Facility,
-    LCGColumn,
     LCGVariable,
     Neonate,
     Observation,
@@ -92,19 +91,12 @@ class Command(BaseCommand):
         )
 
         variables = {v.key: v for v in LCGVariable.objects.all()}
-        timeline = [dt(12, 18, 0), dt(12, 18, 30), dt(12, 19, 0), dt(12, 19, 30),
-                    dt(12, 20, 0), dt(12, 20, 30), dt(12, 22, 30)]
-        columns = {
-            t: LCGColumn.objects.create(document=lcg, ord=i, chart_time=t, stage="first")
-            for i, t in enumerate(timeline, start=1)
-        }
 
         def obs(key, at, *, num=None, text="", unit="", author="Nurse P. Meshram",
                 documented=None, raw_label="", raw_value="", precision=TimePrecision.EXACT):
             return Observation.objects.create(
                 document=lcg,
                 variable=variables[key],
-                column=columns[at],
                 value_num=Decimal(str(num)) if num is not None else None,
                 value_text=text,
                 unit=unit,

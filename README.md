@@ -57,16 +57,18 @@ docker compose exec db psql -U mdr -d mdr \
   -c "select section, variable, cells from lcg_chart where patient = 'Meena Kulkarni' order by section_ord, row_ord;"
 ```
 
-`lcg_chart` is a Postgres view: one row per variable, cells across time in IST.
-`lcg_columns` lists the chart's time columns with their stage and cell count.
+Two views render the chart:
 
-Case 0 has twelve columns — ten active first stage, two second stage. Stage is a
-property of the column, not the cell, so no inference from `pushing` is needed.
-Cervical dilatation correctly stops at full dilatation.
+- `lcg_chart` — one row per variable, cells across time in IST.
+- `lcg_cells` — one row per cell with a computed column number and stage.
+
+Second stage is a single timestamp on the document (`second_stage_at`), not a
+per-cell or per-column flag: everything at or after it is second stage. Case 0
+begins second stage at 23:00; case A never does.
 
 ```sh
 docker compose exec db psql -U mdr -d mdr \
-  -c "select ord, chart_time, stage, cells from lcg_columns order by document_id, ord;"
+  -c "select col, chart_time, stage, count(*) from lcg_cells where patient='Meena Kulkarni' group by 1,2,3 order by 1;"
 ```
 
 ## Regenerate the inventory
@@ -85,9 +87,8 @@ of the registry, never hand-maintained.
 - Registry with full-word section keys and `f4.<section>.<label>` grammar
   (53 fields in the first slice).
 - LCG registry: 7 sections, 34 variables, ordered and typed; observations FK to a
-  variable. `LCGColumn` holds the time axis (ord, chart_time, first/second stage),
-  so stage and empty columns are data, not inference. `lcg_chart` and
-  `lcg_columns` views render the grid.
+  variable. Stage is one boundary on the document (`second_stage_at`). `lcg_chart`
+  and `lcg_cells` views render the grid.
 - Case 0: a complete, normal labour — every grid variable across ten first-stage
   columns and two second-stage columns, 340 observations, no death.
 - 18 rules producing proposals with frozen inputs; `NotComputable` keeps

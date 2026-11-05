@@ -16,7 +16,6 @@ from review.models import (
     Admission,
     Delivery,
     Facility,
-    LCGColumn,
     LCGVariable,
     Neonate,
     Observation,
@@ -66,6 +65,7 @@ class Command(BaseCommand):
             origin_facility=facility.name,
             author="Nurse S. Bhoyar", entered_by="Nurse S. Bhoyar",
             documented_at=dt(18, 0), time_precision=TimePrecision.EXACT,
+            second_stage_at=dt(23, 0),
         )
 
         variables = {v.key: v for v in LCGVariable.objects.all()}
@@ -73,12 +73,6 @@ class Command(BaseCommand):
         first = [dt(18, 0), dt(18, 30), dt(19, 0), dt(19, 30), dt(20, 0),
                  dt(20, 30), dt(21, 0), dt(21, 30), dt(22, 0), dt(22, 30)]
         second = [dt(23, 0), dt(23, 15)]
-        columns = {}
-        for order, t in enumerate(first + second, start=1):
-            columns[t] = LCGColumn.objects.create(
-                document=lcg, ord=order, chart_time=t,
-                stage="first" if t in first else "second",
-            )
         rows = 0
 
         def obs(key, at, value, *, text="", author="Nurse S. Bhoyar", documented=None):
@@ -91,7 +85,7 @@ class Command(BaseCommand):
             else:
                 text = str(value)
             Observation.objects.create(
-                document=lcg, variable=v, column=columns[at],
+                document=lcg, variable=v,
                 value_num=num, value_text=text, unit=v.unit,
                 observed_at=at, observed_at_precision=TimePrecision.EXACT,
                 documented_at=documented or at,
