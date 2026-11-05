@@ -714,3 +714,24 @@ def test_repeating_a_block_save_does_not_add_history(case_a, django_user_model):
     services.save_place_row(case_a, key, "facility_1", values, user)
 
     assert AuditEvent.objects.filter(review=case_a, entity_id=key).count() == 1
+
+
+def test_resubmitted_field_stays_highlighted_for_the_fno(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(
+        case_a, fno, "", {"f4.primary_diagnosis.dx": "which type?"}
+    )
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "Atonic PPH", resident)
+    services.submit(case_a, resident)
+
+    client.force_login(fno)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "Previously returned" not in page
+    assert 'class="addressed"' in page
+    assert "which type?" in page

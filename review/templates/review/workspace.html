@@ -54,26 +54,6 @@
     </div>
   </div>
 {% endif %}
-{% if is_fno and review.status == "submitted" and last_return %}
-  <details class="prev-return">
-    <summary>
-      Previously returned {{ last_return.at|date:"d M H:i" }} ·
-      {{ last_return_comments|length }} field comment{{ last_return_comments|length|pluralize }} ·
-      {{ last_return_addressed }}/{{ last_return_comments|length }} addressed
-    </summary>
-    {% if last_return.overall_comment %}
-      <div class="rb-overall">“{{ last_return.overall_comment }}”</div>
-    {% endif %}
-    <ul class="comment-list">
-      {% for c in last_return_comments %}
-        <li><b>{{ c.label }}</b> — {{ c.text }}
-          {% if c.addressed %}<span class="count">addressed</span>{% endif %}</li>
-      {% empty %}
-        <li class="muted">no field comments</li>
-      {% endfor %}
-    </ul>
-  </details>
-{% endif %}
 {% if open_return %}
   <div class="returnbar" id="returnbar">
     <div class="rb-main">

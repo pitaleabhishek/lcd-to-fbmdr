@@ -235,31 +235,21 @@ def workspace(request, pk: int):
         review.status == Review.Status.SUBMITTED
         or (review.status == Review.Status.RETURNED and open_return is not None)
     )
-    last_return_comments = []
-    if last_return:
-        last_items = {i.field_key: i for i in review.items.all()}
-        for key, text in (last_return.comments or {}).items():
-            f = registry._fields.get(key)
-            item = last_items.get(key)
-            last_return_comments.append(
-                {
-                    "label": f.label_printed if f else key,
-                    "text": text,
-                    "addressed": bool(
-                        item and item.decided_at and item.decided_at > last_return.at
-                    ),
-                }
-            )
     first_comment_slug = ""
     if open_return and open_return.comments:
         order = {f.key: i for i, f in enumerate(registry.all())}
         keys = sorted(open_return.comments, key=lambda k: order.get(k, 9999))
         if keys[0] in registry:
             first_comment_slug = registry[keys[0]].slug
+    # After a resubmission there is no open return, but the FNO still needs to see
+    # which fields they asked about. Highlight them from the last return.
+    comment_source = open_return
+    if comment_source is None and review.status == Review.Status.SUBMITTED:
+        comment_source = last_return
     if draft_comments is not None:
         field_comments = draft_comments
     else:
-        field_comments = (open_return.comments or {}) if open_return else {}
+        field_comments = (comment_source.comments or {}) if comment_source else {}
     overall_value = (
         draft_overall
         if draft_overall is not None
@@ -328,10 +318,10 @@ def workspace(request, pk: int):
                     "revertible": f.key in last_change and not locked,
                     "fno_comment": field_comments.get(f.key, ""),
                     "addressed": bool(
-                        open_return
+                        comment_source
                         and item
                         and item.decided_at
-                        and item.decided_at > open_return.at
+                        and item.decided_at > comment_source.at
                     ),
                     "can_add": bool(
                         f.type == "block"
@@ -399,10 +389,6 @@ def workspace(request, pk: int):
             "fno_can_comment": fno_can_comment,
             "first_comment_slug": first_comment_slug,
             "last_return": last_return,
-            "last_return_comments": last_return_comments,
-            "last_return_addressed": sum(
-                1 for c in last_return_comments if c["addressed"]
-            ),
             "is_author": review.submitted_by_id == request.user.pk,
             "can_author": can_author,
             "locked": locked,
