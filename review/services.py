@@ -18,6 +18,7 @@ from .models import (
     ProposalDecision,
     Review,
     ReviewItem,
+    ReviewReturn,
     ReviewVersion,
     TimePrecision,
 )
@@ -418,6 +419,7 @@ def canonical_payload(review: Review) -> dict:
 @transaction.atomic
 def submit(review: Review, user) -> ReviewVersion:
     review = Review.objects.select_for_update().get(pk=review.pk)
+    was_returned = review.status == Review.Status.RETURNED
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is not in a submittable state")
     missing = missing_required(review)
@@ -444,6 +446,10 @@ def submit(review: Review, user) -> ReviewVersion:
     if death and death.died_at and death.time_precision == TimePrecision.EXACT:
         review.deadline_at = death.died_at + timedelta(hours=24)
     review.save()
+    if was_returned:
+        ReviewReturn.objects.filter(review=review, resolved_at__isnull=True).update(
+            resolved_at=timezone.now()
+        )
     audit(review, user, "submitted", "ReviewVersion", version.pk, {"version_no": version_no})
     return version
 
@@ -478,7 +484,15 @@ def approve(review: Review, user) -> ReviewVersion:
 
 
 @transaction.atomic
-def return_review(review: Review, user, comment: str) -> Review:
+def latest_return(review: Review, open_only: bool = False):
+    qs = review.returns.all()
+    if open_only:
+        qs = qs.filter(resolved_at__isnull=True)
+    return qs.first()
+
+
+@transaction.atomic
+def return_review(review: Review, user, comment: str, comments: dict | None = None) -> Review:
     """Send a submitted review back to the author with a comment."""
     review = Review.objects.select_for_update().get(pk=review.pk)
     if review.status != Review.Status.SUBMITTED:
@@ -487,6 +501,19 @@ def return_review(review: Review, user, comment: str) -> Review:
         raise ValidationError("a comment is required when returning a review")
     if review.submitted_by_id == user.pk:
         raise ValidationError("no self-return: another FNO must review this")
+
+    submission = (
+        review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
+        .order_by("-version_no")
+        .first()
+    )
+    ReviewReturn.objects.create(
+        review=review,
+        submission_version=submission,
+        by=user,
+        overall_comment=comment.strip(),
+        comments=comments or {},
+    )
 
     review.status = Review.Status.RETURNED
     review.returned_by = user

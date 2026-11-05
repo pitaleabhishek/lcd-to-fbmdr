@@ -60,6 +60,17 @@
          border-radius:5px; font-size:13px; box-shadow:0 4px 14px rgba(0,0,0,.08); }
   .msg.ok { background:#eef7f1; border-color:#c9e3d2; }
   .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:12px 0; }
+  .decision-bar { position:fixed; left:0; right:0; bottom:0; z-index:30;
+                  background:#fff; border-top:1px solid var(--line);
+                  padding:8px 16px; display:flex; gap:8px; justify-content:flex-end;
+                  align-items:center; box-shadow:0 -4px 14px rgba(0,0,0,.06); }
+  .decision-bar .return-comment { width:320px; }
+  .review-form { padding-bottom:56px; }
+  .fc summary { font-size:11px; color:var(--accent); cursor:pointer; }
+  .fc textarea { width:100%; margin-top:3px; }
+  .fno-note { margin-top:4px; padding:4px 6px; border-left:3px solid var(--warn);
+              background:#fffaf2; font-size:12px; }
+  .fno-note.done { border-left-color:var(--ok); background:#f4faf6; }
   .returned { background:#fffaf2; border:1px solid #f0d3a8; border-radius:6px;
               padding:8px 10px; margin:10px 0; font-size:13px; }
   .return-comment { width:220px; }

@@ -412,6 +412,26 @@ class Review(models.Model):
         return f"Review {self.pk} ({self.pregnancy.patient.name})"
 
 
+class ReviewReturn(models.Model):
+    """A submitted review sent back to its author, with per-field comments."""
+
+    review = models.ForeignKey(Review, on_delete=models.PROTECT, related_name="returns")
+    submission_version = models.ForeignKey(
+        "ReviewVersion", on_delete=models.PROTECT, related_name="returns"
+    )
+    by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    at = models.DateTimeField(default=timezone.now)
+    overall_comment = models.TextField()
+    comments = models.JSONField(default=dict, blank=True)  # {field_key: text}
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-at"]
+
+    def __str__(self) -> str:
+        return f"Return {self.pk} on review {self.review_id}"
+
+
 class ReviewVersion(models.Model):
     class Kind(models.TextChoices):
         SUBMISSION = "submission", "Submission"

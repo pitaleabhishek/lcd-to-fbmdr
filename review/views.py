@@ -207,6 +207,9 @@ def workspace(request, pk: int):
         return redirect("workspace", pk=review.pk)
 
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED)
+    open_return = services.latest_return(review, open_only=True)
+    field_comments = (open_return.comments or {}) if open_return else {}
+
     items = {i.field_key: i for i in review.items.all()}
     decisions = {}
     for d in (
@@ -266,6 +269,13 @@ def workspace(request, pk: int):
                     "places": _place_rows(f, item)
                     if f.key == "f4.condition.referral" else None,
                     "revertible": f.key in last_change and not locked,
+                    "fno_comment": field_comments.get(f.key, ""),
+                    "addressed": bool(
+                        open_return
+                        and item
+                        and item.decided_at
+                        and item.decided_at > open_return.at
+                    ),
                     "can_add": bool(
                         f.type == "block"
                         and len(_block_rows(f, item))
@@ -326,6 +336,8 @@ def workspace(request, pk: int):
                 )
             ],
             "is_fno": is_fno(request.user),
+            "open_return": open_return,
+            "is_author": review.submitted_by_id == request.user.pk,
             "locked": locked,
         },
     )
@@ -433,8 +445,15 @@ def _handle_action(request, review: Review):
     if action == "return":
         if not is_fno(user):
             raise ValidationError("only an FNO can return a review")
-        services.return_review(review, user, request.POST.get("comment", ""))
-        messages.success(request, "Returned to the author with your comment")
+        comments = {
+            k[3:]: v.strip()
+            for k, v in request.POST.items()
+            if k.startswith("fc_") and v and v.strip()
+        }
+        services.return_review(
+            review, user, request.POST.get("comment", ""), comments
+        )
+        messages.success(request, "Returned to the author with your comments")
         return
 
     if action == "approve":

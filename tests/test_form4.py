@@ -422,3 +422,32 @@ def test_return_with_comment_then_resubmit(case_a, django_user_model):
         (1, "submission"),
         (2, "submission"),
     ]
+
+
+def test_return_stores_per_field_comments(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(
+        case_a, fno, "Please clarify.",
+        {"f4.primary_diagnosis.dx": "Which type of PPH?"},
+    )
+
+    ret = case_a.returns.get()
+    assert ret.comments["f4.primary_diagnosis.dx"] == "Which type of PPH?"
+    assert ret.submission_version.version_no == 1
+
+    client.force_login(resident)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "Which type of PPH?" in page
+    assert "Please clarify." in page
+
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "Atonic PPH", resident)
+    services.submit(case_a, resident)
+    ret.refresh_from_db()
+    assert ret.resolved_at is not None
