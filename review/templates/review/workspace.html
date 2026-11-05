@@ -47,19 +47,30 @@
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
 </div>
 <div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected</div>
-</div>
-
 {% if open_return %}
-  <div class="returned">
-    <b>Returned by {{ open_return.by.username }}</b> · {{ open_return.at|date:"d M H:i" }}
-    {% if open_return.overall_comment %}<div>{{ open_return.overall_comment }}</div>{% endif %}
+  <div class="returnbar" id="returnbar">
+    <div class="rb-main">
+      <b>Returned by {{ open_return.by.username }}</b>
+      <span class="muted">· {{ open_return.at|date:"d M H:i" }}</span>
+      {% if open_return.overall_comment %}
+        <span class="rb-overall" title="{{ open_return.overall_comment }}">“{{ open_return.overall_comment }}”</span>
+      {% endif %}
+      {% if open_return.comments %}
+        <span class="muted">· {{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }}</span>
+      {% endif %}
+    </div>
     {% if open_return.comments %}
-      <div class="key">{{ open_return.comments|length }} field comment{{ open_return.comments|length|pluralize }} below
-        {% if first_comment_slug %}· <a href="#f-{{ first_comment_slug }}">go to the first ↓</a>{% endif %}
-      </div>
+    <div class="rb-nav">
+      <span id="rb-count" class="count">{{ open_return.comments|length }} marked</span>
+      <button type="button" id="rb-prev" title="Previous commented field">↑</button>
+      <button type="button" id="rb-next" title="Next commented field">↓</button>
+    </div>
     {% endif %}
   </div>
 {% endif %}
+</div>
+
+
 
 {% if locked %}
   {% if is_fno and review.status == "submitted" and last_return %}

@@ -106,6 +106,16 @@
               border-radius:5px; padding:8px 10px; margin:10px 0; font-size:13px; }
   .lastreturn { background:#f4f7f9; border:1px solid var(--line); border-radius:5px;
                 padding:6px 10px; margin:8px 0; font-size:12px; }
+  .returnbar { display:flex; justify-content:space-between; gap:10px; align-items:center;
+                background:#fffaf2; border:1px solid #f0d3a8; border-radius:5px;
+                padding:5px 8px; margin:6px 0 0; font-size:12px; }
+  .rb-main { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .rb-overall { color:#6b4a12; }
+  .rb-nav { display:flex; gap:6px; align-items:center; flex-shrink:0; }
+  .rb-nav button { padding:1px 8px; font-size:13px; }
+  tr[id], .block-card[id] { scroll-margin-top:calc(var(--stack-h) + 46px); }
+  tr.flash td { background:#fff3c4 !important; }
+  .block-card.flash { outline:2px solid var(--warn); outline-offset:2px; }
   .returned { background:#fffaf2; border:1px solid #f0d3a8; border-radius:6px;
               padding:8px 10px; margin:10px 0; font-size:13px; }
   .return-comment { width:220px; }
@@ -418,6 +428,35 @@
     autoGrow(t);
     t.addEventListener('input', function () { autoGrow(t); });
   });
+
+  var rbNext = document.getElementById('rb-next');
+  if (rbNext) {
+    var marks = Array.prototype.slice.call(
+      document.querySelectorAll('tr.commented, .block-card.commented')
+    );
+    var rbCount = document.getElementById('rb-count');
+    function rbIndex() {
+      var idx = -1;
+      marks.forEach(function (el, i) {
+        if (el.getBoundingClientRect().top < 220) idx = i;
+      });
+      return idx;
+    }
+    function rbGo(i) {
+      if (!marks.length) return;
+      if (i >= marks.length) i = 0;
+      if (i < 0) i = marks.length - 1;
+      marks[i].scrollIntoView({ block: 'start' });
+      marks[i].classList.add('flash');
+      setTimeout(function () { marks[i].classList.remove('flash'); }, 1400);
+      if (rbCount) rbCount.textContent = (i + 1) + ' of ' + marks.length;
+    }
+    rbNext.addEventListener('click', function () { rbGo(rbIndex() + 1); });
+    document.getElementById('rb-prev').addEventListener('click', function () {
+      rbGo(rbIndex() - 1);
+    });
+    if (rbCount) rbCount.textContent = marks.length + ' marked';
+  }
 
   var approveBtn = document.getElementById('approve-btn');
   if (approveBtn) {

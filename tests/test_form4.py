@@ -608,3 +608,24 @@ def test_approve_is_refused_when_comments_are_present(client, case_a, django_use
     assert resp.status_code == 302
     case_a.refresh_from_db()
     assert case_a.status == Review.Status.SUBMITTED  # not approved
+
+
+def test_returned_page_has_a_sticky_comment_navigator(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    resident = User.objects.get(username="resident")
+    fno = User.objects.get(username="fno")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+    services.return_review(
+        case_a, fno, "please tighten this up",
+        {"f4.primary_diagnosis.dx": "which type?", "f4.timing.b": "check time"},
+    )
+
+    client.force_login(resident)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert 'class="returnbar"' in page
+    assert 'id="rb-next"' in page and 'id="rb-prev"' in page
+    assert "please tighten this up" in page
+    assert 'class="commented"' in page
