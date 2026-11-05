@@ -7,7 +7,7 @@
 <style>
   :root { --ink:#1a1f24; --muted:#5d6b78; --line:#d9e0e6; --bg:#f7f9fa;
           --accent:#0f5c6b; --warn:#8a4b00; --ok:#1f6b3a; --chip:#eef3f5;
-          --header-h:38px; }
+          --header-h:38px; --stack-h:190px; }
   * { box-sizing: border-box; }
   body { margin:0; font:13.5px/1.38 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
          color:var(--ink); background:var(--bg); }
@@ -19,7 +19,6 @@
   main { max-width:1320px; margin:0 auto; padding:14px; }
   h1 { font-size:17px; margin:0 0 2px; }
   h2 { font-size:12.5px; margin:18px 0 6px;
-       scroll-margin-top:calc(var(--header-h) + 134px);
        text-transform:uppercase;
        letter-spacing:.04em; color:var(--muted); }
   .muted { color:var(--muted); }
@@ -91,7 +90,7 @@
                 padding:6px 0 8px; border-bottom:1px solid var(--line); }
   .layout { display:grid; grid-template-columns:205px 1fr; gap:14px;
             align-items:start; margin-top:14px; }
-  .secnav { position:sticky; top:calc(var(--header-h) + 126px); background:#fff; border:1px solid var(--line);
+  .secnav { position:sticky; top:calc(var(--stack-h) + 6px); background:#fff; border:1px solid var(--line);
             border-radius:6px; overflow:hidden; }
   .secnav a { display:flex; justify-content:space-between; gap:8px; padding:6px 8px;
               border-bottom:1px solid var(--line); color:var(--ink);
@@ -112,6 +111,10 @@
   .prop { margin:3px 0; }
   a.button { border:1px solid var(--line); border-radius:4px; padding:4px 9px;
              font-size:12px; text-decoration:none; color:var(--ink); background:#fff; }
+  .form-section { scroll-margin-top:calc(var(--stack-h) + 6px); }
+  .form-section h2 { position:sticky; top:var(--stack-h); z-index:4;
+       background:var(--bg); padding:6px 0 5px; margin:0 0 4px;
+       border-bottom:1px solid var(--line); }
   table.fields { table-layout:fixed; }
   table.fields td:first-child { padding-right:10px; }
   .block-wrap { margin-top:6px; border:1px solid var(--line); border-radius:5px;
@@ -126,7 +129,8 @@
   @media (max-width:860px) {
     .layout { grid-template-columns:1fr; }
     .sticky-top { position:static; }
-    h2 { scroll-margin-top:0; }
+    .form-section { scroll-margin-top:0; }
+    .form-section h2 { position:static; }
     .secnav { position:static; display:flex; overflow-x:auto; }
     .secnav a { border-bottom:0; border-right:1px solid var(--line); white-space:nowrap; }
   }
@@ -148,5 +152,18 @@
   {% for m in messages %}<div class="msg {% if m.tags == 'success' %}ok{% endif %}">{{ m }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main>
+<script>
+  function fitStack() {
+    var h = document.querySelector('header');
+    var s = document.querySelector('.sticky-top');
+    var top = h ? h.offsetHeight : 0;
+    var stack = s ? top + s.offsetHeight : top;
+    document.documentElement.style.setProperty('--header-h', top + 'px');
+    document.documentElement.style.setProperty('--stack-h', stack + 'px');
+  }
+  addEventListener('resize', fitStack);
+  addEventListener('load', fitStack);
+  fitStack();
+</script>
 </body>
 </html>

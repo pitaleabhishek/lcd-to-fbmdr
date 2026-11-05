@@ -57,7 +57,8 @@
 
   <div>
     {% for section in sections %}
-      <h2 id="sec-{{ section.key }}">
+      <section class="form-section" id="sec-{{ section.key }}">
+      <h2>
         {{ section.heading }}
         <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}</span>
       </h2>
@@ -172,6 +173,7 @@
         {% endfor %}
         </tbody>
       </table>
+      </section>
     {% endfor %}
   </div>
 </div>
