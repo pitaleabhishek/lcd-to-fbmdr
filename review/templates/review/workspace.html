@@ -21,6 +21,7 @@
     </div>
   </div>
   <div class="head-actions">
+    <button type="button" id="toggle-remaining" data-count="{{ stats.to_enter }}">Show remaining ({{ stats.to_enter }})</button>
     {% if not locked %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reevaluate">
         <button>Refresh proposals</button></form>
@@ -98,7 +99,7 @@
         <tbody>
         {% for row in section.rows %}
           {% if not row.is_block %}
-          <tr id="f-{{ row.field.slug }}">
+          <tr id="f-{{ row.field.slug }}"{% if not row.is_answered and not row.is_na %} class="remaining"{% endif %}>
             <td>
               <div class="label">{{ row.field.label_printed }}</div>
               <div class="key">{{ row.field.key }}{% if row.field.required %} · <span class="req">required</span>{% endif %}</div>
@@ -295,7 +296,7 @@
 
       {% for row in section.rows %}
         {% if row.is_block %}
-        <div class="block-card" id="b-{{ row.field.slug }}">
+        <div class="block-card{% if not row.is_answered and not row.is_na %} remaining{% endif %}" id="b-{{ row.field.slug }}">
           <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span></h3>
           {% if locked %}
             <div class="readonly-block">

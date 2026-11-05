@@ -70,6 +70,9 @@
   .fc textarea { width:100%; margin-top:3px; }
   .warn { color:var(--warn); font-weight:700; }
   tr.hit td { background:#fdf9e8; font-weight:600; }
+  body.show-remaining tr.remaining td { background:#fffaf2; }
+  body.show-remaining tr.remaining td:first-child { box-shadow:inset 3px 0 0 var(--warn); }
+  body.show-remaining .block-card.remaining { border-left:3px solid var(--warn); background:#fffaf2; }
   .source-slot { margin-top:4px; }
   .source-slot table { margin:2px 0 0; }
   .source-slot th, .source-slot td { padding:3px 5px; font-size:11px; }
@@ -409,6 +412,14 @@
     autoGrow(t);
     t.addEventListener('input', function () { autoGrow(t); });
   });
+
+  var remaining = document.getElementById('toggle-remaining');
+  if (remaining) {
+    remaining.addEventListener('click', function () {
+      var on = document.body.classList.toggle('show-remaining');
+      remaining.textContent = (on ? 'Hide remaining' : 'Show remaining (' + remaining.dataset.count + ')');
+    });
+  }
 
   var drawer = document.getElementById('source-drawer');
   var drawerBody = document.getElementById('source-body');
