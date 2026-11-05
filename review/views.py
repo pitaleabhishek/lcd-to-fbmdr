@@ -489,15 +489,15 @@ REFERRAL_LABELS = {
     "onset_at": "Time of onset",
     "transport_call_at": "Time transport called",
     "transport": "Transport used",
-    "time_to_reach": "Time to reach",
-    "money_transport": "Money on transport",
+    "time_to_reach": "Time to reach (min)",
+    "money_transport": "Money on transport (Rs.)",
     "facility": "Facility / level",
     "attended_by": "Attended by",
     "reason": "Reason for referral",
     "referral_slip": "Referral slip",
     "treatment": "Treatment given",
-    "money_treatment": "Money on treatment",
-    "time_in_facility": "Time in facility",
+    "money_treatment": "Money on treatment (Rs.)",
+    "time_in_facility": "Time in facility (min)",
 }
 PLACE_LABELS = {
     "home_village": "Home / Village",
@@ -560,6 +560,8 @@ def _block_value(spec, raw: str):
         if timezone.is_naive(dt):
             dt = timezone.make_aware(dt, timezone.get_current_timezone())
         return dt.isoformat()
+    if spec["type"] == "duration":
+        return _minutes(raw)
     if spec["type"] in ("int", "number"):
         try:
             return int(raw)

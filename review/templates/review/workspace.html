@@ -267,6 +267,10 @@
                       {% else %}
                         {% if c.spec.type == "datetime" %}
                           <input type="datetime-local" name="col_{{ c.name }}" value="{{ c.value }}">
+                        {% elif c.spec.type == "duration" %}
+                          <input type="text" name="col_{{ c.name }}" value="{{ c.value }}"
+                                 placeholder="e.g. 30 or 1h 15m"
+                                 title="Minutes; you can type 30, 45m or 1h 15m">
                         {% else %}
                           <input type="text" name="col_{{ c.name }}" value="{{ c.value }}"
                             {% if c.spec.type == "int" or c.spec.type == "number" %}inputmode="numeric" placeholder="number"{% endif %}>

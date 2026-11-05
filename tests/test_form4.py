@@ -310,3 +310,25 @@ def test_datetime_field_round_trip(client, case_a, django_user_model):
     page = client.get(f"/review/{case_a.pk}/").content.decode()
     assert 'type="datetime-local"' in page
     assert 'value="2026-11-05T14:30"' in page
+
+
+def test_referral_times_accept_hours_and_minutes(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/review/{case_a.pk}/",
+        {
+            "action": "block_place",
+            "key": "f4.condition.referral",
+            "place": "facility_1",
+            "col_time_to_reach": "1h 15m",
+            "col_time_in_facility": "45",
+            "col_money_treatment": "500",
+        },
+    )
+    assert resp.status_code == 302
+    rows = case_a.items.get(field_key="f4.condition.referral").value_json
+    assert rows[0]["time_to_reach"] == 75
+    assert rows[0]["time_in_facility"] == 45
+    assert rows[0]["money_treatment"] == 500

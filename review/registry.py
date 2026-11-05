@@ -204,7 +204,7 @@ REFERRAL_SCHEMA = {
         "onset_at": {"type": "datetime"},
         "transport_call_at": {"type": "datetime"},
         "transport": {"type": "text"},
-        "time_to_reach": {"type": "int", "min": 0},
+        "time_to_reach": {"type": "duration", "min": 0},
         "money_transport": {"type": "number", "min": 0},
         "facility": {"type": "text"},
         "attended_by": {"type": "enum",
@@ -213,14 +213,14 @@ REFERRAL_SCHEMA = {
         "referral_slip": {"type": "enum", "options": ["given", "not_given"]},
         "treatment": {"type": "text"},
         "money_treatment": {"type": "number", "min": 0},
-        "time_in_facility": {"type": "int", "min": 0},
+        "time_in_facility": {"type": "duration", "min": 0},
     },
     "max_rows": 4,
 }
 F("referral", "condition", "3.b Referral table (13 attributes per place)", "block", 2,
   block_schema=REFERRAL_SCHEMA,
   terminology_note="one printed row per place; the model stores one row per place",
-  precision_note="time_to_reach and time_in_facility are minutes")
+  precision_note="times are stored in minutes; money in rupees (Rs.)")
 
 # --- Diagnosis at admission (1 block) ---------------------------------------
 DIAGNOSIS_SCHEMA = {
