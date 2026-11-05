@@ -918,7 +918,13 @@ def history(request, pk: int):
     for e in page_obj:
         action, detail = _describe(e)
         events.append(
-            {"at": e.at, "actor": e.actor, "action": action, "detail": detail}
+            {
+                "at": e.at,
+                "actor": e.actor,
+                "action": action,
+                "detail": detail,
+                "key": e.entity_id if e.action.startswith(("answer", "proposal", "applicability")) else "",
+            }
         )
     versions = review.versions.select_related("created_by").order_by("-version_no")
 
@@ -929,11 +935,11 @@ def history(request, pk: int):
     ):
         comments = []
         for key, text in (ret.comments or {}).items():
-            field = registry._fields.get(key)
+            field_def = registry._fields.get(key)
             item = items_by_key.get(key)
             comments.append(
                 {
-                    "label": field.label_printed if field else key,
+                    "label": field_def.label_printed if field_def else key,
                     "key": key,
                     "text": text,
                     "addressed": bool(
@@ -953,6 +959,9 @@ def history(request, pk: int):
             "page_obj": page_obj,
             "total": paginator.count,
             "field": field,
+            "field_label": (
+                registry[field].label_printed if field in registry else field
+            ),
         },
     )
 
