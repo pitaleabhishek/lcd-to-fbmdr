@@ -70,6 +70,11 @@
   .fc textarea { width:100%; margin-top:3px; }
   .warn { color:var(--warn); font-weight:700; }
   tr.hit td { background:#fdf9e8; font-weight:600; }
+  .source-slot { margin-top:4px; }
+  .source-slot table { margin:2px 0 0; }
+  .source-slot th, .source-slot td { padding:3px 5px; font-size:11px; }
+  .source-slot h2 { font-size:11px; margin:4px 0 2px; }
+  .source-slot .muted.small { display:none; }
   .drawer { position:fixed; top:0; right:0; bottom:0; width:min(480px,94vw);
             background:#fff; border-left:1px solid var(--line);
             box-shadow:-8px 0 24px rgba(0,0,0,.14); z-index:60; overflow:auto;
@@ -405,6 +410,21 @@
     autoGrow(t);
     t.addEventListener('input', function () { autoGrow(t); });
   });
+
+  document.addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (!d.open || !d.querySelectorAll) return;
+    d.querySelectorAll('.source-slot[data-url]').forEach(function (slot) {
+      if (slot.dataset.loaded) return;
+      slot.dataset.loaded = '1';
+      slot.innerHTML = 'loading…';
+      var u = slot.dataset.url;
+      fetch(u + (u.indexOf('?') === -1 ? '?' : '&') + 'frag=1', { credentials: 'same-origin' })
+        .then(function (r) { return r.text(); })
+        .then(function (html) { slot.innerHTML = html; })
+        .catch(function () { slot.innerHTML = 'could not load the source'; });
+    });
+  }, true);
 
   var drawer = document.getElementById('source-drawer');
   var drawerBody = document.getElementById('source-body');
