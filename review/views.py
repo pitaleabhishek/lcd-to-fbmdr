@@ -10,8 +10,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from . import services
-from .models import AuditEvent, Proposal, Review, ReviewItem
+from .models import AuditEvent, Proposal, ProposalDecision, Review, ReviewItem
 from .registry import CATEGORIES, registry
+from .rules import RULES
 from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
 
 
@@ -194,6 +195,14 @@ def workspace(request, pk: int):
 
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED)
     items = {i.field_key: i for i in review.items.all()}
+    decisions = {}
+    for d in (
+        ProposalDecision.objects.filter(proposal__review=review)
+        .select_related("proposal")
+        .order_by("at", "id")
+    ):
+        decisions[d.proposal.field_key] = d
+
     last_change = {}
     for ev in AuditEvent.objects.filter(review=review, action="answer_set").order_by("at", "id"):
         last_change[ev.entity_id] = ev
@@ -208,6 +217,8 @@ def workspace(request, pk: int):
         for f in fields:
             item = items.get(f.key)
             proposals = open_proposals.get(f.key, [])
+            rule = RULES.get(f.key)
+            mark = {"reused": "R", "derived": "D"}.get(rule.origin if rule else None, "R")
             is_answered = bool(
                 item and item.answer_state == ReviewItem.AnswerState.ANSWERED
             )
@@ -230,8 +241,9 @@ def workspace(request, pk: int):
                           else str(item.value_json)),
                     "mark": chip(item.origin) if item else "—",
                     "proposals": [
-                        {"p": p, "display": fmt(p.value_json)} for p in proposals
+                        {"p": p, "display": fmt(p.value_json), "mark": mark} for p in proposals
                     ],
+                    "decision": _decision(item, decisions.get(f.key), mark),
                     "is_answered": is_answered,
                     "is_na": is_na,
                     "needs": needs,
@@ -382,6 +394,20 @@ def _handle_action(request, review: Review):
         return
 
     raise ValidationError(f"unknown action {action!r}")
+
+
+def _decision(item, last, mark: str):
+    if item and item.accepted_proposal_id:
+        p = item.accepted_proposal
+        return {"kind": "accepted", "display": fmt(p.value_json), "mark": mark, "reason": ""}
+    if last and last.decision == "rejected":
+        return {
+            "kind": "rejected",
+            "display": fmt(last.proposal.value_json),
+            "mark": mark,
+            "reason": last.reason,
+        }
+    return None
 
 
 def _block_rows(field, item):

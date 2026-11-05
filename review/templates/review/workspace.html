@@ -40,6 +40,7 @@
   <div class="stat"><b>{{ stats.needs }}</b> need review</div>
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
 </div>
+<div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected</div>
 </div>
 
 {% if locked %}
@@ -163,7 +164,7 @@
                 {% for pr in row.proposals %}
                   <div class="prop">
                     <span class="value">{{ pr.display }}</span>
-                    <span class="chip {% if pr.p.source_kind == 'observation' or pr.p.source_kind == 'document' %}R{% else %}D{% endif %}">{% if pr.p.source_kind == 'observation' or pr.p.source_kind == 'document' %}R{% else %}D{% endif %}</span>
+                    <span class="chip {{ pr.mark }}" title="{% if pr.mark == 'R' %}reused from the record{% else %}derived from recorded times{% endif %}">{{ pr.mark }}</span>
                     <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
                     <details>
                       <summary>where it came from</summary>
@@ -191,7 +192,15 @@
                     {% endif %}
                   </div>
                 {% empty %}
-                  <span class="muted small">—</span>
+                  {% if row.decision %}
+                    <div class="prop {{ row.decision.kind }}">
+                      <span class="value">{{ row.decision.display }}</span>
+                      <span class="chip {{ row.decision.mark }}">{{ row.decision.mark }}</span>
+                      <span class="why">{{ row.decision.kind }}{% if row.decision.reason %} · {{ row.decision.reason }}{% endif %}</span>
+                    </div>
+                  {% else %}
+                    <span class="muted small">—</span>
+                  {% endif %}
                 {% endfor %}
               {% endif %}
             </td>
