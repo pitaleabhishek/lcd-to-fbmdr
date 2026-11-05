@@ -59,8 +59,8 @@
         {{ section.heading }}
         <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}</span>
       </h2>
-      <table>
-        <thead><tr><th style="width:34%">Item</th><th style="width:18%">Answer</th><th>Reuse / entry</th></tr></thead>
+      <table class="fields">
+        <thead><tr><th style="width:26%">Item</th><th style="width:22%">Answer</th><th>Reuse / entry</th></tr></thead>
         <tbody>
         {% for row in section.rows %}
           <tr>
