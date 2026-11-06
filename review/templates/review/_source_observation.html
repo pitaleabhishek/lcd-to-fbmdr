@@ -1,4 +1,12 @@
 <h2>This column — {{ observation.observed_at|date:"d M H:i" }}</h2>
+{% if correction %}
+  <p class="warn small">
+    This value was later corrected to
+    <b>{{ correction.value_text|default:correction.value_num }}{% if correction.unit %} {{ correction.unit }}{% endif %}</b>
+    by {{ correction.author|default:"—" }}{% if correction.note %} · {{ correction.note }}{% endif %}.
+    The review keeps the value it was given; the chart now reads the correction.
+  </p>
+{% endif %}
 <table>
   <thead><tr><th>Item</th><th>Value</th><th>Author</th><th>Charted</th></tr></thead>
   <tbody>

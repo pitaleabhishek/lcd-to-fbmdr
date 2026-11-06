@@ -1278,6 +1278,7 @@ def source(request, kind: str, pk: int):
     if kind == "observation":
         column = list(
             Observation.objects.filter(document=obj.document, observed_at=obj.observed_at)
+            .current()
             .select_related("variable__section")
             .order_by("variable__section__ord", "variable__ord")
         )
@@ -1286,7 +1287,15 @@ def source(request, kind: str, pk: int):
             if request.GET.get("frag")
             else "review/source_observation.html"
         )
-        return render(request, template, {"observation": obj, "column": column})
+        return render(
+            request,
+            template,
+            {
+                "observation": obj,
+                "column": column,
+                "correction": obj.superseded_by.first(),
+            },
+        )
 
     from django.db.models import Model as DjangoModel
 

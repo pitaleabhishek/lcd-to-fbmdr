@@ -345,3 +345,25 @@ def test_history_shows_the_chain_and_filters_by_item(client, db):
     assert "22:30" not in filtered.split("<tbody>")[1]
     assert 'value="cervix" selected' in filtered
     assert LCGVariable.objects.filter(key="cervix").exists()
+
+
+def test_the_source_drawer_flags_a_value_that_was_later_corrected(client, db):
+    from django.contrib.auth.models import User
+
+    from review import services
+
+    call_command("seed_case_a", verbosity=0)
+    doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Sunita Devi")
+    user = User.objects.get(username="resident")
+    old = Observation.objects.get(
+        document=doc, variable__key="systolic_bp", value_num=150
+    )
+    services.correct_observation(
+        old, value="120", author="Dr A. Rane", actor=user, reason="chart misread"
+    )
+
+    client.force_login(user)
+    page = client.get(f"/source/observation/{old.pk}/").content.decode()
+    assert "later corrected to" in page
+    assert "120" in page
+    assert "chart misread" in page
