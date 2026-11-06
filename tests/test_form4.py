@@ -811,3 +811,24 @@ def test_cervical_lag_is_detected(db):
 
     hits = thresholds.crossings(doc, None)
     assert any(h["variable"] == "cervix" for h in hits)
+
+
+def test_na_state_is_shown_in_the_answer_cell(client, case_a, django_user_model):
+    from django.contrib.auth.models import User
+
+    user = User.objects.get(username="resident")
+    key = "f4.delivery.phase"
+    services.set_applicability(
+        case_a, key, ReviewItem.Applicability.NOT_APPLICABLE, user, "no complication"
+    )
+
+    client.force_login(user)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert 'class="na-state"' in page
+    assert "Not applicable" in page
+    assert "no complication" in page
+
+    resp = client.post(f"/review/{case_a.pk}/", {"action": "applicable", "key": key})
+    assert resp.status_code == 302
+    item = case_a.items.get(field_key=key)
+    assert item.applicability_state == ReviewItem.Applicability.APPLICABLE

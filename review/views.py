@@ -508,6 +508,13 @@ def _handle_action(request, review: Review):
         messages.success(request, "Row saved")
         return
 
+    if action == "applicable":
+        services.set_applicability(
+            review, request.POST["key"], ReviewItem.Applicability.APPLICABLE, user, ""
+        )
+        messages.success(request, "Marked applicable again")
+        return
+
     if action == "na":
         services.set_applicability(
             review, request.POST["key"], ReviewItem.Applicability.NOT_APPLICABLE, user,
