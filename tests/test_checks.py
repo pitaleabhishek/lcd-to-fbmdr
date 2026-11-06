@@ -189,11 +189,45 @@ def test_errors_block_submission(case_a, resident):
     assert case_a.status == Review.Status.DRAFT
 
 
-def test_the_workspace_shows_the_panel_and_the_inline_message(client, case_a, resident):
+def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
     client.force_login(resident)
     page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "what the checks found" not in page
+    assert "to fix before submission" not in page
+    assert 'class="check-msg error"' not in page
+    assert "Checks run when you submit" in page
+
+    resp = client.post(f"/review/{case_a.pk}/", {"action": "submit", "note": "keep me"})
+    assert resp.status_code == 200
+    page = resp.content.decode()
     assert "what the checks found" in page
     assert "to fix before submission" in page
     assert "Primary diagnosis" in page
     assert 'class="check-msg error"' in page
     assert "the server will refuse until they are cleared" in page
+    assert "keep me" in page  # the note survived the blocked submit
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.DRAFT
+    assert case_a.versions.count() == 0
+
+
+def test_warnings_need_one_confirmation_before_submitting(client, case_a, resident):
+    complete_required(case_a, resident)
+    client.force_login(resident)
+
+    resp = client.post(f"/review/{case_a.pk}/", {"action": "submit"})
+    assert resp.status_code == 200
+    page = resp.content.decode()
+    assert "Submit anyway" in page
+    assert "warning" in page
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.DRAFT
+    assert case_a.versions.count() == 0
+
+    resp = client.post(
+        f"/review/{case_a.pk}/", {"action": "submit", "confirm": "yes"}
+    )
+    assert resp.status_code == 302
+    case_a.refresh_from_db()
+    assert case_a.status == Review.Status.SUBMITTED
+    assert case_a.versions.count() == 1

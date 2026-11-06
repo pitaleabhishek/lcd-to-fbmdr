@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 134 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 135 tests passing. 96 Form 4 fields, 34 LCG variables._
 
 ## Built
 
@@ -30,7 +30,7 @@ _Last updated: 6 November 2026. 134 tests passing. 96 Form 4 fields, 34 LCG vari
 - [x] Overlap inventory generated and reconciled to the PDF (96/96 labels)
 - [x] Conditional Form 4: 2 whole-section gates and 30 field rules (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
 - [x] Review creation: one form for an existing woman or a new death; one-click from a labour record; `Review.source_document` is explicit; reporting facilities can be typed in and are created if absent; a no-LCG review says so plainly
-- [x] Checks before submission: deterministic missing/impossible/inconsistent rules (`review/checks.py`, `docs/checks.md`), plain-language panel, inline messages, errors block, warnings do not
+- [x] Checks before submission: deterministic missing/impossible/inconsistent rules (`review/checks.py`, `docs/checks.md`), plain-language panel shown only after Submit, inline messages, errors block, warnings need one confirmation
 
 ## Essential, open
 

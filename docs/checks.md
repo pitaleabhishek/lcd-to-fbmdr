@@ -2,12 +2,16 @@
 
 **Status: implemented in `review/checks.py` (rule set `k1`).**
 
-Checks run while the review is being filled and again at submission. They only
-answer three questions: **is something missing, is a recorded fact impossible, or
-do two answers contradict each other?** They never suggest a clinical cause.
+Checks run when the resident presses **Submit**, not while merely opening or
+filling the form. Nothing is shown on first open: a question the resident has not
+reached is not an error. When Submit is pressed the checks run once, and the panel
+appears only if there is something to say. They only answer three questions:
+**is something missing, is a recorded fact impossible, or do two answers
+contradict each other?** They never suggest a clinical cause.
 
-- **Error** — blocks submission. Shown in red; the submit button says the server will refuse until the errors are cleared.
-- **Warning** — shown in amber, does not block. The reviewer decides.
+- **Error** — blocks submission. The panel opens and no version is created.
+- **Warning** — shown in amber. Submission continues only after a single
+  **Submit anyway** confirmation; the reviewer decides.
 - A check for a missing follow-up only runs when its parent answer is actually
   recorded and says the follow-up applies. A visible-but-unanswered parent does
   not produce a false “missing” error.
@@ -64,8 +68,10 @@ do two answers contradict each other?** They never suggest a clinical cause.
 - [x] Impossible dates include both actual times
 - [x] Every message says what to do next
 - [x] Each issue links to the field, unless the field is hidden; hidden answers are named in the message instead
-- [x] The panel groups errors and warnings; errors open the panel automatically
-- [x] Inline messages appear at the field as well as in the panel
+- [x] The panel appears only after Submit is pressed
+- [x] Errors open the panel; warnings require one confirmation
+- [x] The resident note survives a blocked submit
+- [x] Inline messages appear at the field as well as in the panel, only after Submit
 
 ## What is deliberately not checked
 
@@ -76,7 +82,7 @@ do two answers contradict each other?** They never suggest a clinical cause.
 
 ## Where it is enforced
 
-- [x] Workspace panel and inline messages — `review/views.py`, `workspace.html`
+- [x] Workspace panel and inline messages, shown after Submit — `review/views.py`, `workspace.html`
 - [x] Submission — `services.submit` refuses while any error remains
 - [x] Required-field helper — `services.missing_required` delegates to `checks.required_keys`
 - [x] Tests — `tests/test_checks.py`

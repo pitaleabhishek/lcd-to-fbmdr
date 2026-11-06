@@ -625,23 +625,44 @@ def workspace(request, pk: int):
 
     draft_comments = None
     draft_overall = None
+    draft_note = ""
+    show_checks = False
     if request.method == "POST":
         action = request.POST.get("action")
-        try:
-            _handle_action(request, review)
-        except ValidationError as exc:
-            messages.error(request, "; ".join(exc.messages))
-            if action != "approve":
-                return redirect("workspace", pk=review.pk)
-            # Keep what the FNO typed so an error never costs them their comments.
-            draft_comments = {
-                k[3:]: v
-                for k, v in request.POST.items()
-                if k.startswith("fc_") and v and v.strip()
-            }
-            draft_overall = request.POST.get("comment", "")
+        if action == "submit":
+            draft_note = request.POST.get("note", "")
+            pending = checks.run_checks(review)
+            errors = [i for i in pending if i.severity == checks.ERROR]
+            warnings = [i for i in pending if i.severity == checks.WARNING]
+            confirmed = request.POST.get("confirm") == "yes"
+            if errors or (warnings and not confirmed):
+                # Do not create a version. Show the checks only now, when the
+                # resident has actually finished and pressed Submit.
+                show_checks = True
+            else:
+                try:
+                    _handle_action(request, review)
+                except ValidationError as exc:
+                    messages.error(request, "; ".join(exc.messages))
+                    show_checks = True
+                else:
+                    return redirect("workspace", pk=review.pk)
         else:
-            return redirect("workspace", pk=review.pk)
+            try:
+                _handle_action(request, review)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+                if action != "approve":
+                    return redirect("workspace", pk=review.pk)
+                # Keep what the FNO typed so an error never costs them their comments.
+                draft_comments = {
+                    k[3:]: v
+                    for k, v in request.POST.items()
+                    if k.startswith("fc_") and v and v.strip()
+                }
+                draft_overall = request.POST.get("comment", "")
+            else:
+                return redirect("workspace", pk=review.pk)
 
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
@@ -700,7 +721,7 @@ def workspace(request, pk: int):
         if key in visibility and not visibility[key].applies:
             visibility[key] = conditions.Visibility(True)
     hidden_fields = []
-    check_issues = checks.run_checks(review, visibility)
+    check_issues = checks.run_checks(review, visibility) if show_checks else []
     check_errors = [i for i in check_issues if i.severity == checks.ERROR]
     check_warnings = [i for i in check_issues if i.severity == checks.WARNING]
     checks_by_field: dict[str, list] = {}
@@ -887,6 +908,8 @@ def workspace(request, pk: int):
             "review": review,
             "sections": sections,
             "hidden_fields": hidden_fields,
+            "show_checks": show_checks,
+            "draft_note": draft_note,
             "check_errors": check_errors,
             "check_warnings": check_warnings,
             "check_issues": check_issues,
