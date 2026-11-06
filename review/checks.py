@@ -25,7 +25,9 @@ from .source_time import (
     compare_instants,
     current_admission,
     current_death,
+    current_deliveries,
     current_delivery,
+    current_deaths,
     current_neonates,
     current_source,
     future_status,
@@ -1093,6 +1095,37 @@ def _summary(ctx: CheckContext) -> list[Issue]:
     ]
 
 
+def _source_ambiguity(ctx: CheckContext) -> list[Issue]:
+    out = []
+    deaths = current_deaths(ctx.pregnancy, ctx.admission)
+    if len(deaths) > 1:
+        out.append(
+            _issue(
+                ctx,
+                "source:multiple_deaths",
+                WARNING,
+                "",
+                f"There are {len(deaths)} current death records. Checks use the latest clinical time; confirm which death is the right one.",
+                "Resolve the duplicate death records.",
+                link=False,
+            )
+        )
+    deliveries = current_deliveries(ctx.pregnancy)
+    if len(deliveries) > 1:
+        out.append(
+            _issue(
+                ctx,
+                "source:multiple_deliveries",
+                WARNING,
+                "",
+                f"There are {len(deliveries)} current delivery records. Checks use the latest clinical time; confirm which delivery is the right one.",
+                "Resolve the duplicate delivery records.",
+                link=False,
+            )
+        )
+    return out
+
+
 def _source_updated(ctx: CheckContext) -> list[Issue]:
     if not source_has_newer_correction(ctx.review):
         return []
@@ -1128,6 +1161,7 @@ CHECKS = (
     _late_entries,
     _no_labour_record,
     _summary,
+    _source_ambiguity,
     _source_updated,
 )
 

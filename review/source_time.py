@@ -78,19 +78,34 @@ def current_admission(review: Review):
     return None
 
 
-def current_death(pregnancy, admission=None):
+def current_deaths(pregnancy, admission=None):
+    """All current death heads, optionally narrowed to the reporting admission.
+
+    More than one current head is an ambiguity the caller should surface; the
+    helpers below use the latest clinical time only as a deterministic fallback.
+    """
     qs = current(pregnancy.deaths.all())
     if admission is not None:
         linked = qs.filter(admission=admission)
         if linked.exists():
             qs = linked
-    return qs.order_by("-died_at", "-pk").first()
+    return list(qs.order_by("-died_at", "-pk"))
+
+
+def current_death(pregnancy, admission=None):
+    rows = current_deaths(pregnancy, admission)
+    return rows[0] if rows else None
+
+
+def current_deliveries(pregnancy):
+    return list(
+        current(pregnancy.deliveries.all()).order_by("-delivered_at", "-pk")
+    )
 
 
 def current_delivery(pregnancy):
-    return current(pregnancy.deliveries.all()).order_by(
-        "-delivered_at", "-pk"
-    ).first()
+    rows = current_deliveries(pregnancy)
+    return rows[0] if rows else None
 
 
 def current_neonates(delivery):

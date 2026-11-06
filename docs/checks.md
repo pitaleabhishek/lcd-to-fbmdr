@@ -56,6 +56,7 @@ contradict each other?** They never suggest a clinical cause.
 - [x] **Corrected source** — an editable review is flagged until Refresh proposals; that action relinks the source head and marks changed accepted answers for reconsideration
 - [x] **Frozen review** — submitted/approved reviews keep their linked source and frozen payload; they are never silently relinked
 - [x] **No source fallback** — a review with no linked source does not borrow another document
+- [x] **Multiple current heads** — more than one current death or delivery produces a warning; checks use the latest clinical time only as a deterministic fallback
 
 ## Precision
 
@@ -65,6 +66,7 @@ contradict each other?** They never suggest a clinical cause.
 - [x] **Future dates** — an exact or date-only future date is invalid; a date-only future date is caught without inventing a time
 - [x] **Late entries** — definite late only when the death time and entry time support it; same-day/date-only/estimated is reported as uncertain
 - [x] **Discharge** — `discharged_at` is treated as administrative closure unless defined otherwise; discharge after death is a warning, not an impossible clinical event
+- [x] **Hospital-stay calculation** — if the administrative discharge is after death, the derived stay ends at death; a discharge before death is used normally
 
 ## Impossible
 
@@ -99,6 +101,7 @@ contradict each other?** They never suggest a clinical cause.
 - [x] **Entered admission–death interval** — compared with entered 1.a/1.b, or exact source times when Form 4 times are absent; one-minute rounding tolerance; warning
 - [x] **Entered admission–delivery interval** — compared with exact source times only when delivery is not before admission and the reporting facility matches; warning
 - [x] **Entered ICU duration** — compared with exact ICU stay bounds; warning
+- [x] **Interval tolerance** — one minute, to absorb rounding; delivery-before-admission and different-facility delivery intervals are skipped
 - [x] **Transfusion = no but intervention matrix records transfusion** — warning
 - [x] **Pregnancy outcome vs neonatal outcome** — warning for clarification, never automatic correction
 - [x] **Multiple births** — mixed outcomes are a warning, not an impossible state

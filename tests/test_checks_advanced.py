@@ -428,3 +428,71 @@ def test_source_correction_is_flagged_until_proposals_are_refreshed(db, resident
     review.refresh_from_db()
     assert review.source_document_id == new.pk
     assert issue(checks.run_checks(review), "source:newer_correction") is None
+
+
+def test_hospital_stay_does_not_extend_past_death_for_administrative_discharge(db):
+    from review.rules import RULES
+
+    facility = Facility.objects.create(name="PHC")
+    patient = Patient.objects.create(name="Discharge after death", age=25)
+    pregnancy = Pregnancy.objects.create(patient=patient, outcome="delivery")
+    admission = Admission.objects.create(
+        pregnancy=pregnancy, facility=facility, admitted_at=dt(10, 0),
+        discharged_at=dt(20, 0), time_precision=TimePrecision.EXACT,
+    )
+    Death.objects.create(
+        pregnancy=pregnancy, died_at=dt(18, 0), time_precision=TimePrecision.EXACT
+    )
+    review = Review.objects.create(
+        pregnancy=pregnancy, reporting_facility=facility,
+        reporting_admission=admission,
+    )
+
+    result = RULES["f4.timing.c"].fn(services.build_context(review))
+    assert result.value["minutes"] == 480  # 10:00 to death at 18:00, not 20:00
+
+
+def test_hospital_stay_uses_discharge_when_it_precedes_death(db):
+    from review.rules import RULES
+
+    facility = Facility.objects.create(name="PHC")
+    patient = Patient.objects.create(name="Discharge before death", age=25)
+    pregnancy = Pregnancy.objects.create(patient=patient, outcome="delivery")
+    admission = Admission.objects.create(
+        pregnancy=pregnancy, facility=facility, admitted_at=dt(10, 0),
+        discharged_at=dt(18, 0), time_precision=TimePrecision.EXACT,
+    )
+    Death.objects.create(
+        pregnancy=pregnancy, died_at=dt(20, 0), time_precision=TimePrecision.EXACT
+    )
+    review = Review.objects.create(
+        pregnancy=pregnancy, reporting_facility=facility,
+        reporting_admission=admission,
+    )
+
+    result = RULES["f4.timing.c"].fn(services.build_context(review))
+    assert result.value["minutes"] == 480
+
+
+def test_multiple_current_deaths_and_deliveries_are_surfaced(db, resident):
+    from review.models import Delivery
+
+    facility = Facility.objects.create(name="PHC")
+    patient = Patient.objects.create(name="Ambiguous sources", age=25)
+    pregnancy = Pregnancy.objects.create(patient=patient, outcome="delivery")
+    admission = Admission.objects.create(
+        pregnancy=pregnancy, facility=facility, admitted_at=dt(10, 0),
+        time_precision=TimePrecision.EXACT,
+    )
+    Death.objects.create(pregnancy=pregnancy, died_at=dt(18, 0), time_precision=TimePrecision.EXACT)
+    Death.objects.create(pregnancy=pregnancy, died_at=dt(19, 0), time_precision=TimePrecision.EXACT)
+    Delivery.objects.create(pregnancy=pregnancy, delivered_at=dt(17, 0), time_precision=TimePrecision.EXACT)
+    Delivery.objects.create(pregnancy=pregnancy, delivered_at=dt(18, 0), time_precision=TimePrecision.EXACT)
+    review = Review.objects.create(
+        pregnancy=pregnancy, reporting_facility=facility,
+        reporting_admission=admission, created_by=resident, assigned_to=resident,
+    )
+
+    issues = checks.run_checks(review)
+    assert issue(issues, "source:multiple_deaths") is not None
+    assert issue(issues, "source:multiple_deliveries") is not None

@@ -250,15 +250,21 @@ def timing_c(ctx: Context):
     a = ctx.admission
     if not a:
         return NotComputable("no admission record", "missing")
-    end = a.discharged_at or (ctx.death.died_at if ctx.death else None)
+    death_at = ctx.death.died_at if ctx.death else None
+    # discharged_at is administrative closure. It cannot extend a clinical stay
+    # past death; if it is later than death, use death as the clinical exit.
+    use_discharge = bool(a.discharged_at) and (
+        death_at is None or a.discharged_at <= death_at
+    )
+    end = a.discharged_at if use_discharge else death_at
     refs = [fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at,
                        author=a.admitted_by)]
-    if a.discharged_at:
+    if use_discharge:
         refs.append(fact_input(f"admission:{a.pk}", "Discharged", a.discharged_at,
                                a.discharged_at, a.time_precision))
-    elif ctx.death and ctx.death.died_at:
-        refs.append(fact_input(f"death:{ctx.death.pk}", "Died", ctx.death.died_at,
-                               ctx.death.died_at, author=ctx.death.certified_by))
+    elif death_at:
+        refs.append(fact_input(f"death:{ctx.death.pk}", "Died", death_at,
+                               death_at, author=ctx.death.certified_by))
     return interval(a.admitted_at, end, a.time_precision,
                     TimePrecision.EXACT, "admission time", "exit time", refs)
 

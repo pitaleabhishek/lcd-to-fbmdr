@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 167 tests passing. 99 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 170 tests passing. 99 Form 4 fields, 34 LCG variables._
 
 ## Built
 
