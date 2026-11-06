@@ -824,11 +824,11 @@ def test_na_state_is_shown_in_the_answer_cell(client, case_a, django_user_model)
 
     client.force_login(user)
     page = client.get(f"/review/{case_a.pk}/").content.decode()
-    assert 'class="na-state"' in page
+    assert 'class="answer-na"' in page
     assert "Not applicable" in page
-    assert "no complication" in page
 
-    resp = client.post(f"/review/{case_a.pk}/", {"action": "applicable", "key": key})
-    assert resp.status_code == 302
+    resp = client.post(f"/review/{case_a.pk}/na/", {"key": key, "state": "clear"})
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "applicable"
     item = case_a.items.get(field_key=key)
     assert item.applicability_state == ReviewItem.Applicability.APPLICABLE

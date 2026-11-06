@@ -815,6 +815,28 @@ def _coerce(field, raw: str):
 
 @login_required
 @require_http_methods(["POST"])
+def na_field(request, pk: int):
+    """Toggle not-applicable without leaving the page."""
+    review = get_object_or_404(Review, pk=pk)
+    key = request.POST.get("key", "")
+    if key not in registry:
+        return JsonResponse({"ok": False, "error": "unknown field"}, status=400)
+    state = (
+        ReviewItem.Applicability.NOT_APPLICABLE
+        if request.POST.get("state") == "na"
+        else ReviewItem.Applicability.APPLICABLE
+    )
+    try:
+        services.set_applicability(
+            review, key, state, request.user, request.POST.get("reason", "")
+        )
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
+    return JsonResponse({"ok": True, "state": state, "reason": request.POST.get("reason", "")})
+
+
+@login_required
+@require_http_methods(["POST"])
 def save_field(request, pk: int):
     """Autosave one field. Returns JSON so the page never reloads."""
     review = get_object_or_404(Review, pk=pk)

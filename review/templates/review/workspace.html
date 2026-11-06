@@ -134,20 +134,8 @@
                 <span class="value">{{ row.display }}</span>
                 <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                 {% if row.widget == "readonly" %}<span class="key">set by Month</span>{% endif %}
-              {% elif row.is_na %}
-                <div class="na-state">
-                  <span class="chip N">N/A</span>
-                  <span class="value">Not applicable</span>
-                  {% if row.item.reason %}<span class="why">· {{ row.item.reason }}</span>{% endif %}
-                  {% if not locked %}
-                    <form method="post" class="inline">{% csrf_token %}
-                      <input type="hidden" name="action" value="applicable">
-                      <input type="hidden" name="key" value="{{ row.field.key }}">
-                      <button class="linkish">clear</button>
-                    </form>
-                  {% endif %}
-                </div>
               {% else %}
+                <div class="answer-edit" {% if row.is_na %}hidden{% endif %}>
                 <form method="post" class="answer"
                       data-autosave="{% url 'save_field' review.pk %}"
                       data-key="{{ row.field.key }}">{% csrf_token %}
@@ -211,8 +199,19 @@
                     <summary title="Add a note to this field">note</summary>
                     <input type="text" name="reason" class="why-in" placeholder="note (optional)">
                   </details>
-                  <button name="action" value="na" class="linkish" title="Mark not applicable">N/A</button>
+                  <button type="button" class="linkish na-toggle" data-state="na"
+                          data-key="{{ row.field.key }}"
+                          data-url="{% url 'na_field' review.pk %}"
+                          title="Mark not applicable">N/A</button>
                 </form>
+                </div>
+                <div class="answer-na" {% if not row.is_na %}hidden{% endif %}>
+                  <input type="text" class="val" value="Not applicable" disabled>
+                  <span class="why na-reason">{% if row.is_na and row.item.reason %}· {{ row.item.reason }}{% endif %}</span>
+                  <button type="button" class="linkish na-toggle" data-state="clear"
+                          data-key="{{ row.field.key }}"
+                          data-url="{% url 'na_field' review.pk %}">clear</button>
+                </div>
               {% endif %}
               {% if row.evidence %}
                 <div class="evidence">
