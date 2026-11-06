@@ -341,6 +341,28 @@ def visibility_for(review: Review) -> dict[str, Visibility]:
     return visibility(review)
 
 
+def definitely_applies(key: str, answers: dict) -> bool:
+    """True only when every gate on this field is positively satisfied.
+
+    Visibility fails open so a missing answer does not hide a question. A check
+    for a *missing follow-up* must do the opposite: ask only when the parent
+    answer is actually present and says the follow-up applies.
+    """
+    field = registry._fields.get(key)
+    if field is None:
+        return False
+    section_rule = SECTION_RULES.get(field.section)
+    if section_rule is not None and _eval(section_rule, answers) != TRUE:
+        return False
+    rule = FIELD_RULES.get(key)
+    if rule is not None and _eval(rule, answers) != TRUE:
+        return False
+    parent = PARENT.get(key)
+    if parent and not definitely_applies(parent, answers):
+        return False
+    return True
+
+
 def controller_keys() -> list[str]:
     """Every answer that can change what is shown. Used for the reload after save."""
     keys: set[str] = set()

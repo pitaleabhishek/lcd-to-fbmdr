@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 123 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 133 tests passing. 96 Form 4 fields, 34 LCG variables._
 
 ## Built
 
@@ -30,6 +30,7 @@ _Last updated: 6 November 2026. 123 tests passing. 96 Form 4 fields, 34 LCG vari
 - [x] Overlap inventory generated and reconciled to the PDF (96/96 labels)
 - [x] Conditional Form 4: 2 whole-section gates and 30 field rules (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
 - [x] Review creation: one form for an existing woman or a new death; one-click from a labour record; `Review.source_document` is explicit; reporting facilities can be typed in and are created if absent; a no-LCG review says so plainly
+- [x] Checks before submission: deterministic missing/impossible/inconsistent rules (`review/checks.py`, `docs/checks.md`), plain-language panel, inline messages, errors block, warnings do not
 
 ## Essential, open
 
@@ -41,7 +42,6 @@ _Last updated: 6 November 2026. 123 tests passing. 96 Form 4 fields, 34 LCG vari
   supersessions; filterable by item and author, paginated.
 - [ ] **Cases B, C, D** — caesarean after labour, no labour record, referred in after delivery
 - [ ] **Amendments** — approved reviews frozen; needs an attributed amendment path
-- [ ] **Pre-submission checks** — plain-language inconsistencies, not just missing required fields
 - [ ] **Overlap analysis write-up** — per Dr Atter's four categories: counts, sources, false friends, 1/96 finding
 - [ ] **Security note** — and close the gaps it exposes: non-owner DB role, author/facility scoping, login throttling
 - [ ] **Output provenance appendix** — "from where" per printed value

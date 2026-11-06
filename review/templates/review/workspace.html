@@ -52,6 +52,8 @@
   <div class="stat"><b>{{ stats.needs }}</b> need review</div>
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
   {% if stats.hidden %}<div class="stat"><b>{{ stats.hidden }}</b> not shown</div>{% endif %}
+  {% if check_errors %}<div class="stat warn"><b>{{ check_errors|length }}</b> to fix</div>{% endif %}
+  {% if check_warnings %}<div class="stat"><b>{{ check_warnings|length }}</b> warning{{ check_warnings|length|pluralize }}</div>{% endif %}
 </div>
 <div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected · questions hide when they cannot apply</div>
 {% if submission_note %}
@@ -102,6 +104,33 @@
           <td>{{ h.field.label_printed }}<div class="key">{{ h.section }}</div></td>
           <td class="muted">{{ h.reason }}</td>
           <td>{% if h.display %}{{ h.display }}{% elif h.na %}<span class="muted">Not applicable</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
+
+{% if check_issues %}
+<details class="checks"{% if check_errors %} open{% endif %}>
+  <summary>
+    {% if check_errors %}<b class="warn">{{ check_errors|length }} to fix before submission</b>{% endif %}
+    {% if check_errors and check_warnings %} · {% endif %}
+    {% if check_warnings %}{{ check_warnings|length }} warning{{ check_warnings|length|pluralize }}{% endif %}
+    · what the checks found
+  </summary>
+  <p class="muted small">
+    Deterministic checks only: missing answers, impossible dates and contradictions.
+    Errors block submission; warnings do not.
+  </p>
+  <table>
+    <thead><tr><th style="width:8%">Kind</th><th>Problem</th><th style="width:26%">Where</th></tr></thead>
+    <tbody>
+      {% for issue in check_issues %}
+        <tr class="check-row {{ issue.severity }}">
+          <td>{% if issue.severity == "error" %}<b class="warn">Fix</b>{% else %}Check{% endif %}</td>
+          <td>{{ issue.message }}{% if issue.fix %}<div class="muted small">{{ issue.fix }}</div>{% endif %}</td>
+          <td>{% if issue.slug %}<a href="#f-{{ issue.slug }}">{{ issue.label }}</a>{% else %}{{ issue.label|default:"Review" }}{% endif %}</td>
         </tr>
       {% endfor %}
     </tbody>
@@ -245,6 +274,11 @@
                 </form>
                 </div>
               {% endif %}
+              {% for c in row.checks %}
+                <div class="check-msg {{ c.severity }}">
+                  {{ c.message }}{% if c.fix %} <span class="muted">{{ c.fix }}</span>{% endif %}
+                </div>
+              {% endfor %}
               {% if row.evidence %}
                 <div class="evidence">
                   <div class="ev-head">Evidence from the labour record
@@ -506,6 +540,9 @@
           <textarea name="note" rows="3" class="auto"
                     placeholder="Anything the reviewer should know before deciding — for example where a time came from. Not printed on Form 4."></textarea>
           <div class="bar">
+            {% if check_errors %}
+              <span class="check-msg error">Fix {{ check_errors|length }} problem{{ check_errors|length|pluralize }} before submitting; the server will refuse until they are cleared.</span>
+            {% endif %}
             <button class="primary">Submit for review</button>
             <span class="muted small">Optional. Included with this submission only.</span>
           </div>

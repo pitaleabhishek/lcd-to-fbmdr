@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from . import conditions, services
+from . import checks, conditions, services
 from .models import (
     AuditEvent,
     Death,
@@ -700,6 +700,13 @@ def workspace(request, pk: int):
         if key in visibility and not visibility[key].applies:
             visibility[key] = conditions.Visibility(True)
     hidden_fields = []
+    check_issues = checks.run_checks(review, visibility)
+    check_errors = [i for i in check_issues if i.severity == checks.ERROR]
+    check_warnings = [i for i in check_issues if i.severity == checks.WARNING]
+    checks_by_field: dict[str, list] = {}
+    for issue in check_issues:
+        if issue.field:
+            checks_by_field.setdefault(issue.field, []).append(issue)
     decisions = {}
     for d in (
         ProposalDecision.objects.filter(proposal__review=review)
@@ -819,6 +826,7 @@ def workspace(request, pk: int):
                         and len(_block_rows(f, item))
                         < (f.block_schema or {}).get("max_rows", 99)
                     ),
+                    "checks": checks_by_field.get(f.key, []),
                 }
             )
         if rows:
@@ -879,6 +887,9 @@ def workspace(request, pk: int):
             "review": review,
             "sections": sections,
             "hidden_fields": hidden_fields,
+            "check_errors": check_errors,
+            "check_warnings": check_warnings,
+            "check_issues": check_issues,
             "controller_keys": conditions.controller_keys(),
             "stats": stats,
             "years": list(range(timezone.now().year + 1, 1989, -1)),

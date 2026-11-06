@@ -23,7 +23,7 @@ from .models import (
     ReviewVersion,
     TimePrecision,
 )
-from . import conditions
+from . import checks, conditions
 from .registry import registry
 from .rules import RULES, Context, NotComputable, Value
 
@@ -557,18 +557,7 @@ def clear_place_row(review: Review, key: str, place: str, user):
 
 
 def missing_required(review: Review) -> list[str]:
-    answered = {
-        i.field_key
-        for i in review.items.all()
-        if i.answer_state == ReviewItem.AnswerState.ANSWERED
-        or i.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
-    }
-    visibility = conditions.visibility(review)
-    return [
-        f.key
-        for f in registry.all()
-        if f.required and visibility[f.key].applies and f.key not in answered
-    ]
+    return checks.required_keys(review)
 
 
 def canonical_payload(review: Review) -> dict:
@@ -630,9 +619,13 @@ def submit(review: Review, user, note: str = "") -> ReviewVersion:
     was_returned = review.status == Review.Status.RETURNED
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is not in a submittable state")
-    missing = missing_required(review)
-    if missing:
-        raise ValidationError(f"required fields unanswered: {', '.join(missing)}")
+    issues = checks.run_checks(review)
+    errors = [issue for issue in issues if issue.severity == checks.ERROR]
+    if errors:
+        detail = "; ".join(issue.message for issue in errors[:4])
+        if len(errors) > 4:
+            detail += f" (+{len(errors) - 4} more)"
+        raise ValidationError(detail)
 
     payload = canonical_payload(review)
     body = json.dumps(payload, sort_keys=True, default=str)
