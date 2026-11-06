@@ -3,16 +3,17 @@
 {% block content %}
 <h1>Start a death review</h1>
 <p class="muted">
-  The review is linked to the woman, and to her labour record when one exists.
-  Nothing is re-keyed: values the record can supply become proposals.
+  Choose a woman who is already in the system, or record a death that has no
+  labour record. A labour record is linked automatically when one exists.
 </p>
 
 {% if error %}<div class="obs-error">{{ error }}</div>{% endif %}
 
 <form method="post" class="correction-form">
   {% csrf_token %}
+
   <label>Woman
-    <select name="pregnancy" required>
+    <select name="pregnancy" id="woman-select" required>
       <option value="">—</option>
       {% for p in pregnancies %}
         <option value="{{ p.pregnancy.pk }}"{% if selected_pregnancy == p.pregnancy.pk|stringformat:"s" %} selected{% endif %}>
@@ -22,17 +23,39 @@
           {% if p.has_review %}· review already exists{% endif %}
         </option>
       {% endfor %}
+      <option value="new"{% if selected_pregnancy == "new" %} selected{% endif %}>
+        Someone not listed — record a death with no labour record
+      </option>
     </select>
   </label>
 
+  <details id="new-woman" class="new-woman"{% if selected_pregnancy == "new" %} open{% endif %}>
+    <summary>Details for a woman not in the list</summary>
+
+    <label>Name
+      <input type="text" name="new_name" value="{{ new_name }}" id="new-name">
+    </label>
+
+    <label>Age
+      <input type="number" name="new_age" min="1" max="119" step="1" value="{{ new_age }}">
+    </label>
+
+    <label>Date and time of death
+      <input type="datetime-local" name="new_died_at" value="{{ new_died_at }}">
+    </label>
+  </details>
+
   <label>Reporting facility
-    <select name="facility" required>
-      <option value="">—</option>
-      {% for f in facilities %}
-        <option value="{{ f.pk }}"{% if selected_facility == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.name }}</option>
-      {% endfor %}
-    </select>
+    <input type="text" name="facility_name" list="facility-list"
+           value="{{ facility_name }}" placeholder="Type or choose a facility">
+    <datalist id="facility-list">
+      {% for name in facilities %}<option value="{{ name }}">{% endfor %}
+    </datalist>
   </label>
+  <p class="muted small">
+    If the facility is not listed, type its name and it will be added.
+    For an existing woman you can leave this blank to use her admission facility.
+  </p>
 
   <label>FBMDR No. <span class="muted">(optional)</span>
     <input type="text" name="fbmdr_no" value="{{ fbmdr_no }}" placeholder="e.g. 0008">
@@ -44,47 +67,19 @@
   </div>
 </form>
 
-<h2>Or record a death with no labour record</h2>
-<p class="muted">
-  This creates the minimum death record and starts the review without a chart.
-  No values are proposed from a labour record.
-</p>
-<form method="post" class="correction-form">
-  {% csrf_token %}
-  <input type="hidden" name="mode" value="no_record">
-
-  <label>Name
-    <input type="text" name="new_name" value="{{ new_name }}" required>
-  </label>
-
-  <label>Age
-    <input type="number" name="new_age" min="1" max="119" step="1" value="{{ new_age }}">
-  </label>
-
-  <label>Date and time of death
-    <input type="datetime-local" name="new_died_at" value="{{ new_died_at }}" required>
-  </label>
-
-  <label>Reporting facility
-    <select name="facility" required>
-      <option value="">—</option>
-      {% for f in facilities %}
-        <option value="{{ f.pk }}"{% if selected_facility == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.name }}</option>
-      {% endfor %}
-    </select>
-  </label>
-
-  <label>FBMDR No. <span class="muted">(optional)</span>
-    <input type="text" name="fbmdr_no" value="{{ fbmdr_no }}" placeholder="e.g. 0008">
-  </label>
-
-  <div class="bar">
-    <button class="primary">Start without a labour record</button>
-    <a href="/">Cancel</a>
-  </div>
-</form>
-
-{% if not pregnancies %}
-  <p class="muted">No pregnancy records exist yet; the form above can still start a review.</p>
-{% endif %}
+<script>
+(function () {
+  var select = document.getElementById('woman-select');
+  var details = document.getElementById('new-woman');
+  var name = document.getElementById('new-name');
+  if (!select || !details) return;
+  function sync() {
+    var isNew = select.value === 'new';
+    if (isNew) details.open = true;
+    name.required = isNew;
+  }
+  select.addEventListener('change', sync);
+  sync();
+})();
+</script>
 {% endblock %}

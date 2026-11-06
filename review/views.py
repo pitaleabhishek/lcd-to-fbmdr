@@ -147,85 +147,100 @@ def start_review(request, pk: int):
     return redirect("workspace", pk=review.pk)
 
 
+def _facility_for(name: str):
+    """Find a facility by name, or add it when it is not in the list."""
+    name = (name or "").strip()
+    if not name:
+        return None
+    facility = Facility.objects.filter(name__iexact=name).first()
+    if facility is not None:
+        return facility
+    return Facility.objects.create(name=name)
+
+
 @login_required
 def new_review(request):
-    """Start a review with or without a labour record."""
+    """Start a review from a woman's record, or from a death with no record.
+
+    One form. The labour record and the reporting facility are both optional in
+    the sense that they may not exist yet; the facility can be typed in and is
+    created if it is not already listed.
+    """
     error = ""
-    selected_pregnancy = request.GET.get("pregnancy", "")
-    selected_facility = request.GET.get("facility", "")
+    selected = request.GET.get("pregnancy", "")
+    facility_name = ""
     fbmdr_no = ""
     new_name = ""
     new_age = ""
     new_died_at = _local_input(timezone.now())
 
-    if request.method == "POST" and request.POST.get("mode") == "no_record":
+    if request.method == "POST":
+        selected = request.POST.get("pregnancy", "")
+        facility_name = request.POST.get("facility_name", "").strip()
+        fbmdr_no = request.POST.get("fbmdr_no", "")
         new_name = request.POST.get("new_name", "").strip()
         new_age = request.POST.get("new_age", "").strip()
         new_died_at = request.POST.get("new_died_at", "")
-        selected_facility = request.POST.get("facility", "")
-        fbmdr_no = request.POST.get("fbmdr_no", "")
         try:
-            if not new_name:
-                raise ValidationError("enter the woman's name")
-            facility = Facility.objects.get(pk=selected_facility)
-            died_at = _parse_dt(new_died_at)
-            if died_at is None:
-                raise ValidationError("pick the date and time of death")
-            if timezone.is_naive(died_at):
-                died_at = timezone.make_aware(
-                    died_at, timezone.get_current_timezone()
+            if not selected:
+                raise ValidationError("choose the woman, or record a death")
+
+            if selected == "new":
+                if not new_name:
+                    raise ValidationError("enter the woman's name")
+                if not facility_name:
+                    raise ValidationError("enter the reporting facility")
+                died_at = _parse_dt(new_died_at)
+                if died_at is None:
+                    raise ValidationError("pick the date and time of death")
+                if timezone.is_naive(died_at):
+                    died_at = timezone.make_aware(
+                        died_at, timezone.get_current_timezone()
+                    )
+                age = int(new_age) if new_age else None
+                if age is not None and not 0 < age < 120:
+                    raise ValidationError("enter an age between 1 and 119")
+                facility = _facility_for(facility_name)
+                patient = Patient.objects.create(name=new_name, age=age)
+                pregnancy = Pregnancy.objects.create(
+                    patient=patient, outcome="", outcome_at=died_at
                 )
-            age = int(new_age) if new_age else None
-            if age is not None and not 0 < age < 120:
-                raise ValidationError("enter an age between 1 and 119")
-        except (Facility.DoesNotExist, ValueError, TypeError, ValidationError) as exc:
-            if isinstance(exc, ValidationError):
-                error = "; ".join(exc.messages)
+                Death.objects.create(
+                    pregnancy=pregnancy,
+                    died_at=died_at,
+                    time_precision=TimePrecision.EXACT,
+                )
+                source = None
+                admission = None
             else:
-                error = "choose the reporting facility"
-        else:
-            patient = Patient.objects.create(name=new_name, age=age)
-            pregnancy = Pregnancy.objects.create(
-                patient=patient, outcome="", outcome_at=died_at
-            )
-            Death.objects.create(
-                pregnancy=pregnancy,
-                died_at=died_at,
-                time_precision=TimePrecision.EXACT,
-            )
-            review = _create_review(
-                request, pregnancy, facility, None, None, fbmdr_no
-            )
-            messages.success(request, "Review started without a labour record")
-            return redirect("workspace", pk=review.pk)
+                try:
+                    pregnancy = Pregnancy.objects.get(pk=selected)
+                except (Pregnancy.DoesNotExist, ValueError, TypeError):
+                    raise ValidationError("choose the woman, or record a death")
 
-    if request.method == "POST" and request.POST.get("mode") != "no_record":
-        selected_pregnancy = request.POST.get("pregnancy", "")
-        selected_facility = request.POST.get("facility", "")
-        fbmdr_no = request.POST.get("fbmdr_no", "")
-        try:
-            pregnancy = Pregnancy.objects.get(pk=selected_pregnancy)
-            facility = Facility.objects.get(pk=selected_facility)
-        except (Pregnancy.DoesNotExist, Facility.DoesNotExist, ValueError, TypeError):
-            error = "Choose the woman and the reporting facility"
-        else:
-            existing = (
-                Review.objects.filter(pregnancy=pregnancy)
-                .order_by("-created_at")
-                .first()
-            )
-            if existing is not None:
-                messages.info(request, "A review already exists for this woman")
-                return redirect("workspace", pk=existing.pk)
-
-            source = (
-                SourceDocument.objects.filter(
-                    pregnancy=pregnancy, kind=SourceDocument.Kind.LCG
+                existing = (
+                    Review.objects.filter(pregnancy=pregnancy)
+                    .order_by("-created_at")
+                    .first()
                 )
-                .order_by("id")
-                .first()
-            )
-            _, admission = _default_facility(pregnancy)
+                if existing is not None:
+                    messages.info(request, "A review already exists for this woman")
+                    return redirect("workspace", pk=existing.pk)
+
+                facility, admission = _default_facility(pregnancy)
+                if facility_name:
+                    facility = _facility_for(facility_name)
+                if facility is None:
+                    raise ValidationError("enter the reporting facility")
+
+                source = (
+                    SourceDocument.objects.filter(
+                        pregnancy=pregnancy, kind=SourceDocument.Kind.LCG
+                    )
+                    .order_by("id")
+                    .first()
+                )
+
             review = _create_review(
                 request, pregnancy, facility, source, admission, fbmdr_no
             )
@@ -236,6 +251,8 @@ def new_review(request):
                 else "Review started without a labour record",
             )
             return redirect("workspace", pk=review.pk)
+        except ValidationError as exc:
+            error = "; ".join(exc.messages)
 
     pregnancies = []
     for pregnancy in (
@@ -262,10 +279,10 @@ def new_review(request):
         "review/new_review.html",
         {
             "pregnancies": pregnancies,
-            "facilities": Facility.objects.order_by("name"),
+            "facilities": Facility.objects.order_by("name").values_list("name", flat=True),
             "error": error,
-            "selected_pregnancy": str(selected_pregnancy),
-            "selected_facility": str(selected_facility),
+            "selected_pregnancy": str(selected),
+            "facility_name": facility_name,
             "fbmdr_no": fbmdr_no,
             "new_name": new_name,
             "new_age": new_age,

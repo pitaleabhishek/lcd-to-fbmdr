@@ -98,7 +98,7 @@ def test_start_review_without_a_labour_record(client, woman, resident):
         reverse("new_review"),
         {
             "pregnancy": woman["pregnancy"].pk,
-            "facility": woman["facility"].pk,
+            "facility_name": "PHC, Wardha",
             "fbmdr_no": "0009",
         },
     )
@@ -122,7 +122,7 @@ def test_new_review_links_a_labour_record_when_one_exists(client, woman, residen
 
     resp = client.post(
         reverse("new_review"),
-        {"pregnancy": woman["pregnancy"].pk, "facility": woman["facility"].pk},
+        {"pregnancy": woman["pregnancy"].pk, "facility_name": "PHC, Wardha"},
     )
     assert resp.status_code == 302
     review = Review.objects.get(pregnancy=woman["pregnancy"])
@@ -132,7 +132,7 @@ def test_new_review_links_a_labour_record_when_one_exists(client, woman, residen
 def test_new_review_is_not_duplicated(client, woman, resident):
     client.force_login(resident)
     url = reverse("new_review")
-    data = {"pregnancy": woman["pregnancy"].pk, "facility": woman["facility"].pk}
+    data = {"pregnancy": woman["pregnancy"].pk, "facility_name": "PHC, Wardha"}
     client.post(url, data)
     client.post(url, data)
     assert Review.objects.filter(pregnancy=woman["pregnancy"]).count() == 1
@@ -140,9 +140,9 @@ def test_new_review_is_not_duplicated(client, woman, resident):
 
 def test_new_review_requires_a_woman_and_facility(client, woman, resident):
     client.force_login(resident)
-    resp = client.post(reverse("new_review"), {"pregnancy": "", "facility": ""})
+    resp = client.post(reverse("new_review"), {"pregnancy": ""})
     assert resp.status_code == 200
-    assert "Choose the woman and the reporting facility" in resp.content.decode()
+    assert "choose the woman, or record a death" in resp.content.decode()
     assert not Review.objects.exists()
 
 
@@ -191,11 +191,11 @@ def test_start_a_new_death_without_a_labour_record_from_the_form(
     resp = client.post(
         reverse("new_review"),
         {
-            "mode": "no_record",
+            "pregnancy": "new",
             "new_name": "Lata Pawar",
             "new_age": "31",
             "new_died_at": "2026-10-12T14:30",
-            "facility": woman["facility"].pk,
+            "facility_name": "Rural Hospital, Arvi",
             "fbmdr_no": "0010",
         },
     )
@@ -211,6 +211,7 @@ def test_start_a_new_death_without_a_labour_record_from_the_form(
     assert review.source_document is None
     assert review.reporting_admission is None
     assert review.fbmdr_no == "0010"
+    assert review.reporting_facility.name == "Rural Hospital, Arvi"
 
     page = client.get(reverse("workspace", args=[review.pk])).content.decode()
     assert "No labour record" in page
@@ -245,3 +246,50 @@ def test_output_shows_the_link_for_an_older_version_without_a_frozen_source(
     page = client.get(reverse("output", args=[review.pk])).content.decode()
     assert f"/labour/{doc.pk}/" in page
     assert "no labour record" not in page
+
+
+def test_a_new_facility_name_is_created_once_and_reused(client, woman, resident):
+    client.force_login(resident)
+    data = {
+        "pregnancy": "new",
+        "new_name": "Meera Shinde",
+        "new_age": "24",
+        "new_died_at": "2026-10-12T15:00",
+        "facility_name": "Rural Hospital, Arvi",
+    }
+    client.post(reverse("new_review"), data)
+    client.post(
+        reverse("new_review"),
+        {**data, "new_name": "Kavita Rane"},
+    )
+    assert Facility.objects.filter(name__iexact="Rural Hospital, Arvi").count() == 1
+
+
+def test_a_death_without_a_labour_record_still_needs_a_facility(
+    client, woman, resident
+):
+    client.force_login(resident)
+    resp = client.post(
+        reverse("new_review"),
+        {
+            "pregnancy": "new",
+            "new_name": "Meera Shinde",
+            "new_died_at": "2026-10-12T15:00",
+            "facility_name": "",
+        },
+    )
+    assert resp.status_code == 200
+    assert "enter the reporting facility" in resp.content.decode()
+    assert not Review.objects.exists()
+
+
+def test_an_existing_woman_defaults_to_her_admission_facility(
+    client, woman, resident
+):
+    client.force_login(resident)
+    client.post(
+        reverse("new_review"),
+        {"pregnancy": woman["pregnancy"].pk},
+    )
+    review = Review.objects.get(pregnancy=woman["pregnancy"])
+    assert review.reporting_facility_id == woman["facility"].pk
