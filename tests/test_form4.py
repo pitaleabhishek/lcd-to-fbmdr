@@ -824,7 +824,7 @@ def test_na_state_is_shown_in_the_answer_cell(client, case_a, django_user_model)
 
     client.force_login(user)
     page = client.get(f"/review/{case_a.pk}/").content.decode()
-    assert 'class="answer-na"' in page
+    assert 'class="na-echo"' in page
     assert "Not applicable" in page
 
     resp = client.post(f"/review/{case_a.pk}/na/", {"key": key, "state": "clear"})

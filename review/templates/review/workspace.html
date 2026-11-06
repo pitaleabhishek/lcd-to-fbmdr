@@ -135,44 +135,44 @@
                 <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                 {% if row.widget == "readonly" %}<span class="key">set by Month</span>{% endif %}
               {% else %}
-                <div class="answer-edit" {% if row.is_na %}hidden{% endif %}>
+                <div class="answer-edit">
                 <form method="post" class="answer"
                       data-autosave="{% url 'save_field' review.pk %}"
                       data-key="{{ row.field.key }}">{% csrf_token %}
                   <input type="hidden" name="key" value="{{ row.field.key }}">
                   {% if row.widget == "month" %}
-                    <select name="value" class="val" title="Month">
+                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}" title="Month">
                       <option value="">—</option>
                       {% for m in months %}
                         <option value="{{ m.value }}" {% if row.current == m.value|stringformat:"s" %}selected{% endif %}>{{ m.label }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.widget == "year" %}
-                    <select name="value" class="val" title="Year">
+                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}" title="Year">
                       <option value="">—</option>
                       {% for y in years %}
                         <option value="{{ y }}" {% if row.current == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.field.type == "date" %}
-                    <input type="date" name="value" class="val" value="{{ row.current }}">
+                    <input type="date" name="value" class="val{% if row.is_na %} na-hidden{% endif %}" value="{{ row.current }}">
                   {% elif row.field.type == "datetime" %}
-                    <input type="datetime-local" name="value" class="val"
+                    <input type="datetime-local" name="value" class="val{% if row.is_na %} na-hidden{% endif %}"
                            title="Date and time" value="{{ row.current }}">
                   {% elif row.field.type == "int" %}
-                    <input type="number" name="value" class="val" step="1" min="0"
+                    <input type="number" name="value" class="val{% if row.is_na %} na-hidden{% endif %}" step="1" min="0"
                            inputmode="numeric" placeholder="{{ row.example }}"
                            title="Whole number only"
                            value="{{ row.current }}">
                   {% elif row.field.type == "enum" %}
-                    <select name="value" class="val">
+                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}">
                       <option value="">—</option>
                       {% for opt in row.field.options %}
                         <option value="{{ opt }}" {% if row.item.value_json == opt %}selected{% endif %}>{{ opt }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.field.type == "multi" %}
-                    <details class="multi">
+                    <details class="multi{% if row.is_na %} na-hidden{% endif %}">
                       <summary>{{ row.display }}</summary>
                       <div class="multi-list">
                         {% for opt in row.field.options %}
@@ -182,10 +182,10 @@
                       </div>
                     </details>
                   {% elif row.field.type == "text" %}
-                    <textarea name="value" rows="1" class="val auto"
+                    <textarea name="value" rows="1" class="val auto{% if row.is_na %} na-hidden{% endif %}"
                               placeholder="{{ row.field.slug|cut:"_" }}">{{ row.current }}</textarea>
                   {% else %}
-                    <input type="text" name="value" class="val"
+                    <input type="text" name="value" class="val{% if row.is_na %} na-hidden{% endif %}"
                            {% if row.field.type == "duration" %}placeholder="e.g. 1d 6h"
                            title="Days / hours / minutes, e.g. 1d 6h, 7h 30m or 450"
                            {% elif row.field.type == "datetime" %}placeholder="2026-11-05 14:30"
@@ -193,24 +193,19 @@
                            {% else %}placeholder="{{ row.field.slug|cut:"_" }}"{% endif %}
                            value="{{ row.current }}">
                   {% endif %}
+                  <span class="na-echo" {% if not row.is_na %}hidden{% endif %}>Not applicable</span>
                   <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                   <span class="save-state"></span>
                   <details class="notewrap">
                     <summary title="Add a note to this field">note</summary>
                     <input type="text" name="reason" class="why-in" placeholder="note (optional)">
                   </details>
-                  <button type="button" class="linkish na-toggle" data-state="na"
+                  <button type="button" class="linkish na-toggle"
+                          data-state="{% if row.is_na %}clear{% else %}na{% endif %}"
                           data-key="{{ row.field.key }}"
                           data-url="{% url 'na_field' review.pk %}"
-                          title="Mark not applicable">N/A</button>
+                          title="Toggle not applicable">{% if row.is_na %}clear{% else %}N/A{% endif %}</button>
                 </form>
-                </div>
-                <div class="answer-na" {% if not row.is_na %}hidden{% endif %}>
-                  <input type="text" class="val" value="Not applicable" disabled>
-                  <span class="why na-reason">{% if row.is_na and row.item.reason %}· {{ row.item.reason }}{% endif %}</span>
-                  <button type="button" class="linkish na-toggle" data-state="clear"
-                          data-key="{{ row.field.key }}"
-                          data-url="{% url 'na_field' review.pk %}">clear</button>
                 </div>
               {% endif %}
               {% if row.evidence %}

@@ -94,9 +94,9 @@
   .block-card.commented { border-left:3px solid #e0a52a; background:#fff8e1; }
   .block-card.addressed { border-left:3px solid var(--accent); }
   button:disabled { opacity:.45; cursor:not-allowed; }
-  .na-state { display:flex; gap:6px; align-items:center; flex-wrap:wrap;
-              background:#f4f7f9; border:1px dashed var(--line);
-              border-radius:4px; padding:3px 6px; }
+  .na-hidden { display:none !important; }
+  .na-echo { flex:1 1 180px; min-width:140px; font-size:13px; color:var(--muted);
+             font-style:italic; }
   .evidence { margin-top:5px; padding:5px 7px; background:#f4f7f9;
               border-left:3px solid var(--accent); border-radius:4px; font-size:11.5px; }
   .ev-head { font-weight:700; font-size:10.5px; text-transform:uppercase;
@@ -500,7 +500,8 @@
     if (!btn) return;
     var cell = btn.closest('td');
     var edit = cell.querySelector('.answer-edit');
-    var na = cell.querySelector('.answer-na');
+    var echo = edit.querySelector('.na-echo');
+    var controls = edit.querySelectorAll('[name=value], details.multi');
     var reasonInput = edit.querySelector('input[name=reason]');
     var body = new FormData();
     body.append('key', btn.dataset.key);
@@ -512,12 +513,15 @@
       .then(function (j) {
         if (!j.ok) return;
         if (j.state === 'not_applicable') {
-          edit.hidden = true;
-          na.hidden = false;
-          na.querySelector('.na-reason').textContent = j.reason ? '· ' + j.reason : '';
+          controls.forEach(function (c) { c.classList.add('na-hidden'); });
+          if (echo) echo.hidden = false;
+          btn.dataset.state = 'clear';
+          btn.textContent = 'clear';
         } else {
-          edit.hidden = false;
-          na.hidden = true;
+          controls.forEach(function (c) { c.classList.remove('na-hidden'); });
+          if (echo) echo.hidden = true;
+          btn.dataset.state = 'na';
+          btn.textContent = 'N/A';
           var value = edit.querySelector('input[name=value]');
           if (value) value.value = '';
         }
