@@ -92,7 +92,8 @@ def header_input(doc, label: str, value: Any, key: str = "") -> dict:
 
 
 def fact_input(ref: str, label: str, value: Any, at: datetime | None = None,
-               precision: str = TimePrecision.EXACT) -> dict:
+               precision: str = TimePrecision.EXACT, author: str = "",
+               entered_by: str = "") -> dict:
     return {
         "kind": "fact",
         "ref": ref,
@@ -101,10 +102,19 @@ def fact_input(ref: str, label: str, value: Any, at: datetime | None = None,
         "observed_at": _iso(at),
         "documented_at": None,
         "entered_at": None,
-        "author": "",
-        "entered_by": "",
+        "author": author,
+        "entered_by": entered_by,
         "precision": precision,
     }
+
+
+#: How each derived value was calculated. Shown next to its inputs.
+CALCULATIONS = {
+    "f4.timing.c": "discharge (or death) time − admission time",
+    "f4.timing.d": "sum of ICU stay durations",
+    "f4.timing.e": "delivery time − admission time",
+    "f4.timing.f": "death time − admission time",
+}
 
 
 def _minutes(start: datetime, end: datetime) -> dict:
@@ -179,7 +189,8 @@ def inpatient_no(ctx: Context):
         return NotComputable("no admission record", "missing")
     return Value(
         ctx.admission.uin,
-        [fact_input(f"admission:{ctx.admission.pk}", "Inpatient No.", ctx.admission.uin)],
+        [fact_input(f"admission:{ctx.admission.pk}", "Inpatient No.", ctx.admission.uin,
+                    author=ctx.admission.admitted_by)],
     )
 
 
@@ -189,7 +200,8 @@ def medico_legal(ctx: Context):
         return NotComputable("not recorded at admission", "missing")
     return Value(
         ctx.admission.medico_legal,
-        [fact_input(f"admission:{ctx.admission.pk}", "Medico-legal", ctx.admission.medico_legal)],
+        [fact_input(f"admission:{ctx.admission.pk}", "Medico-legal", ctx.admission.medico_legal,
+                    author=ctx.admission.admitted_by)],
     )
 
 
@@ -206,7 +218,8 @@ def timing_a(ctx: Context):
         return NotComputable("admission time is not exact", "unknown")
     return Value(
         _iso(a.admitted_at),
-        [fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at, a.admitted_at, a.time_precision)],
+        [fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at, a.admitted_at,
+                    a.time_precision, author=a.admitted_by)],
     )
 
 
@@ -221,7 +234,8 @@ def timing_b(ctx: Context):
         return NotComputable("time of death is not exact", "unknown")
     return Value(
         _iso(d.died_at),
-        [fact_input(f"death:{d.pk}", "Died", d.died_at, d.died_at, d.time_precision)],
+        [fact_input(f"death:{d.pk}", "Died", d.died_at, d.died_at, d.time_precision,
+                    author=d.certified_by)],
     )
 
 
@@ -231,9 +245,14 @@ def timing_c(ctx: Context):
     if not a:
         return NotComputable("no admission record", "missing")
     end = a.discharged_at or (ctx.death.died_at if ctx.death else None)
-    refs = [fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at)]
-    if ctx.death and ctx.death.died_at and not a.discharged_at:
-        refs.append(fact_input(f"death:{ctx.death.pk}", "Died", ctx.death.died_at, ctx.death.died_at))
+    refs = [fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at,
+                       author=a.admitted_by)]
+    if a.discharged_at:
+        refs.append(fact_input(f"admission:{a.pk}", "Discharged", a.discharged_at,
+                               a.discharged_at, a.time_precision))
+    elif ctx.death and ctx.death.died_at:
+        refs.append(fact_input(f"death:{ctx.death.pk}", "Died", ctx.death.died_at,
+                               ctx.death.died_at, author=ctx.death.certified_by))
     return interval(a.admitted_at, end, a.time_precision,
                     TimePrecision.EXACT, "admission time", "exit time", refs)
 
@@ -261,8 +280,10 @@ def timing_e(ctx: Context):
     if not d:
         return NotComputable("no delivery recorded", "missing")
     refs = [
-        fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at),
-        fact_input(f"delivery:{d.pk}", "Delivered", d.delivered_at or "", d.delivered_at),
+        fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at,
+                   author=a.admitted_by),
+        fact_input(f"delivery:{d.pk}", "Delivered", d.delivered_at or "", d.delivered_at,
+                   author=d.performed_by),
     ]
     return interval(a.admitted_at, d.delivered_at, a.time_precision,
                     d.time_precision, "admission time", "delivery time", refs)
@@ -276,8 +297,10 @@ def timing_f(ctx: Context):
     if not d:
         return NotComputable("no death record", "missing")
     refs = [
-        fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at),
-        fact_input(f"death:{d.pk}", "Died", d.died_at or "", d.died_at),
+        fact_input(f"admission:{a.pk}", "Admitted", a.admitted_at or "", a.admitted_at,
+                   author=a.admitted_by),
+        fact_input(f"death:{d.pk}", "Died", d.died_at or "", d.died_at,
+                   author=d.certified_by),
     ]
     return interval(a.admitted_at, d.died_at, a.time_precision,
                     d.time_precision, "admission time", "death time", refs)
@@ -322,7 +345,8 @@ def delivery_mode(ctx: Context):
     d = ctx.delivery
     if not d or not d.mode:
         return NotComputable("mode of delivery not recorded", "missing")
-    return Value(d.mode, [fact_input(f"delivery:{d.pk}", "Mode", d.mode, d.delivered_at)])
+    return Value(d.mode, [fact_input(f"delivery:{d.pk}", "Mode", d.mode, d.delivered_at,
+                                      author=d.performed_by)])
 
 
 @rule("f4.delivery.neonatal.from_neonate", "f4.delivery.neonatal_outcome")

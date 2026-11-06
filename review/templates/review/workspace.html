@@ -338,6 +338,7 @@
                         {% if inp.url %} · <a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a>{% endif %}
                       </div>
                     {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
+                    {% if pr.calculation %}<div class="why">calculated as {{ pr.calculation }}</div>{% endif %}
                     {% if not locked %}
                     <form method="post" class="inline">{% csrf_token %}
                       <input type="hidden" name="action" value="accept">

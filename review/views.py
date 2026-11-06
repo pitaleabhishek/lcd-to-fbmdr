@@ -29,7 +29,7 @@ from .models import (
 )
 from .registry import CATEGORIES, registry
 from .evidence import EVIDENCE
-from .rules import RULES
+from .rules import CALCULATIONS, RULES
 from . import thresholds
 from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
 
@@ -776,6 +776,7 @@ def workspace(request, pk: int):
                     "mark": chip(item.origin) if item else "—",
                     "proposals": [
                         {"p": p, "display": fmt(p.value_json), "mark": mark,
+                         "calculation": CALCULATIONS.get(p.field_key, ""),
                          "inputs": _provenance(p, death)} for p in proposals
                     ],
                     "decision": _decision(item, decisions.get(f.key), mark),
