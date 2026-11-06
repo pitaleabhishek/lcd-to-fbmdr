@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from . import services
+from . import conditions, services
 from .models import (
     AuditEvent,
     Proposal,
@@ -478,6 +478,13 @@ def workspace(request, pk: int):
     )
 
     items = {i.field_key: i for i in review.items.all()}
+    visibility = conditions.visibility_for(review)
+    # An FNO comment always wins: the field must stay addressable even when a
+    # later answer would otherwise hide it.
+    for key in field_comments:
+        if key in visibility and not visibility[key].applies:
+            visibility[key] = conditions.Visibility(True)
+    hidden_fields = []
     decisions = {}
     for d in (
         ProposalDecision.objects.filter(proposal__review=review)
@@ -496,9 +503,33 @@ def workspace(request, pk: int):
     sections = []
     for section, heading, fields in registry.by_section():
         rows = []
-        answered_n = needs_n = na_n = 0
+        answered_n = needs_n = na_n = hidden_n = 0
         for f in fields:
             item = items.get(f.key)
+            seen = visibility[f.key]
+            if not seen.applies:
+                hidden_n += 1
+                hidden_fields.append(
+                    {
+                        "field": f,
+                        "section": heading,
+                        "reason": seen.reason or "this question does not apply",
+                        "display": (
+                            fmt(item.value_json)
+                            if item
+                            and item.answer_state == ReviewItem.AnswerState.ANSWERED
+                            and item.value_json not in (None, "", [], {})
+                            else ""
+                        ),
+                        "na": bool(
+                            item
+                            and item.applicability_state
+                            == ReviewItem.Applicability.NOT_APPLICABLE
+                        ),
+                    }
+                )
+                continue
+
             proposals = open_proposals.get(f.key, [])
             rule = RULES.get(f.key)
             mark = {"reused": "R", "derived": "D"}.get(rule.origin if rule else None, "R")
@@ -565,41 +596,56 @@ def workspace(request, pk: int):
                     ),
                 }
             )
-        sections.append(
-            {
-                "key": section,
-                "heading": heading,
-                "rows": rows,
-                "total": len(fields),
-                "answered": answered_n,
-                "na": na_n,
-                "needs": needs_n,
-            }
-        )
+        if rows:
+            sections.append(
+                {
+                    "key": section,
+                    "heading": heading,
+                    "rows": rows,
+                    "total": len(rows),
+                    "answered": answered_n,
+                    "na": na_n,
+                    "needs": needs_n,
+                    "hidden": hidden_n,
+                }
+            )
 
+    visible_fields = [f for f in registry.all() if visibility[f.key].applies]
     answered_total = sum(
-        1 for i in items.values() if i.answer_state == ReviewItem.AnswerState.ANSWERED
+        1
+        for f in visible_fields
+        if f.key in items
+        and items[f.key].answer_state == ReviewItem.AnswerState.ANSWERED
     )
     na_total = sum(
         1
-        for i in items.values()
-        if i.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+        for f in visible_fields
+        if f.key in items
+        and items[f.key].applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
     )
     resolved = answered_total + na_total
     stats = {
-        "fields": len(registry.all()),
+        "fields": len(visible_fields),
+        "hidden": len(hidden_fields),
         "answered": answered_total,
         "resolved": resolved,
-        "to_enter": len(registry.all()) - resolved,
+        "to_enter": len(visible_fields) - resolved,
         "na": na_total,
-        "proposed": sum(len(v) for v in open_proposals.values()),
-        "needs": sum(1 for i in items.values() if i.needs_reconsideration),
+        "proposed": sum(
+            len(v) for k, v in open_proposals.items() if visibility[k].applies
+        ),
+        "needs": sum(
+            1
+            for f in visible_fields
+            if f.key in items and items[f.key].needs_reconsideration
+        ),
         "gaps": sum(
             1
-            for f in registry.all()
-            if f.required and (f.key not in items or items[f.key].answer_state != "answered")
+            for f in visible_fields
+            if f.required
+            and (f.key not in items or items[f.key].answer_state != "answered")
         ),
-        "percent": round(100 * resolved / max(1, len(registry.all()))),
+        "percent": round(100 * resolved / max(1, len(visible_fields))),
     }
     return render(
         request,
@@ -607,6 +653,8 @@ def workspace(request, pk: int):
         {
             "review": review,
             "sections": sections,
+            "hidden_fields": hidden_fields,
+            "controller_keys": conditions.controller_keys(),
             "stats": stats,
             "years": list(range(timezone.now().year + 1, 1989, -1)),
             "months": [
@@ -1350,10 +1398,22 @@ def output(request, pk: int):
 
     fields = version.payload_json.get("fields", {})
     sections = []
+    hidden_rows = []
     for section, heading, fs in registry.by_section():
         rows = []
         for f in fs:
-            entry = fields.get(f.key)
+            entry = fields.get(f.key) or {}
+            if not entry.get("applies", True):
+                if entry.get("value") not in (None, "", [], {}):
+                    hidden_rows.append(
+                        {
+                            "field": f,
+                            "entry": entry,
+                            "display": fmt(entry.get("value")),
+                            "reason": entry.get("condition_reason", ""),
+                        }
+                    )
+                continue
             rows.append(
                 {
                     "field": f,
@@ -1362,7 +1422,8 @@ def output(request, pk: int):
                     "mark": chip(entry["origin"]) if entry else "—",
                 }
             )
-        sections.append({"key": section, "heading": heading, "rows": rows})
+        if rows:
+            sections.append({"key": section, "heading": heading, "rows": rows})
 
     return render(
         request,
@@ -1371,6 +1432,7 @@ def output(request, pk: int):
             "review": review,
             "version": version,
             "sections": sections,
+            "hidden_rows": hidden_rows,
             "categories": CATEGORIES,
             "fields_payload": fields,
         },

@@ -12,6 +12,10 @@
   <a href="?format=json">JSON</a>
 </div>
 
+{% if version.payload_json.conditions_version %}
+<p class="muted small">Conditional rules {{ version.payload_json.conditions_version }}, frozen with this version.</p>
+{% endif %}
+
 {% for section in sections %}
 <h2>{{ section.heading }}</h2>
 <table>
@@ -31,4 +35,24 @@
   </tbody>
 </table>
 {% endfor %}
+
+{% if hidden_rows %}
+<h2>Questions that did not apply</h2>
+<p class="muted small">
+  These answers were already recorded when the branch changed or when the review
+  was submitted. They are kept for the record and are not part of the printed form.
+</p>
+<table>
+  <thead><tr><th style="width:38%">Printed item</th><th style="width:32%">Kept value</th><th>Why it did not apply</th></tr></thead>
+  <tbody>
+  {% for row in hidden_rows %}
+    <tr>
+      <td>{{ row.field.label_printed }}<div class="key">{{ row.field.key }}</div></td>
+      <td class="value">{{ row.display }}</td>
+      <td class="muted">{{ row.reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
 {% endblock %}

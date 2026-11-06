@@ -35,7 +35,7 @@
   </div>
 </div>
 
-<div class="progress" title="{{ stats.resolved }} of {{ stats.fields }} resolved">
+<div class="progress" title="{{ stats.resolved }} of {{ stats.fields }} resolved{% if stats.hidden %} · {{ stats.hidden }} not shown{% endif %}">
   <span style="width:{{ stats.percent }}%"></span>
 </div>
 <div class="stats">
@@ -44,8 +44,9 @@
   <div class="stat"><b>{{ stats.proposed }}</b> open proposals</div>
   <div class="stat"><b>{{ stats.needs }}</b> need review</div>
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
+  {% if stats.hidden %}<div class="stat"><b>{{ stats.hidden }}</b> not shown</div>{% endif %}
 </div>
-<div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected</div>
+<div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected · questions hide when they cannot apply</div>
 {% if submission_note %}
   <div class="returnbar resident-note">
     <div class="rb-main">
@@ -79,6 +80,27 @@
 {% endif %}
 </div>
 
+{% if hidden_fields %}
+<details class="not-shown">
+  <summary>{{ hidden_fields|length }} question{{ hidden_fields|length|pluralize }} not shown · why</summary>
+  <p class="muted small">
+    Hidden because an answer already recorded says they cannot apply.
+    A hidden question is not answered or marked N/A; any earlier answer is kept.
+  </p>
+  <table>
+    <thead><tr><th>Question</th><th>Why it is not shown</th><th>Kept answer</th></tr></thead>
+    <tbody>
+      {% for h in hidden_fields %}
+        <tr>
+          <td>{{ h.field.label_printed }}<div class="key">{{ h.section }}</div></td>
+          <td class="muted">{{ h.reason }}</td>
+          <td>{% if h.display %}{{ h.display }}{% elif h.na %}<span class="muted">Not applicable</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
 
 
 {% if locked %}
@@ -117,7 +139,7 @@
       <section class="form-section" id="sec-{{ section.key }}">
       <h2>
         {{ section.heading }}
-        <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}</span>
+        <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}{% if section.hidden %} · {{ section.hidden }} not shown{% endif %}</span>
       </h2>
       <table class="fields">
         <thead><tr><th style="width:30%">Item</th><th style="width:34%">Answer</th><th>Proposed</th></tr></thead>
@@ -465,6 +487,7 @@
     {% endif %}
   </div>
 </div>
+{{ controller_keys|json_script:"condition-controllers" }}
 {% if fno_can_comment %}
   <div class="decision-bar">
     <input type="text" name="comment" class="return-comment"

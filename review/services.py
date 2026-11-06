@@ -23,6 +23,7 @@ from .models import (
     ReviewVersion,
     TimePrecision,
 )
+from . import conditions
 from .registry import registry
 from .rules import RULES, Context, NotComputable, Value
 
@@ -244,12 +245,23 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
         assert_can_author(review, actor)
 
     ctx = build_context(review)
+    visibility = conditions.visibility(review)
     created: list[Proposal] = []
 
     for field in registry.all():
+        if not visibility[field.key].applies:
+            review.proposals.filter(
+                field_key=field.key, status=Proposal.Status.PROPOSED
+            ).update(
+                status=Proposal.Status.SUPERSEDED,
+                status_reason=visibility[field.key].reason or "does not apply",
+            )
+            continue
+
         rule = RULES.get(field.key)
         if rule is None:
             continue
+
         result = rule.fn(ctx)
 
         if isinstance(result, NotComputable):
@@ -551,15 +563,22 @@ def missing_required(review: Review) -> list[str]:
         if i.answer_state == ReviewItem.AnswerState.ANSWERED
         or i.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
     }
-    return [f.key for f in registry.all() if f.required and f.key not in answered]
+    visibility = conditions.visibility(review)
+    return [
+        f.key
+        for f in registry.all()
+        if f.required and visibility[f.key].applies and f.key not in answered
+    ]
 
 
 def canonical_payload(review: Review) -> dict:
     """Every registered field, answered or not: a version must show the gaps."""
     items = {i.field_key: i for i in review.items.all()}
+    visibility = conditions.visibility(review)
     fields = {}
     for field in registry.all():
         item = items.get(field.key)
+        seen = visibility[field.key]
         if item is None:
             fields[field.key] = {
                 "value": None,
@@ -570,6 +589,8 @@ def canonical_payload(review: Review) -> dict:
                 "accepted_proposal_id": None,
                 "decided_by": None,
                 "decided_at": None,
+                "applies": seen.applies,
+                "condition_reason": seen.reason,
             }
             continue
         fields[field.key] = {
@@ -581,12 +602,15 @@ def canonical_payload(review: Review) -> dict:
             "accepted_proposal_id": item.accepted_proposal_id,
             "decided_by": item.decided_by.username if item.decided_by else None,
             "decided_at": item.decided_at.isoformat() if item.decided_at else None,
+            "applies": seen.applies,
+            "condition_reason": seen.reason,
         }
     return {
         "form": "FBMDR-2017",
         "review": review.pk,
         "registry_version": "r1",
         "template": "f4-2017@1",
+        "conditions_version": conditions.CONDITIONS_VERSION,
         "generated_at": timezone.now().isoformat(),
         "fields": fields,
     }

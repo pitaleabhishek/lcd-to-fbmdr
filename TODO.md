@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 88 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 105 tests passing. 96 Form 4 fields, 34 LCG variables._
 
 ## Built
 
@@ -28,6 +28,7 @@ _Last updated: 6 November 2026. 88 tests passing. 96 Form 4 fields, 34 LCG varia
 - [x] Review history: versions, returns with per-field comments, paginated activity (100/page), per-field filter, 2-minute grouping
 - [x] Dependency register (`docs/dependencies.md`)
 - [x] Overlap inventory generated and reconciled to the PDF (96/96 labels)
+- [x] Conditional Form 4: 2 whole-section gates and 30 field rules (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
 
 ## Essential, open
 
@@ -39,7 +40,6 @@ _Last updated: 6 November 2026. 88 tests passing. 96 Form 4 fields, 34 LCG varia
   supersessions; filterable by item and author, paginated.
 - [ ] **Cases B, C, D** — caesarean after labour, no labour record, referred in after delivery
 - [ ] **Amendments** — approved reviews frozen; needs an attributed amendment path
-- [ ] **Conditional form** — honour `applicability` (abortion branches, transfusion units, neonatal cause)
 - [ ] **Pre-submission checks** — plain-language inconsistencies, not just missing required fields
 - [ ] **Overlap analysis write-up** — per Dr Atter's four categories: counts, sources, false friends, 1/96 finding
 - [ ] **Security note** — and close the gaps it exposes: non-owner DB role, author/facility scoping, login throttling

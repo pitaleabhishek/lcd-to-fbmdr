@@ -95,6 +95,11 @@
   .block-card.addressed { border-left:3px solid var(--accent); }
   button:disabled { opacity:.45; cursor:not-allowed; }
   .na-hidden { display:none !important; }
+  .not-shown { margin:10px 0; background:#fff; border:1px solid var(--line);
+               border-radius:6px; padding:7px 10px; }
+  .not-shown summary { font-size:12px; color:var(--accent); }
+  .not-shown table { margin-top:7px; }
+  .not-shown th, .not-shown td { padding:4px 6px; font-size:12px; }
   .na-echo { flex:1 1 180px; min-width:140px; font-size:13px; color:var(--muted);
              font-style:italic; }
   .evidence { margin-top:5px; padding:5px 7px; background:#f4f7f9;
@@ -366,6 +371,13 @@
     } catch (e) {}
   });
 
+  var conditionControllers = (function () {
+    try {
+      var el = document.getElementById('condition-controllers');
+      return new Set(el ? JSON.parse(el.textContent) : []);
+    } catch (e) { return new Set(); }
+  })();
+
   function human(ms) {
     var s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
     if (s < 2) return 'just now';
@@ -425,6 +437,12 @@
         if (chipEl && res.j.mark) {
           chipEl.className = 'chip ' + res.j.mark;
           chipEl.textContent = res.j.mark;
+        }
+        if (conditionControllers.has(f.dataset.key)) {
+          try {
+            sessionStorage.setItem('mdr:scroll:' + location.pathname, String(window.scrollY));
+          } catch (e) {}
+          location.reload();
         }
       }).catch(function () {
         state.className = 'save-state error';
