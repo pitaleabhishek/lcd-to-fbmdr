@@ -286,25 +286,16 @@
                     <span class="value">{{ pr.display }}</span>
                     <span class="chip {{ pr.mark }}" title="{% if pr.mark == 'R' %}reused from the record{% else %}derived from recorded times{% endif %}">{{ pr.mark }}</span>
                     <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
-                    <details>
-                      <summary>see source</summary>
-                      {% for inp in pr.inputs %}
-                        {% if inp.url %}
-                          <a class="why ev-link see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">
-                            <b>{{ inp.label }}</b> = {{ inp.value }}
-                            {% if inp.when %} · {{ inp.when }}{% endif %}
-                            {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
-                            {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
-                            {% if inp.author %} · {{ inp.author }}{% endif %}
-                          </a>
-                        {% else %}
-                          <div class="why">
-                            <b>{{ inp.label }}</b> = {{ inp.value }}
-                            {% if inp.author %} · {{ inp.author }}{% endif %}
-                          </div>
-                        {% endif %}
-                      {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
-                    </details>
+                    {% for inp in pr.inputs %}
+                      <div class="why">
+                        <b>{{ inp.label }}</b> = {{ inp.value }}
+                        {% if inp.when %} · {{ inp.when }}{% endif %}
+                        {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
+                        {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
+                        {% if inp.author %} · {{ inp.author }}{% endif %}
+                        {% if inp.url %} · <a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a>{% endif %}
+                      </div>
+                    {% empty %}<div class="why">no inputs recorded</div>{% endfor %}
                     {% if not locked %}
                     <form method="post" class="inline">{% csrf_token %}
                       <input type="hidden" name="action" value="accept">
