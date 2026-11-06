@@ -87,13 +87,79 @@ def _num(value) -> str:
     return str(int(d)) if d == int(d) else f"{d:g}"
 
 
+def _local_input(dt) -> str:
+    if dt is None:
+        return ""
+    if timezone.is_aware(dt):
+        dt = timezone.localtime(dt)
+    return dt.strftime("%Y-%m-%dT%H:%M")
+
+
 @login_required
 def labour(request, pk: int):
-    from .models import SourceDocument
+    from .models import LCGVariable, SourceDocument
 
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+
+    entry = {
+        "variable": "",
+        "value": "",
+        "observed_at": _local_input(timezone.now()),
+        "documented_at": "",
+        "author": request.user.get_full_name() or request.user.get_username(),
+    }
+    entry_error = ""
+    if request.method == "POST":
+        entry = {
+            "variable": request.POST.get("variable", ""),
+            "value": request.POST.get("value", ""),
+            "observed_at": request.POST.get("observed_at", ""),
+            "documented_at": request.POST.get("documented_at", ""),
+            "author": request.POST.get("author", ""),
+        }
+        try:
+            variable = LCGVariable.objects.select_related("section").get(
+                key=entry["variable"]
+            )
+            if variable.section.key == "identifying":
+                raise ValidationError("that item belongs to the chart header")
+            observed_at = _parse_dt(entry["observed_at"])
+            if observed_at is None:
+                raise ValidationError("pick the observation time")
+            if timezone.is_naive(observed_at):
+                observed_at = timezone.make_aware(
+                    observed_at, timezone.get_current_timezone()
+                )
+            documented_at = observed_at
+            if entry["documented_at"]:
+                documented_at = _parse_dt(entry["documented_at"])
+                if documented_at is None:
+                    raise ValidationError("pick the documented time")
+            if documented_at is not None and timezone.is_naive(documented_at):
+                documented_at = timezone.make_aware(
+                    documented_at, timezone.get_current_timezone()
+                )
+            services.add_observation(
+                doc,
+                variable,
+                value=entry["value"],
+                observed_at=observed_at,
+                documented_at=documented_at,
+                author=entry["author"],
+                actor=request.user,
+            )
+        except LCGVariable.DoesNotExist:
+            entry_error = "choose an item to record"
+        except ValidationError as exc:
+            entry_error = "; ".join(exc.messages)
+        else:
+            messages.success(request, "Observation added")
+            return redirect("labour", pk=doc.pk)
+
     obs = list(
-        doc.observations.select_related("variable__section").order_by("observed_at")
+        doc.observations.current()
+        .select_related("variable__section")
+        .order_by("observed_at")
     )
     death = doc.pregnancy.deaths.order_by("-died_at").first()
     times = sorted({o.observed_at for o in obs})
@@ -131,6 +197,7 @@ def labour(request, pk: int):
     def cell(o):
         late = bool(death and o.documented_at and death.died_at and o.documented_at > death.died_at)
         return {
+            "pk": o.pk,
             "value": o.value_text if o.value_text not in ("", None) else _num(o.value_num),
             "author": o.author,
             "observed": timezone.localtime(o.observed_at).strftime("%H:%M")
@@ -181,6 +248,20 @@ def labour(request, pk: int):
             }
         )
 
+    entry_variables = [
+        {
+            "label": label,
+            "variables": [v for v in VARIABLES if v.section == key],
+        }
+        for _, key, label in LCG_SECTIONS
+        if key != "identifying"
+    ]
+    variable_specs = {
+        v.key: {"type": v.type, "unit": v.unit, "options": list(v.options)}
+        for v in VARIABLES
+        if v.section != "identifying"
+    }
+
     return render(
         request,
         "review/labour.html",
@@ -193,6 +274,134 @@ def labour(request, pk: int):
             "groups": groups,
             "sections": sections,
             "death": death,
+            "entry": entry,
+            "entry_error": entry_error,
+            "entry_variables": entry_variables,
+            "variable_specs": variable_specs,
+        },
+    )
+
+
+@login_required
+def labour_history(request, pk: int):
+    from django.core.paginator import Paginator
+
+    from .models import LCGVariable, SourceDocument
+
+    doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    death = doc.pregnancy.deaths.order_by("-died_at").first()
+
+    qs = doc.observations.select_related("variable__section").order_by(
+        "-observed_at", "-pk"
+    )
+    variable_key = request.GET.get("variable", "")
+    author = request.GET.get("author", "").strip()
+    if variable_key:
+        qs = qs.filter(variable__key=variable_key)
+    if author:
+        qs = qs.filter(author__icontains=author)
+
+    page_obj = Paginator(qs, 100).get_page(request.GET.get("page"))
+    rows = []
+    for o in page_obj:
+        late = bool(
+            death and death.died_at and o.documented_at and o.documented_at > death.died_at
+        )
+        correction = o.superseded_by.first()
+        rows.append(
+            {
+                "obs": o,
+                "value": services.observation_display(o),
+                "late": late,
+                "correction": correction,
+                "correction_value": services.observation_display(correction)
+                if correction
+                else "",
+            }
+        )
+
+    return render(
+        request,
+        "review/labour_history.html",
+        {
+            "document": doc,
+            "pregnancy": doc.pregnancy,
+            "patient": doc.pregnancy.patient,
+            "death": death,
+            "rows": rows,
+            "page_obj": page_obj,
+            "variables": LCGVariable.objects.exclude(section__key="identifying"),
+            "authors": sorted(
+                {a for a in doc.observations.values_list("author", flat=True) if a}
+            ),
+            "filter_variable": variable_key,
+            "filter_author": author,
+            "total": qs.count(),
+        },
+    )
+
+
+@login_required
+def correct_observation(request, pk: int, obs_pk: int):
+    from .models import Observation, SourceDocument
+
+    doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    obs = get_object_or_404(
+        Observation.objects.select_related("variable"), pk=obs_pk, document=doc
+    )
+    if obs.superseded_by.exists():
+        messages.error(
+            request, "That entry has already been corrected; correct its replacement."
+        )
+        return redirect("labour", pk=doc.pk)
+
+    values = {
+        "value": services.observation_display(obs),
+        "documented_at": _local_input(timezone.now()),
+        "author": obs.author,
+        "reason": "",
+    }
+    error = ""
+    if request.method == "POST":
+        values = {
+            name: request.POST.get(name, "")
+            for name in ("value", "documented_at", "author", "reason")
+        }
+        try:
+            documented_at = timezone.now()
+            if values["documented_at"]:
+                documented_at = _parse_dt(values["documented_at"])
+                if documented_at is None:
+                    raise ValidationError("pick the documented time")
+            if documented_at is not None and timezone.is_naive(documented_at):
+                documented_at = timezone.make_aware(
+                    documented_at, timezone.get_current_timezone()
+                )
+            if not values["reason"].strip():
+                raise ValidationError("say why the entry is being corrected")
+            services.correct_observation(
+                obs,
+                value=values["value"],
+                documented_at=documented_at,
+                author=values["author"],
+                actor=request.user,
+                reason=values["reason"].strip(),
+            )
+        except ValidationError as exc:
+            error = "; ".join(exc.messages)
+        else:
+            messages.success(request, "Correction recorded")
+            return redirect("labour", pk=doc.pk)
+
+    return render(
+        request,
+        "review/correct_observation.html",
+        {
+            "document": doc,
+            "patient": doc.pregnancy.patient,
+            "obs": obs,
+            "values": values,
+            "error": error,
         },
     )
 

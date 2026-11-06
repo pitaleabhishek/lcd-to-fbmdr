@@ -1,0 +1,50 @@
+{% extends "review/base.html" %}
+{% block title %}Correct {{ obs.variable.label }} · {{ patient.name }}{% endblock %}
+{% block content %}
+<h1>Correct an entry</h1>
+<p class="muted">
+  {{ patient.name }} · {{ obs.variable.label }}
+  · observed {{ obs.observed_at|date:"d M Y H:i" }}
+  · written by {{ obs.author|default:"—" }}
+</p>
+
+<div class="statebox">
+  The original stays in the record. This adds a corrected entry for
+  <b>{{ obs.variable.label }}</b> at the same time; the chart and the review then
+  read the corrected value, and the history shows both.
+</div>
+
+{% if error %}<div class="obs-error">{{ error }}</div>{% endif %}
+
+<form method="post" class="correction-form">
+  {% csrf_token %}
+  <label>Value
+    {% if obs.variable.type == "enum" %}
+      <select name="value" required>
+        {% for o in obs.variable.options %}
+          <option value="{{ o }}"{% if values.value == o %} selected{% endif %}>{{ o }}</option>
+        {% endfor %}
+      </select>
+    {% elif obs.variable.type == "num" or obs.variable.type == "bool" %}
+      <input type="number" step="any" name="value" value="{{ values.value }}" required>
+    {% else %}
+      <input type="text" name="value" value="{{ values.value }}" required>
+    {% endif %}
+    {% if obs.variable.unit %}<span class="unit">{{ obs.variable.unit }}</span>{% endif %}
+  </label>
+  <label>Documented
+    <input type="datetime-local" name="documented_at" value="{{ values.documented_at }}">
+  </label>
+  <label>Author
+    <input type="text" name="author" value="{{ values.author }}">
+  </label>
+  <label class="wide">Why
+    <input type="text" name="reason" value="{{ values.reason }}"
+           placeholder="e.g. transcribed 150, chart reads 120" required>
+  </label>
+  <div class="bar">
+    <button class="primary">Record correction</button>
+    <a href="{% url 'labour' document.pk %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -6,6 +6,12 @@ from . import views
 urlpatterns = [
     path("", views.index, name="index"),
     path("labour/<int:pk>/", views.labour, name="labour"),
+    path("labour/<int:pk>/history/", views.labour_history, name="labour_history"),
+    path(
+        "labour/<int:pk>/observations/<int:obs_pk>/correct/",
+        views.correct_observation,
+        name="correct_observation",
+    ),
     path("source/<str:kind>/<int:pk>/", views.source, name="source"),
     path("review/<int:pk>/", views.workspace, name="workspace"),
     path("review/<int:pk>/field/", views.save_field, name="save_field"),

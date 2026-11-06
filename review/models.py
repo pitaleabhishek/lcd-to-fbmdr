@@ -205,7 +205,15 @@ class Form4Field(models.Model):
         return self.key
 
 
+class ObservationQuerySet(models.QuerySet):
+    def current(self):
+        """Rows that have not been corrected; the chart and rules read these."""
+        return self.filter(superseded_by__isnull=True)
+
+
 class Observation(models.Model):
+    objects = ObservationQuerySet.as_manager()
+
     document = models.ForeignKey(SourceDocument, on_delete=models.PROTECT, related_name="observations")
     variable = models.ForeignKey(LCGVariable, on_delete=models.PROTECT, related_name="observations")
     stage = models.CharField(

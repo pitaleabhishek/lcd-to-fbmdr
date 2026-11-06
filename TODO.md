@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 82 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 87 tests passing. 96 Form 4 fields, 34 LCG variables._
 
 ## Built
 
@@ -31,12 +31,12 @@ _Last updated: 6 November 2026. 82 tests passing. 96 Form 4 fields, 34 LCG varia
 
 ## Essential, open
 
-*(top two are next)*
-
-- [ ] **LCG entry form** — one compact panel on the labour record: variable, time,
-  value, author, documented-at, stage. Append-only; late entries flagged.
-- [ ] **History screen for the labour record** — who wrote what, when, late entries,
-  supersessions. Same shape as the review history; needs the entry form first.
+- [x] **LCG entry form** — one compact panel on the labour record: variable, time,
+  value, author, documented-at; stage stamped from the chart. Append-only.
+- [x] **Corrections** — a new row superseding the old one, with a reason; the chart
+  and alert rules read only the head of the chain, the original stays in history.
+- [x] **History screen for the labour record** — who wrote what, when, late entries,
+  supersessions; filterable by item and author, paginated.
 - [ ] **Cases B, C, D** — caesarean after labour, no labour record, referred in after delivery
 - [ ] **Amendments** — approved reviews frozen; needs an attributed amendment path
 - [ ] **Conditional form** — honour `applicability` (abortion branches, transfusion units, neonatal cause)

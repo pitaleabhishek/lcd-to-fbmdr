@@ -42,7 +42,9 @@ variable 1 ── N observation
   blank, so there is no printed empty cell to store.
 - **Corrections** are a new row with `supersedes_id`. UPDATE and DELETE are
   blocked by a trigger on `observation`, `sourcedocument`, `delivery`, `death`,
-  `carecontact`.
+  `carecontact`. The chart, the rules and the alert crossings read only the head
+  of each chain (`superseded_by IS NULL`), so a corrected 150 stops firing; the
+  history screen reads every row and shows both.
 
 ## Value rules
 

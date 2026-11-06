@@ -1,0 +1,99 @@
+{% extends "review/base.html" %}
+{% block title %}{{ patient.name }} · Labour record history{% endblock %}
+{% block content %}
+<h1>{{ patient.name }} — labour record history</h1>
+<p class="muted">
+  {{ document.source_format }} · written by {{ document.author|default:"—" }}
+  {% if death %} · died {{ death.died_at|date:"d M H:i" }}{% endif %}
+</p>
+
+<div class="bar">
+  <a href="{% url 'labour' document.pk %}">Back to the chart</a>
+  {% with review=pregnancy.reviews.first %}
+    {% if review %}<a href="{% url 'workspace' review.pk %}">Open the review</a>{% endif %}
+  {% endwith %}
+  <a href="/">All cases</a>
+</div>
+
+<form method="get" class="filter-form">
+  <label>Item
+    <select name="variable">
+      <option value="">all</option>
+      {% for v in variables %}
+        <option value="{{ v.key }}"{% if filter_variable == v.key %} selected{% endif %}>{{ v.section.label }} · {{ v.label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Author
+    <input type="text" name="author" value="{{ filter_author }}" list="authors">
+    <datalist id="authors">
+      {% for a in authors %}<option value="{{ a }}">{% endfor %}
+    </datalist>
+  </label>
+  <button>Filter</button>
+  <span class="muted small">{{ total }} entr{{ total|pluralize:"y,ies" }}</span>
+</form>
+
+<table class="history">
+  <thead>
+    <tr>
+      <th>Observed</th>
+      <th>Item</th>
+      <th>Value</th>
+      <th>Author</th>
+      <th>Documented</th>
+      <th>Entered</th>
+      <th>State</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+      <tr class="{% if row.correction %}superseded{% endif %}{% if row.late %} late-row{% endif %}">
+        <td class="nowrap">
+          {{ row.obs.observed_at|date:"d M H:i" }}
+          <div class="key">{{ row.obs.get_stage_display }}</div>
+        </td>
+        <td>
+          {{ row.obs.variable.label }}
+          {% if row.obs.variable.unit %}<span class="unit">{{ row.obs.variable.unit }}</span>{% endif %}
+        </td>
+        <td><span class="value">{{ row.value|default:"—" }}</span></td>
+        <td>{{ row.obs.author|default:"—" }}</td>
+        <td class="nowrap">
+          {{ row.obs.documented_at|date:"d M H:i" }}
+          {% if row.late %}<div class="warn small">documented after death</div>{% endif %}
+        </td>
+        <td class="nowrap">
+          {{ row.obs.entered_at|date:"d M H:i" }}
+          {% if row.obs.entered_by and row.obs.entered_by != row.obs.author %}
+            <div class="key">{{ row.obs.entered_by }}</div>
+          {% endif %}
+        </td>
+        <td>
+          {% if row.correction %}
+            <span class="chip C">superseded</span>
+            <div class="small muted">corrected to {{ row.correction_value }}</div>
+          {% else %}
+            <span class="chip R">current</span>
+          {% endif %}
+          {% if row.obs.note %}<div class="small muted">{{ row.obs.note }}</div>{% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">No entries match.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if page_obj.has_other_pages %}
+  <div class="bar">
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if filter_variable %}&variable={{ filter_variable }}{% endif %}{% if filter_author %}&author={{ filter_author|urlencode }}{% endif %}">Previous</a>
+    {% endif %}
+    <span class="muted small">page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if filter_variable %}&variable={{ filter_variable }}{% endif %}{% if filter_author %}&author={{ filter_author|urlencode }}{% endif %}">Next</a>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

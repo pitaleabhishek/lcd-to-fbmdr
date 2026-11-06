@@ -192,3 +192,156 @@ def test_case_0_has_no_physiological_crossings(case_0):
     }
     hits = thresholds.crossings(case_0, None)
     assert not [h for h in hits if h["variable"] in urgent]
+
+
+def test_the_chart_offers_a_simple_entry_panel(client, case_0):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    page = client.get(f"/labour/{case_0.pk}/").content.decode()
+    assert "Add an observation" in page
+    assert 'id="obs-variable"' in page
+    assert 'name="observed_at"' in page
+    assert "History" in page
+
+
+def test_add_observation_appends_with_author_stage_and_audit(client, case_0):
+    from decimal import Decimal
+
+    from django.contrib.auth.models import User
+    from django.utils import timezone
+
+    from review.models import AuditEvent
+
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/labour/{case_0.pk}/",
+        {
+            "variable": "systolic_bp",
+            "value": "132",
+            "observed_at": "2026-10-12T22:45",
+            "documented_at": "2026-10-12T22:50",
+            "author": "Dr A. Rane",
+        },
+    )
+    assert resp.status_code == 302
+
+    obs = Observation.objects.order_by("-pk").first()
+    assert obs.variable.key == "systolic_bp"
+    assert obs.value_num == Decimal("132")
+    assert obs.unit == "mmHg"
+    assert obs.stage == "second"  # the chart reached 10 cm at 22:00
+    assert obs.author == "Dr A. Rane"
+    assert obs.entered_by == "resident"
+    assert timezone.localtime(obs.observed_at).strftime("%H:%M") == "22:45"
+    assert timezone.localtime(obs.documented_at).strftime("%H:%M") == "22:50"
+    assert AuditEvent.objects.filter(
+        action="observation_added", entity_id=str(obs.pk)
+    ).exists()
+
+
+def test_add_observation_rejects_a_value_the_chart_does_not_allow(client, case_0):
+    from django.contrib.auth.models import User
+
+    before = Observation.objects.count()
+    client.force_login(User.objects.get(username="resident"))
+    resp = client.post(
+        f"/labour/{case_0.pk}/",
+        {
+            "variable": "posture",
+            "value": "upright",
+            "observed_at": "2026-10-12T21:00",
+            "author": "Nurse S. Bhoyar",
+        },
+    )
+    assert resp.status_code == 200
+    assert "is not one of" in resp.content.decode()
+    assert Observation.objects.count() == before
+
+
+def test_correction_supersedes_without_changing_the_original(client, db):
+    from decimal import Decimal
+
+    from django.contrib.auth.models import User
+    from django.utils import timezone
+
+    from review import services, thresholds
+    from review.models import Death
+
+    call_command("seed_case_a", verbosity=0)
+    doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Sunita Devi")
+    user = User.objects.get(username="resident")
+    old = Observation.objects.get(
+        document=doc, variable__key="systolic_bp", value_num=150
+    )
+
+    client.force_login(user)
+    page = client.get(f"/labour/{doc.pk}/observations/{old.pk}/correct/")
+    assert page.status_code == 200
+    assert "The original stays in the record" in page.content.decode()
+
+    resp = client.post(
+        f"/labour/{doc.pk}/observations/{old.pk}/correct/",
+        {
+            "value": "120",
+            "documented_at": "2026-10-13T09:00",
+            "author": "Dr A. Rane",
+            "reason": "150 was a misread; the chart reads 120",
+        },
+    )
+    assert resp.status_code == 302
+
+    old.refresh_from_db()
+    new = old.superseded_by.get()
+    assert old.value_num == Decimal("150")  # original is untouched
+    assert new.supersedes_id == old.pk
+    assert new.value_num == Decimal("120")
+    assert new.stage == "second"
+    assert new.note.startswith("150 was a misread")
+    assert timezone.localtime(new.observed_at).strftime("%H:%M") == "22:30"
+    assert timezone.localtime(new.documented_at).strftime("%H:%M") == "09:00"
+
+    chart = client.get(f"/labour/{doc.pk}/").content.decode()
+    assert "120" in chart
+    assert ">150<" not in chart
+
+    hits = thresholds.crossings(doc, Death.objects.first())
+    assert not [h for h in hits if h["variable"] == "systolic_bp"]
+    assert [h for h in hits if h["variable"] == "diastolic_bp"]
+
+
+def test_history_shows_the_chain_and_filters_by_item(client, db):
+    from django.contrib.auth.models import User
+
+    from review import services
+    from review.models import LCGVariable
+
+    call_command("seed_case_a", verbosity=0)
+    doc = SourceDocument.objects.get(kind="lcg", pregnancy__patient__name="Sunita Devi")
+    user = User.objects.get(username="resident")
+    old = Observation.objects.get(
+        document=doc, variable__key="systolic_bp", value_num=150
+    )
+    services.correct_observation(
+        old,
+        value="120",
+        author="Dr A. Rane",
+        actor=user,
+        reason="chart misread",
+    )
+
+    client.force_login(user)
+    page = client.get(f"/labour/{doc.pk}/history/").content.decode()
+    assert "labour record history" in page.lower()
+    assert "superseded" in page
+    assert "corrected to 120" in page
+    assert "chart misread" in page
+    assert "documented after death" in page  # the 22:30 row was a late entry
+
+    filtered = client.get(
+        f"/labour/{doc.pk}/history/?variable=cervix"
+    ).content.decode()
+    assert "Systolic BP" not in filtered.split("<tbody>")[1]
+    assert "22:30" not in filtered.split("<tbody>")[1]
+    assert 'value="cervix" selected' in filtered
+    assert LCGVariable.objects.filter(key="cervix").exists()

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -44,6 +45,162 @@ def audit(review, actor, action: str, entity_type: str, entity_id="", payload=No
     )
 
 
+def _person(user) -> str:
+    if user is None:
+        return ""
+    return user.get_full_name() or user.get_username()
+
+
+def observation_value(variable, raw) -> dict:
+    """Turn one typed value into the column the variable declares."""
+    raw = "" if raw is None else str(raw).strip()
+    if not raw:
+        raise ValidationError(f"{variable.label}: a value is required")
+    if variable.type == "num":
+        try:
+            return {"value_num": Decimal(raw), "value_text": ""}
+        except (InvalidOperation, ValueError):
+            raise ValidationError(f"{variable.label}: enter a number")
+    if variable.type == "bool":
+        if raw not in ("0", "1", "no", "yes"):
+            raise ValidationError(f"{variable.label}: choose yes or no")
+        return {
+            "value_num": Decimal(1 if raw in ("1", "yes") else 0),
+            "value_text": "",
+        }
+    return {"value_num": None, "value_text": raw}
+
+
+def observation_display(obs: Observation) -> str:
+    if obs.variable.type in ("num", "bool"):
+        if obs.value_num is None:
+            return ""
+        num = obs.value_num
+        return str(int(num)) if num == int(num) else f"{num:g}"
+    return obs.value_text
+
+
+def stage_for(document: SourceDocument, at, *, variable=None, value_num=None) -> str:
+    """Second stage starts at full dilatation or at birth, whichever is recorded first."""
+    if at is None:
+        return "first"
+    if variable is not None and variable.key == "cervix" and value_num is not None:
+        if value_num >= 10:
+            return "second"
+    full = (
+        document.observations.current()
+        .filter(variable__key="cervix", value_num__gte=10, observed_at__lte=at)
+        .exists()
+    )
+    born = document.pregnancy.deliveries.filter(delivered_at__lte=at).exists()
+    return "second" if full or born else "first"
+
+
+@transaction.atomic
+def add_observation(
+    document: SourceDocument,
+    variable,
+    *,
+    value,
+    observed_at,
+    documented_at=None,
+    author: str = "",
+    actor=None,
+    note: str = "",
+) -> Observation:
+    """Append one chart entry. Existing rows are never edited."""
+    parts = observation_value(variable, value)
+    author = (author or "").strip() or _person(actor)
+    obs = Observation.objects.create(
+        document=document,
+        variable=variable,
+        stage=stage_for(
+            document, observed_at, variable=variable, value_num=parts["value_num"]
+        ),
+        unit=variable.unit,
+        observed_at=observed_at,
+        observed_at_precision=TimePrecision.EXACT,
+        documented_at=documented_at or observed_at,
+        entered_by=_person(actor),
+        author=author,
+        note=note,
+        **parts,
+    )
+    AuditEvent.objects.create(
+        actor=actor,
+        action="observation_added",
+        entity_type="Observation",
+        entity_id=str(obs.pk),
+        review=None,
+        payload={
+            "document_id": document.pk,
+            "variable": variable.key,
+            "value": observation_display(obs),
+            "observed_at": obs.observed_at.isoformat() if obs.observed_at else None,
+            "documented_at": obs.documented_at.isoformat() if obs.documented_at else None,
+            "author": author,
+            "note": note,
+        },
+    )
+    return obs
+
+
+@transaction.atomic
+def correct_observation(
+    old: Observation,
+    *,
+    value=None,
+    documented_at=None,
+    author: str = "",
+    actor=None,
+    reason: str = "",
+) -> Observation:
+    """Correction is a new row that supersedes the old one, never an update."""
+    if old.superseded_by.exists():
+        raise ValidationError("this entry has already been corrected")
+
+    variable = old.variable
+    if value is None:
+        parts = {"value_num": old.value_num, "value_text": old.value_text}
+    else:
+        parts = observation_value(variable, value)
+    author = (author or "").strip() or old.author or _person(actor)
+
+    new = Observation.objects.create(
+        document=old.document,
+        variable=variable,
+        stage=old.stage,
+        unit=variable.unit,
+        observed_at=old.observed_at,
+        observed_at_precision=old.observed_at_precision,
+        documented_at=documented_at or timezone.now(),
+        entered_by=_person(actor),
+        author=author,
+        author_role=old.author_role,
+        supersedes=old,
+        note=reason,
+        **parts,
+    )
+    AuditEvent.objects.create(
+        actor=actor,
+        action="observation_corrected",
+        entity_type="Observation",
+        entity_id=str(new.pk),
+        review=None,
+        payload={
+            "document_id": old.document_id,
+            "variable": variable.key,
+            "from": observation_display(old),
+            "to": observation_display(new),
+            "observed_at": old.observed_at.isoformat() if old.observed_at else None,
+            "documented_at": new.documented_at.isoformat() if new.documented_at else None,
+            "author": author,
+            "reason": reason,
+        },
+    )
+    return new
+
+
 def build_context(review: Review) -> Context:
     pregnancy = review.pregnancy
     admission = (
@@ -52,6 +209,7 @@ def build_context(review: Review) -> Context:
     )
     observations = list(
         Observation.objects.filter(document__pregnancy=pregnancy)
+        .current()
         .select_related("variable")
         .order_by("observed_at", "pk")
     )

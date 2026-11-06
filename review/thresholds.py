@@ -103,7 +103,11 @@ def crossings(document, death=None) -> list[dict]:
     out: list[dict] = []
     cervix: dict[int, list] = {}
 
-    for obs in document.observations.select_related("variable").order_by("observed_at", "pk"):
+    for obs in (
+        document.observations.current()
+        .select_related("variable")
+        .order_by("observed_at", "pk")
+    ):
         if obs.observed_at is None:
             continue
         threshold = THRESHOLDS.get(obs.variable.key)

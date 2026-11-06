@@ -16,10 +16,47 @@
   {% endfor %}
 </div>
 
+<h2>Add an observation</h2>
+<form method="post" class="obs-form" id="obs-form"
+      data-variable="{{ entry.variable }}" data-value="{{ entry.value }}">
+  {% csrf_token %}
+  {% if entry_error %}<div class="obs-error">{{ entry_error }}</div>{% endif %}
+  <label>Item
+    <select name="variable" id="obs-variable">
+      <option value="">—</option>
+      {% for group in entry_variables %}
+        <optgroup label="{{ group.label }}">
+          {% for v in group.variables %}
+            <option value="{{ v.key }}"{% if entry.variable == v.key %} selected{% endif %}>{{ v.label }}{% if v.unit %} ({{ v.unit }}){% endif %}</option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Value
+    <span id="obs-value-slot"><input type="text" name="value" id="obs-value" value="{{ entry.value }}"></span>
+  </label>
+  <label>Observed
+    <input type="datetime-local" name="observed_at" value="{{ entry.observed_at }}" required>
+  </label>
+  <label>Documented
+    <input type="datetime-local" name="documented_at" value="{{ entry.documented_at }}">
+  </label>
+  <label>Author
+    <input type="text" name="author" value="{{ entry.author }}" placeholder="who wrote it">
+  </label>
+  <button class="primary">Add</button>
+</form>
+<p class="legend">
+  Documented after Observed is a late entry, and is flagged on the chart.
+  The stage is stamped from the chart: second stage begins at full dilatation or birth.
+</p>
+
 <div class="bar">
   {% with review=pregnancy.reviews.first %}
     {% if review %}<a href="{% url 'workspace' review.pk %}">Open the review</a>{% endif %}
   {% endwith %}
+  <a href="{% url 'labour_history' document.pk %}">History</a>
   <a href="/">All cases</a>
 </div>
 
@@ -54,10 +91,11 @@
           {% for cell in row.cells %}
             <td>
               {% if cell %}
-                <span class="cell {% if cell.late %}late{% endif %}"
-                      title="{{ cell.author }} · observed {{ cell.observed }} · documented {{ cell.documented }}{% if cell.late %} · late entry{% endif %}">
+                <a class="cell {% if cell.late %}late{% endif %}"
+                   href="{% url 'correct_observation' document.pk cell.pk %}"
+                   title="{{ cell.author }} · observed {{ cell.observed }} · documented {{ cell.documented }}{% if cell.late %} · late entry{% endif %} · click to correct">
                   {{ cell.value }}{% if cell.late %}<sup>late</sup>{% endif %}
-                </span>
+                </a>
               {% else %}
                 <span class="empty">·</span>
               {% endif %}
@@ -69,5 +107,69 @@
   </tbody>
 </table>
 </div>
-<p class="muted small">Hover a value for its author and timestamps. “late” means documented after the time of death.</p>
+<p class="muted small">Hover a value for its author and timestamps. Click a value to correct it. “late” means documented after the time of death.</p>
+
+{{ variable_specs|json_script:"obs-specs" }}
+<script>
+(function () {
+  var specs = JSON.parse(document.getElementById('obs-specs').textContent);
+  var form = document.getElementById('obs-form');
+  var variable = document.getElementById('obs-variable');
+  var slot = document.getElementById('obs-value-slot');
+
+  function control(spec, preset) {
+    var el;
+    if (spec.type === 'enum') {
+      el = document.createElement('select');
+      var blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = '—';
+      el.appendChild(blank);
+      (spec.options || []).forEach(function (o) {
+        var opt = document.createElement('option');
+        opt.value = o;
+        opt.textContent = o.replace(/_/g, ' ');
+        el.appendChild(opt);
+      });
+    } else if (spec.type === 'bool') {
+      el = document.createElement('select');
+      [['', '—'], ['1', 'yes'], ['0', 'no']].forEach(function (pair) {
+        var opt = document.createElement('option');
+        opt.value = pair[0];
+        opt.textContent = pair[1];
+        el.appendChild(opt);
+      });
+    } else {
+      el = document.createElement('input');
+      el.type = spec.type === 'num' ? 'number' : 'text';
+      if (spec.type === 'num') el.step = 'any';
+    }
+    el.name = 'value';
+    el.id = 'obs-value';
+    if (preset) el.value = preset;
+    slot.innerHTML = '';
+    slot.appendChild(el);
+    var unit = spec.unit ? '(' + spec.unit + ')' : '';
+    var current = document.getElementById('obs-unit');
+    if (!current) {
+      current = document.createElement('span');
+      current.id = 'obs-unit';
+      current.className = 'obs-unit';
+      slot.parentNode.appendChild(current);
+    }
+    current.textContent = unit;
+  }
+
+  function refresh(preset) {
+    if (!variable.value) return;
+    control(specs[variable.value] || {type: 'text'}, preset || '');
+  }
+
+  variable.addEventListener('change', function () { refresh(''); });
+  if (form.dataset.variable) {
+    variable.value = form.dataset.variable;
+    refresh(form.dataset.value);
+  }
+})();
+</script>
 {% endblock %}

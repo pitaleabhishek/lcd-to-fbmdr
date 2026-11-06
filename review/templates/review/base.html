@@ -167,6 +167,40 @@
   .chart .empty { color:#c4ccd3; }
   .chart .late { color:var(--warn); font-weight:700; }
   .chart .late sup { font-size:9px; margin-left:2px; }
+  a.cell { color:inherit; text-decoration:none; border-bottom:1px dotted #c4ccd3; }
+  a.cell:hover { color:var(--accent); border-bottom-color:var(--accent); }
+  a.cell.late { color:var(--warn); }
+  .obs-form, .filter-form { display:flex; gap:10px; align-items:flex-end;
+                flex-wrap:wrap; background:#fff; border:1px solid var(--line);
+                border-radius:6px; padding:8px 10px; }
+  .obs-form label, .filter-form label { display:flex; flex-direction:column; gap:2px;
+                font-size:10.5px; text-transform:uppercase; letter-spacing:.04em;
+                color:var(--muted); }
+  .obs-form input, .obs-form select, .filter-form input, .filter-form select {
+                font:inherit; font-size:13px; padding:3px 5px; border:1px solid var(--line);
+                border-radius:4px; background:#fff; color:var(--ink);
+                text-transform:none; letter-spacing:0; }
+  .obs-form input[type=text], .obs-form input[type=number],
+  .obs-form #obs-value-slot input, .obs-form #obs-value-slot select { width:140px; }
+  .obs-form input[type=datetime-local] { width:190px; }
+  #obs-value-slot { display:inline-block; }
+  .obs-unit { font-size:11px; color:var(--muted); margin-left:4px; align-self:center; }
+  .obs-error { flex-basis:100%; background:#fdecec; border:1px solid #e8b4b4;
+               color:#8a1f1f; padding:5px 8px; border-radius:4px; font-size:12px; }
+  .filter-form { margin:12px 0; }
+  table.history tr.superseded td { color:var(--muted); background:#fbfcfd; }
+  table.history tr.superseded .value { text-decoration:line-through; }
+  table.history tr.late-row td:first-child { box-shadow:inset 3px 0 0 var(--warn); }
+  .nowrap { white-space:nowrap; }
+  .correction-form { background:#fff; border:1px solid var(--line); border-radius:6px;
+                     padding:12px; max-width:680px; }
+  .correction-form label { display:block; margin-bottom:10px; font-size:10.5px;
+                     text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .correction-form input, .correction-form select { display:block; margin-top:3px;
+                     font:inherit; font-size:13px; padding:4px 6px; border:1px solid var(--line);
+                     border-radius:4px; width:100%; max-width:420px;
+                     text-transform:none; letter-spacing:0; }
+  .correction-form label.wide input { max-width:560px; }
   .small { font-size:12px; }
   .review-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
   .head-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
