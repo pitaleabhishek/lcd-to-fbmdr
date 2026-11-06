@@ -4,7 +4,8 @@ Reuse labour documentation (WHO Labour Care Guide) in a Facility-Based Maternal
 Death Review (Form 4), with provenance: nothing re-keyed, nothing claimed that
 was not recorded.
 
-Design: [`docs/design.md`](docs/design.md). To-do: [`TODO.md`](TODO.md).
+Agent handoff: [`AGENTS.md`](AGENTS.md). Design: [`docs/design.md`](docs/design.md).
+To-do: [`TODO.md`](TODO.md).
 Dependencies: [`docs/dependencies.md`](docs/dependencies.md). Evidence map:
 [`docs/evidence-map.md`](docs/evidence-map.md). UI principles:
 [`docs/ui.md`](docs/ui.md). LCG storage model:
@@ -92,26 +93,20 @@ docker compose exec web python manage.py build_inventory
 Writes `docs/inventory.csv` and `docs/inventory.md`. The inventory is an output
 of the registry, never hand-maintained.
 
-## What exists (day 1)
+## Current state
 
-- All domain models, migrations, and Postgres triggers that make recorded facts
-  append-only (`Observation`, `SourceDocument`, `Delivery`, `Death`, `CareContact`).
-- Form 4 registry: 14 sections, 99 fields, three block schemas (referral,
-  diagnosis, interventions). Unknown keys and off-form enum/multi answers are
-  rejected by a Postgres trigger; block rows are checked in `ReviewItem.clean()`.
-- LCG registry: 7 sections, 34 variables, ordered and typed; observations FK to a
-  variable and carry `stage` on the row. `lcg_chart` and `lcg_cells` views render
-  the grid.
-- Case 0: a complete, normal labour — every grid variable across ten first-stage
-  columns and two second-stage columns, 334 observations, no death.
-- 18 rules producing proposals with frozen inputs; `NotComputable` keeps
-  missing / unknown / not-applicable apart.
-- Case A seeded: charted labour, an alert crossing, one missed observation, a
-  late entry (documented after death), a PPH death.
-- Accept / reject / correct, submit, approve, reproducible output from a version,
-  and a JSON payload that includes gaps rather than omitting them.
-- Inventory reconciled against the extracted Form 4 text: 53 of 53 labels found;
-  2 fields (3.8%) sourced from the LCG.
+Read [`AGENTS.md`](AGENTS.md) for the full agent handoff, current behavior and
+remaining work. Read [`TODO.md`](TODO.md) for the authoritative task list.
 
-Not built yet: blocks (referral, neonatal, transfusion, interventions matrix),
-the amendment workspace, HTMX partials, and the remaining ~100 fields.
+- Form 4: 14 sections, **99 fields**, three block schemas.
+- LCG: 7 sections, 34 variables, Postgres-validated observations.
+- Cases 0 and A seeded; review creation works with or without a labour record.
+- Proposals, provenance drawer, derived calculations, accept/reject/correct.
+- Conditional Form 4 (`c2`), corrections with supersession and history.
+- Pre-submission checks (`k3`), including Not known and N/A distinctions.
+- Submit → return with per-field comments → resubmit → approve; frozen versions.
+- HTML/JSON output from a version.
+
+Not yet complete: amendments, output provenance appendix, missing-observation
+marker, security hardening/scoping, overlap write-up and demo script. See
+`TODO.md` and `AGENTS.md`; do not treat the limitations as solved.
