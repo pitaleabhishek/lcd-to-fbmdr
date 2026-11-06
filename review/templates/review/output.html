@@ -7,6 +7,14 @@
   registry {{ version.registry_version }}, template {{ version.output_template_version }},
   hash <span class="key">{{ version.payload_hash|slice:":12" }}</span>.
 </p>
+<p class="muted">
+  Source:
+  {% if output_source_id %}
+    <a href="{% url 'labour' output_source_id %}">labour record</a>
+  {% else %}
+    no labour record
+  {% endif %}
+</p>
 <div class="bar">
   <a href="{% url 'workspace' review.pk %}">Back to review</a>
   <a href="?format=json">JSON</a>

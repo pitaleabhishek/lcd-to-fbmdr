@@ -54,7 +54,13 @@
 
 <div class="bar">
   {% with review=pregnancy.reviews.first %}
-    {% if review %}<a href="{% url 'workspace' review.pk %}">Open the review</a>{% endif %}
+    {% if review %}
+      <a href="{% url 'workspace' review.pk %}">Open the review</a>
+    {% else %}
+      <form method="post" action="{% url 'start_review' document.pk %}" class="inline">{% csrf_token %}
+        <button class="primary">Start a review</button>
+      </form>
+    {% endif %}
   {% endwith %}
   <a href="{% url 'labour_history' document.pk %}">History</a>
   <a href="/">All cases</a>

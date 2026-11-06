@@ -605,12 +605,19 @@ def canonical_payload(review: Review) -> dict:
             "applies": seen.applies,
             "condition_reason": seen.reason,
         }
+    source = review.source_document
     return {
         "form": "FBMDR-2017",
         "review": review.pk,
         "registry_version": "r1",
         "template": "f4-2017@1",
         "conditions_version": conditions.CONDITIONS_VERSION,
+        "source_document_id": review.source_document_id,
+        "source": {
+            "document_id": review.source_document_id,
+            "kind": source.kind if source else None,
+            "format": source.source_format if source else None,
+        },
         "generated_at": timezone.now().isoformat(),
         "fields": fields,
     }

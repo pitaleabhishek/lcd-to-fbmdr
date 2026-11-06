@@ -2,26 +2,35 @@
 {% block title %}Reviews{% endblock %}
 {% block content %}
 <h1>Death reviews</h1>
-<p class="muted">Each review is linked to a pregnancy and a labour record. Nothing is re-keyed.</p>
+<p class="muted">Each review is linked to a woman, with or without a labour record. Nothing is re-keyed.</p>
+
+<div class="bar">
+  <a class="button primary-link" href="{% url 'new_review' %}">Start a review</a>
+</div>
+
 <table>
-  <thead><tr><th>Patient</th><th>FBMDR No.</th><th>Status</th><th>Version</th><th></th></tr></thead>
+  <thead><tr><th>Patient</th><th>Source</th><th>FBMDR No.</th><th>Status</th><th>Version</th><th></th></tr></thead>
   <tbody>
   {% for r in reviews %}
     <tr>
       <td><b>{{ r.pregnancy.patient.name }}</b><div class="muted">{{ r.reporting_facility.name }}</div></td>
+      <td>
+        {% if r.source_document %}
+          <a href="{% url 'labour' r.source_document.pk %}">Labour record</a>
+        {% else %}
+          <span class="muted">No labour record</span>
+        {% endif %}
+      </td>
       <td>{{ r.fbmdr_no|default:"—" }}</td>
       <td>{{ r.get_status_display }}</td>
       <td>{{ r.current_version }}</td>
       <td>
         <a href="{% url 'workspace' r.pk %}">Open review</a>
-        {% with doc=r.pregnancy.documents.first %}
-          {% if doc %} · <a href="{% url 'labour' doc.pk %}">Labour record</a>{% endif %}
-        {% endwith %}
         {% if r.current_version %} · <a href="{% url 'output' r.pk %}">Output</a>{% endif %}
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="5" class="muted">No reviews yet. Run <span class="key">python manage.py seed_case_a</span>.</td></tr>
+    <tr><td colspan="6" class="muted">No reviews yet. <a href="{% url 'new_review' %}">Start one</a>.</td></tr>
   {% endfor %}
   </tbody>
 </table>

@@ -53,7 +53,7 @@ Intervention(id, admission, phase, kind, at, note)
 Death(id, pregnancy, admission?, died_at?, time_precision, place, brought_dead,
           certified_by, supersedes_id)
 
-Review(id, pregnancy, reporting_facility, reporting_admission?, status,
+Review(id, pregnancy, source_document?, reporting_facility, reporting_admission?, status,
           current_version, edit_revision, created_by, assigned_to?, created_at,
           submitted_by, submitted_at, returned_by, returned_at, return_comment,
           approved_by, approved_at, deadline_at?)

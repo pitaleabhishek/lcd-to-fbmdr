@@ -201,7 +201,7 @@ class Command(BaseCommand):
             resident.save()
         review = Review.objects.create(
             pregnancy=pregnancy, reporting_facility=facility,
-            reporting_admission=admission, fbmdr_no="0001",
+            reporting_admission=admission, source_document=lcg, fbmdr_no="0001",
             created_by=resident, assigned_to=resident,
         )
         proposals = services.reevaluate(review, resident)

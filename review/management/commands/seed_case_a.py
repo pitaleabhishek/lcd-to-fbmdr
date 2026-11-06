@@ -166,6 +166,7 @@ class Command(BaseCommand):
             pregnancy=pregnancy,
             reporting_facility=facility,
             reporting_admission=admission,
+            source_document=lcg,
             fbmdr_no="0007",
             created_by=resident,
             assigned_to=resident,

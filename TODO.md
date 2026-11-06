@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 105 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 114 tests passing. 96 Form 4 fields, 34 LCG variables._
 
 ## Built
 
@@ -29,6 +29,7 @@ _Last updated: 6 November 2026. 105 tests passing. 96 Form 4 fields, 34 LCG vari
 - [x] Dependency register (`docs/dependencies.md`)
 - [x] Overlap inventory generated and reconciled to the PDF (96/96 labels)
 - [x] Conditional Form 4: 2 whole-section gates and 30 field rules (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
+- [x] Review creation: one click from a labour record, or a new review with no chart; `Review.source_document` is explicit, the index uses it, and a no-LCG review says so plainly
 
 ## Essential, open
 

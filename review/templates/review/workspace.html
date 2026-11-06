@@ -5,7 +5,14 @@
 <div class="review-head">
   <div>
     <h1>{{ review.pregnancy.patient.name }}</h1>
-    <p class="muted">{{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }}</p>
+    <p class="muted">
+      {{ review.reporting_facility.name }} · FBMDR {{ review.fbmdr_no|default:"—" }}
+      {% if labour_document %}
+        · <a href="{% url 'labour' labour_document.pk %}">Labour record</a>
+      {% else %}
+        · <span class="warn">No labour record</span>
+      {% endif %}
+    </p>
     <div class="statusline">
       <span class="statusbig {{ review.status }}">{{ review.get_status_display }}</span>
       {% if review.submitted_at %}
@@ -114,6 +121,14 @@
     {% else %}
       This review is {{ review.get_status_display|lower }}.
     {% endif %}
+  </div>
+{% endif %}
+
+{% if not has_labour_record %}
+  <div class="statebox">
+    <b>No labour record.</b> This review is being completed from the death record
+    and clinical judgement. No values are proposed from a chart, and no alert
+    evidence is available.
   </div>
 {% endif %}
 

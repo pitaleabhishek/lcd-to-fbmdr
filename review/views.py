@@ -15,12 +15,17 @@ from django.views.decorators.http import require_http_methods
 from . import conditions, services
 from .models import (
     AuditEvent,
+    Death,
+    Facility,
+    Patient,
+    Pregnancy,
     Proposal,
     ProposalDecision,
     Review,
     ReviewItem,
     ReviewVersion,
     SourceDocument,
+    TimePrecision,
 )
 from .registry import CATEGORIES, registry
 from .evidence import EVIDENCE
@@ -78,6 +83,195 @@ def index(request):
         .order_by("-created_at")
     )
     return render(request, "review/index.html", {"reviews": reviews, "is_fno": is_fno(request.user)})
+
+
+def _default_facility(pregnancy):
+    admission = pregnancy.admissions.order_by("-admitted_at").first()
+    if admission is not None:
+        return admission.facility, admission
+    delivery = pregnancy.deliveries.order_by("-delivered_at").first()
+    if delivery is not None and delivery.facility_id:
+        return delivery.facility, None
+    return None, None
+
+
+def _create_review(request, pregnancy, facility, source, admission, fbmdr_no=""):
+    review = Review.objects.create(
+        pregnancy=pregnancy,
+        reporting_facility=facility,
+        reporting_admission=admission,
+        source_document=source,
+        fbmdr_no=(fbmdr_no or "").strip(),
+        created_by=request.user,
+        assigned_to=request.user,
+    )
+    services.audit(
+        review,
+        request.user,
+        "review_created",
+        "Review",
+        review.pk,
+        {
+            "source_document_id": source.pk if source else None,
+            "pregnancy_id": pregnancy.pk,
+        },
+    )
+    try:
+        services.reevaluate(review, request.user)
+    except ValidationError:
+        pass
+    return review
+
+
+@login_required
+@require_http_methods(["POST"])
+def start_review(request, pk: int):
+    """Start the review from this labour record, in one click."""
+    doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    existing = (
+        Review.objects.filter(pregnancy=doc.pregnancy).order_by("-created_at").first()
+    )
+    if existing is not None:
+        messages.info(request, "A review already exists for this woman")
+        return redirect("workspace", pk=existing.pk)
+
+    facility, admission = _default_facility(doc.pregnancy)
+    if doc.admission_id:
+        facility, admission = doc.admission.facility, doc.admission
+    if facility is None:
+        messages.error(request, "No facility is recorded for this labour; add one first")
+        return redirect("labour", pk=doc.pk)
+
+    review = _create_review(request, doc.pregnancy, facility, doc, admission)
+    messages.success(request, "Review started from the labour record")
+    return redirect("workspace", pk=review.pk)
+
+
+@login_required
+def new_review(request):
+    """Start a review with or without a labour record."""
+    error = ""
+    selected_pregnancy = request.GET.get("pregnancy", "")
+    selected_facility = request.GET.get("facility", "")
+    fbmdr_no = ""
+    new_name = ""
+    new_age = ""
+    new_died_at = _local_input(timezone.now())
+
+    if request.method == "POST" and request.POST.get("mode") == "no_record":
+        new_name = request.POST.get("new_name", "").strip()
+        new_age = request.POST.get("new_age", "").strip()
+        new_died_at = request.POST.get("new_died_at", "")
+        selected_facility = request.POST.get("facility", "")
+        fbmdr_no = request.POST.get("fbmdr_no", "")
+        try:
+            if not new_name:
+                raise ValidationError("enter the woman's name")
+            facility = Facility.objects.get(pk=selected_facility)
+            died_at = _parse_dt(new_died_at)
+            if died_at is None:
+                raise ValidationError("pick the date and time of death")
+            if timezone.is_naive(died_at):
+                died_at = timezone.make_aware(
+                    died_at, timezone.get_current_timezone()
+                )
+            age = int(new_age) if new_age else None
+            if age is not None and not 0 < age < 120:
+                raise ValidationError("enter an age between 1 and 119")
+        except (Facility.DoesNotExist, ValueError, TypeError, ValidationError) as exc:
+            if isinstance(exc, ValidationError):
+                error = "; ".join(exc.messages)
+            else:
+                error = "choose the reporting facility"
+        else:
+            patient = Patient.objects.create(name=new_name, age=age)
+            pregnancy = Pregnancy.objects.create(
+                patient=patient, outcome="", outcome_at=died_at
+            )
+            Death.objects.create(
+                pregnancy=pregnancy,
+                died_at=died_at,
+                time_precision=TimePrecision.EXACT,
+            )
+            review = _create_review(
+                request, pregnancy, facility, None, None, fbmdr_no
+            )
+            messages.success(request, "Review started without a labour record")
+            return redirect("workspace", pk=review.pk)
+
+    if request.method == "POST" and request.POST.get("mode") != "no_record":
+        selected_pregnancy = request.POST.get("pregnancy", "")
+        selected_facility = request.POST.get("facility", "")
+        fbmdr_no = request.POST.get("fbmdr_no", "")
+        try:
+            pregnancy = Pregnancy.objects.get(pk=selected_pregnancy)
+            facility = Facility.objects.get(pk=selected_facility)
+        except (Pregnancy.DoesNotExist, Facility.DoesNotExist, ValueError, TypeError):
+            error = "Choose the woman and the reporting facility"
+        else:
+            existing = (
+                Review.objects.filter(pregnancy=pregnancy)
+                .order_by("-created_at")
+                .first()
+            )
+            if existing is not None:
+                messages.info(request, "A review already exists for this woman")
+                return redirect("workspace", pk=existing.pk)
+
+            source = (
+                SourceDocument.objects.filter(
+                    pregnancy=pregnancy, kind=SourceDocument.Kind.LCG
+                )
+                .order_by("id")
+                .first()
+            )
+            _, admission = _default_facility(pregnancy)
+            review = _create_review(
+                request, pregnancy, facility, source, admission, fbmdr_no
+            )
+            messages.success(
+                request,
+                "Review started from the labour record"
+                if source
+                else "Review started without a labour record",
+            )
+            return redirect("workspace", pk=review.pk)
+
+    pregnancies = []
+    for pregnancy in (
+        Pregnancy.objects.select_related("patient")
+        .prefetch_related("documents", "deaths", "reviews")
+        .order_by("patient__name", "pk")
+    ):
+        doc = next(
+            (d for d in pregnancy.documents.all() if d.kind == SourceDocument.Kind.LCG),
+            None,
+        )
+        death = pregnancy.deaths.order_by("-died_at").first()
+        pregnancies.append(
+            {
+                "pregnancy": pregnancy,
+                "document": doc,
+                "death": death,
+                "has_review": bool(pregnancy.reviews.all()),
+            }
+        )
+
+    return render(
+        request,
+        "review/new_review.html",
+        {
+            "pregnancies": pregnancies,
+            "facilities": Facility.objects.order_by("name"),
+            "error": error,
+            "selected_pregnancy": str(selected_pregnancy),
+            "selected_facility": str(selected_facility),
+            "fbmdr_no": fbmdr_no,
+            "new_name": new_name,
+            "new_age": new_age,
+            "new_died_at": new_died_at,
+        },
+    )
 
 
 def _num(value) -> str:
@@ -435,11 +629,15 @@ def workspace(request, pk: int):
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
     death = review.pregnancy.deaths.order_by("-died_at").first()
-    lcg = (
-        SourceDocument.objects.filter(
-            pregnancy=review.pregnancy, kind=SourceDocument.Kind.LCG
-        ).first()
-    )
+    lcg = review.source_document
+    if lcg is None:
+        # Legacy reviews created before the explicit link: fall back to the
+        # woman's only labour record, if there is one.
+        lcg = (
+            SourceDocument.objects.filter(
+                pregnancy=review.pregnancy, kind=SourceDocument.Kind.LCG
+            ).first()
+        )
     crossing_list = thresholds.crossings(lcg, death) if lcg else []
     crossings_by_var: dict[str, list] = {}
     for c in crossing_list:
@@ -666,6 +864,8 @@ def workspace(request, pk: int):
                 )
             ],
             "is_fno": is_fno(request.user),
+            "has_labour_record": bool(lcg),
+            "labour_document": lcg,
             "open_return": open_return,
             "submission_note": submission_note,
             "overall_value": overall_value,
@@ -1397,6 +1597,10 @@ def output(request, pk: int):
         return JsonResponse(version.payload_json)
 
     fields = version.payload_json.get("fields", {})
+    frozen_source = (version.payload_json.get("source") or {}).get("document_id")
+    source_id = (
+        frozen_source if "source" in version.payload_json else review.source_document_id
+    )
     sections = []
     hidden_rows = []
     for section, heading, fs in registry.by_section():
@@ -1433,6 +1637,7 @@ def output(request, pk: int):
             "version": version,
             "sections": sections,
             "hidden_rows": hidden_rows,
+            "output_source_id": source_id,
             "categories": CATEGORIES,
             "fields_payload": fields,
         },

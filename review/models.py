@@ -396,6 +396,14 @@ class Review(models.Model):
     reporting_admission = models.ForeignKey(
         Admission, on_delete=models.PROTECT, null=True, blank=True, related_name="reviews"
     )
+    source_document = models.ForeignKey(
+        "SourceDocument",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reviews",
+        help_text="The labour record this review reads, if any.",
+    )
     fbmdr_no = models.CharField(max_length=30, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
     current_version = models.PositiveIntegerField(default=0)
