@@ -59,10 +59,14 @@ class Field:
     options: tuple[str, ...] = field(default_factory=tuple)
     block_schema: dict | None = None
     widget: str = ""  # presentation only: month | year
+    option_labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def slug(self) -> str:
         return self.key.split(".", 2)[2]
+
+    def label_for(self, option: str) -> str:
+        return self.option_labels.get(option, option)
 
 
 class Registry:
@@ -271,6 +275,10 @@ F("risks", "antenatal_care", "3.e Risk factor identified", "multi", 2,
            "short_stature", "pih_pe", "previous_cs", "multiple_pregnancy",
            "grand_multi", "abnormal_presentation", "big_baby", "anaemia",
            "diabetes_gdm", "medical_conditions", "others"))
+F("risks_medical", "antenatal_care", "3.e Medical conditions, specify", "text", 2,
+  applicability="medical_conditions")
+F("risks_others", "antenatal_care", "3.e Others, specify", "text", 2,
+  applicability="others")
 
 # --- Delivery, puerperium, neonatal (17) ------------------------------------
 F("labour_pains", "delivery", "4.a Did she have labour pains", "enum", 2,
@@ -294,16 +302,28 @@ F("mode", "delivery", "4.d Mode of delivery", "enum", 3,
            "caesarean_emergency", "laparotomy", "ectopic"))
 F("mode_indication", "delivery", "4.d Indication (CS / instrumental)", "text", 3)
 F("anaesthesia", "delivery", "4.e Anaesthesia", "multi", 3,
-  options=("general", "epidural_spinal", "local"))
+  options=("general", "epidural_spinal", "local", "none"),
+  option_labels={
+      "general": "General anaesthesia",
+      "epidural_spinal": "Reg - Epidural / Spinal",
+      "local": "Local",
+      "none": "No anaesthesia",
+  })
 F("anaesthesia_reaction", "delivery", "4.e Any adverse reaction", "text", 3)
 F("phase", "delivery", "4.f Phase of labour at complication", "enum", 2,
   options=("first", "second", "third", "post_birth"))
+F("post_birth_complication_time", "delivery", "4.f Post-birth complication interval", "enum", 2,
+  options=("within_6h", "over_6_to_24h", "over_24h"),
+  option_labels={
+      "within_6h": "Within ≤ 6 hrs. of birth",
+      "over_6_to_24h": "> 6 - ≤ 24 hrs. of birth",
+      "over_24h": "> 24 hrs. after birth",
+  },
+  applicability="post_birth")
 F("neonatal_outcome", "delivery", "4.g Neonatal outcome", "enum", 2,
   handling="propose", source="neonate", rule="f4.delivery.neonatal.from_neonate",
   options=("alive", "fresh_still_birth", "macerated_still_birth", "neonatal_death"))
-F("neonatal_death_time", "delivery", "4.h Time of neonatal death", "enum", 2,
-  options=("lt_6h", "6_to_24h", "gt_24h"), applicability="neonatal_death")
-F("neonatal_cause", "delivery", "4.h Probable cause of neonatal death", "multi", 2,
+F("neonatal_cause", "delivery", "4.h Probable cause of death if baby died", "multi", 2,
   options=("birth_asphyxia", "respiratory_distress", "aspiration_mas", "sepsis",
            "congenital_anomalies", "preterm", "others"))
 F("neonatal_cause_other", "delivery", "4.h Others, specify", "text", 2)
@@ -312,6 +332,8 @@ F("postnatal", "delivery", "4.i Postnatal period", "enum", 2,
 F("postnatal_cause", "delivery", "4.i Probable cause if eventful", "multi", 2,
   options=("pph", "pe_eclampsia", "cva_pulmonary_embolism", "sepsis_ards",
            "anaemia", "post_op_complication", "medical_conditions", "others"))
+F("postnatal_cause_medical", "delivery", "4.i Medical conditions, specify", "text", 2,
+  applicability="medical_conditions")
 F("postnatal_cause_other", "delivery", "4.i Others, specify", "text", 2)
 
 # --- Interventions (5) -------------------------------------------------------
@@ -379,6 +401,26 @@ F("designation", "summary", "Designation", "text", 1)
 F("institution_address", "summary", "Address of the Institution", "text", 1)
 F("signed_on", "summary", "Stamp & Date", "date", 1,
   precision_note="one date for the sign-off block")
+
+
+#: Fields retired from the active form. Their old answers are kept and shown as
+#: legacy data; they are never mapped onto a new question.
+LEGACY_FIELDS = {
+    "f4.delivery.neonatal_death_time": Field(
+        key="f4.delivery.neonatal_death_time",
+        section="delivery",
+        label_printed="4.h Time of neonatal death (previous version)",
+        type="enum",
+        category=2,
+        options=("lt_6h", "6_to_24h", "gt_24h"),
+        option_labels={
+            "lt_6h": "Within 6 hrs. of birth",
+            "6_to_24h": "> 6 - 24 hrs. of birth",
+            "gt_24h": "> 24 hrs. after birth",
+        },
+        applicability="neonatal_death",
+    ),
+}
 
 
 KEY_RE = re.compile(r"^f4\.(?P<section>[a-z_]+)\.(?P<slug>[a-z][a-z0-9_]*)$")

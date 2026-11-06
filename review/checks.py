@@ -19,7 +19,7 @@ from . import conditions
 from .models import Review, ReviewItem, SourceDocument, TimePrecision
 from .registry import registry
 
-CHECK_VERSION = "k1"
+CHECK_VERSION = "k2"
 ERROR = "error"
 WARNING = "warning"
 
@@ -221,28 +221,13 @@ FOLLOWUPS: dict[str, tuple[str, str, str]] = {
     ),
     "f4.antenatal_care.risks": (
         WARNING,
-        "ANC was received; the risk factor identified is missing.",
+        "She was told about a disorder or complication; the risk factor identified is missing.",
         "Answer 3.e, or mark it not applicable.",
-    ),
-    "f4.antenatal_care.facility_other": (
-        ERROR,
-        "The ANC facility is 'other'; type the facility.",
-        "Complete 3.b Other facility, specify.",
-    ),
-    "f4.antenatal_care.provider_other": (
-        ERROR,
-        "The ANC provider is 'other specialist'; type who.",
-        "Complete 3.c Other specialist, specify.",
     ),
     "f4.condition.places": (
         WARNING,
         "She was referred from outside; the number of places visited is missing.",
         "Enter 3.a.i.",
-    ),
-    "f4.condition.referral": (
-        WARNING,
-        "She was referred from outside; the referral table is empty.",
-        "Fill 3.b, or mark the item not applicable with a reason.",
     ),
     "f4.delivery.mode": (
         WARNING,
@@ -254,40 +239,25 @@ FOLLOWUPS: dict[str, tuple[str, str, str]] = {
         "Caesarean or instrumental delivery is recorded; the indication is missing.",
         "Complete 4.d Indication.",
     ),
-    "f4.delivery.complications_other": (
-        ERROR,
-        "Complications include 'others'; specify them.",
-        "Complete 4.c Others, specify.",
-    ),
     "f4.delivery.neonatal_outcome": (
         WARNING,
         "The neonatal outcome is missing.",
         "Choose 4.g Neonatal outcome.",
     ),
-    "f4.delivery.neonatal_death_time": (
+    "f4.delivery.post_birth_complication_time": (
         ERROR,
-        "The baby died; the time of neonatal death is missing.",
-        "Choose 4.h Time of neonatal death.",
+        "The complication is recorded as post-birth; say whether it developed within 6 hours, 6-24 hours, or after 24 hours.",
+        "Choose the post-birth interval.",
     ),
     "f4.delivery.neonatal_cause": (
         ERROR,
         "The baby died; the probable cause is missing.",
-        "Complete 4.h Probable cause of neonatal death.",
-    ),
-    "f4.delivery.neonatal_cause_other": (
-        ERROR,
-        "The neonatal cause includes 'others'; specify it.",
-        "Complete 4.h Others, specify.",
+        "Complete 4.h Probable cause of death if baby died.",
     ),
     "f4.delivery.postnatal_cause": (
         ERROR,
         "The postnatal period was eventful; the probable cause is missing.",
         "Complete 4.i Probable cause if eventful.",
-    ),
-    "f4.delivery.postnatal_cause_other": (
-        ERROR,
-        "The postnatal cause includes 'others'; specify it.",
-        "Complete 4.i Others, specify.",
     ),
     "f4.interventions.transfusion_units": (
         ERROR,
@@ -303,6 +273,52 @@ FOLLOWUPS: dict[str, tuple[str, str, str]] = {
         ERROR,
         "Autopsy was performed; the final diagnosis is missing.",
         "Complete 9. Autopsy final diagnosis.",
+    ),
+}
+
+#: Specification fields are required when their own option is selected, even if
+#: an upstream controller is still unknown. The selected option is the fact that
+#: establishes the requirement.
+VISIBLE_FOLLOWUPS: dict[str, tuple[str, str, str]] = {
+    "f4.antenatal_care.facility_other": (
+        ERROR,
+        "The ANC facility is 'other'; type the facility.",
+        "Complete 3.b Other facility, specify.",
+    ),
+    "f4.antenatal_care.provider_other": (
+        ERROR,
+        "The ANC provider is 'other specialist'; type who.",
+        "Complete 3.c Other specialist, specify.",
+    ),
+    "f4.antenatal_care.risks_medical": (
+        ERROR,
+        "Medical conditions are selected as a risk; specify them.",
+        "Complete 3.e Medical conditions, specify.",
+    ),
+    "f4.antenatal_care.risks_others": (
+        ERROR,
+        "Others is selected as a risk; specify it.",
+        "Complete 3.e Others, specify.",
+    ),
+    "f4.delivery.complications_other": (
+        ERROR,
+        "Complications include 'others'; specify them.",
+        "Complete 4.c Others, specify.",
+    ),
+    "f4.delivery.neonatal_cause_other": (
+        ERROR,
+        "The baby's cause includes 'others'; specify it.",
+        "Complete 4.h Others, specify.",
+    ),
+    "f4.delivery.postnatal_cause_medical": (
+        ERROR,
+        "Medical conditions are selected as a postnatal cause; specify them.",
+        "Complete 4.i Medical conditions, specify.",
+    ),
+    "f4.delivery.postnatal_cause_other": (
+        ERROR,
+        "The postnatal cause includes 'others'; specify it.",
+        "Complete 4.i Others, specify.",
     ),
 }
 
@@ -332,6 +348,41 @@ def _followups(ctx: CheckContext) -> list[Issue]:
         if ctx.resolved(key):
             continue
         out.append(_issue(ctx, f"missing:{key}", severity, key, message, fix))
+    for key, (severity, message, fix) in VISIBLE_FOLLOWUPS.items():
+        if (
+            ctx.visible(key)
+            and conditions.option_selected(key, ctx.answers)
+            and not ctx.resolved(key)
+        ):
+            out.append(_issue(ctx, f"missing:{key}", severity, key, message, fix))
+    # The referral table is not gated on a formal referral, but when she was
+    # referred the table is expected.
+    if ctx.value("f4.condition.referred") == "yes" and not ctx.resolved(
+        "f4.condition.referral"
+    ):
+        out.append(
+            _issue(
+                ctx,
+                "missing:f4.condition.referral",
+                WARNING,
+                "f4.condition.referral",
+                "She was referred from outside; the referral table is empty.",
+                "Fill 3.b, or mark the item not applicable with a reason.",
+            )
+        )
+    # "No anaesthesia" cannot sit beside a specific anaesthetic.
+    anaesthesia = ctx.value("f4.delivery.anaesthesia")
+    if isinstance(anaesthesia, list) and "none" in anaesthesia and len(anaesthesia) > 1:
+        out.append(
+            _issue(
+                ctx,
+                "impossible:anaesthesia_none",
+                ERROR,
+                "f4.delivery.anaesthesia",
+                "Anaesthesia records both 'No anaesthesia' and a specific type.",
+                "Clear 'No anaesthesia', or clear the specific types.",
+            )
+        )
     # A zero unit count is not a missing answer; it is impossible.
     if ctx.visible("f4.interventions.transfusion_units") and ctx.answered(
         "f4.interventions.transfusion_units"
@@ -549,6 +600,8 @@ def _outcome_consistency(ctx: CheckContext) -> list[Issue]:
 def _retained_answers(ctx: CheckContext) -> list[Issue]:
     out = []
     for key, item in ctx.items.items():
+        if key not in registry:
+            continue
         if ctx.visible(key):
             continue
         if item.answer_state != ReviewItem.AnswerState.ANSWERED:

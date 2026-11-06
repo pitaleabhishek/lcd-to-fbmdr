@@ -27,7 +27,7 @@ from .models import (
     SourceDocument,
     TimePrecision,
 )
-from .registry import CATEGORIES, registry
+from .registry import CATEGORIES, LEGACY_FIELDS, registry
 from .evidence import EVIDENCE
 from .rules import CALCULATIONS, RULES
 from . import thresholds
@@ -64,6 +64,16 @@ def fmt(value) -> str:
             return dt.strftime("%d %b %Y %H:%M")
         return value.replace("_", " ")
     return str(value)
+
+
+def field_display(field, value) -> str:
+    if value is None or value == "":
+        return "—"
+    if field.type == "enum":
+        return field.label_for(str(value))
+    if field.type == "multi" and isinstance(value, list):
+        return ", ".join(field.label_for(str(v)) for v in value) if value else "—"
+    return fmt(value)
 
 
 def chip(origin: str) -> str:
@@ -721,6 +731,26 @@ def workspace(request, pk: int):
         if key in visibility and not visibility[key].applies:
             visibility[key] = conditions.Visibility(True)
     hidden_fields = []
+    legacy_items = []
+    for item in items.values():
+        if item.field_key in registry:
+            continue
+        field = LEGACY_FIELDS.get(item.field_key)
+        if item.answer_state != ReviewItem.AnswerState.ANSWERED and item.applicability_state != ReviewItem.Applicability.NOT_APPLICABLE:
+            continue
+        legacy_items.append(
+            {
+                "key": item.field_key,
+                "label": field.label_printed if field else item.field_key,
+                "display": (
+                    field_display(field, item.value_json)
+                    if field and item.answer_state == ReviewItem.AnswerState.ANSWERED
+                    else "Not applicable"
+                ),
+                "origin": chip(item.origin),
+                "reason": item.reason,
+            }
+        )
     check_issues = checks.run_checks(review, visibility) if show_checks else []
     check_errors = [i for i in check_issues if i.severity == checks.ERROR]
     check_warnings = [i for i in check_issues if i.severity == checks.WARNING]
@@ -800,8 +830,11 @@ def workspace(request, pk: int):
                 {
                     "field": f,
                     "item": item,
-                    "display": fmt(item.value_json) if item else "—",
+                    "display": field_display(f, item.value_json) if item else "—",
                     "widget": f.widget,
+                    "options": [
+                        {"value": opt, "label": f.label_for(opt)} for opt in f.options
+                    ],
                     "evidence": [
                         c
                         for var in EVIDENCE.get(f.key, ((), ""))[0]
@@ -851,10 +884,20 @@ def workspace(request, pk: int):
                 }
             )
         if rows:
+            note = ""
+            if section == "delivery" and (
+                items.get("f4.timing.g")
+                and items["f4.timing.g"].value_json == "abortion"
+            ):
+                note = (
+                    "Only anaesthesia and its adverse reaction are shown because "
+                    "the outcome is abortion."
+                )
             sections.append(
                 {
                     "key": section,
                     "heading": heading,
+                    "note": note,
                     "rows": rows,
                     "total": len(rows),
                     "answered": answered_n,
@@ -908,6 +951,7 @@ def workspace(request, pk: int):
             "review": review,
             "sections": sections,
             "hidden_fields": hidden_fields,
+            "legacy_items": legacy_items,
             "show_checks": show_checks,
             "draft_note": draft_note,
             "check_errors": check_errors,
@@ -1667,6 +1711,9 @@ def output(request, pk: int):
     for section, heading, fs in registry.by_section():
         rows = []
         for f in fs:
+            if f.key not in fields:
+                # A field added after this version was frozen did not exist then.
+                continue
             entry = fields.get(f.key) or {}
             if not entry.get("applies", True):
                 if entry.get("value") not in (None, "", [], {}):
@@ -1674,7 +1721,7 @@ def output(request, pk: int):
                         {
                             "field": f,
                             "entry": entry,
-                            "display": fmt(entry.get("value")),
+                            "display": field_display(f, entry.get("value")),
                             "reason": entry.get("condition_reason", ""),
                         }
                     )
@@ -1683,12 +1730,33 @@ def output(request, pk: int):
                 {
                     "field": f,
                     "entry": entry,
-                    "display": fmt(entry["value"]) if entry else "—",
+                    "display": field_display(f, entry.get("value")) if entry else "—",
                     "mark": chip(entry["origin"]) if entry else "—",
                 }
             )
         if rows:
             sections.append({"key": section, "heading": heading, "rows": rows})
+
+    legacy_payload = version.payload_json.get("legacy_fields", {}) or {}
+    legacy_keys = set(legacy_payload) | {
+        key for key in fields if key not in registry._fields
+    }
+    legacy_rows = []
+    for key in sorted(legacy_keys):
+        entry = legacy_payload.get(key) or fields.get(key) or {}
+        if entry.get("value") in (None, "", [], {}):
+            continue
+        field = LEGACY_FIELDS.get(key)
+        legacy_rows.append(
+            {
+                "key": key,
+                "label": field.label_printed if field else entry.get("label", key),
+                "display": field_display(field, entry.get("value"))
+                if field
+                else fmt(entry.get("value")),
+                "mark": chip(entry.get("origin", "none")),
+            }
+        )
 
     return render(
         request,
@@ -1698,6 +1766,7 @@ def output(request, pk: int):
             "version": version,
             "sections": sections,
             "hidden_rows": hidden_rows,
+            "legacy_rows": legacy_rows,
             "output_source_id": source_id,
             "categories": CATEGORIES,
             "fields_payload": fields,

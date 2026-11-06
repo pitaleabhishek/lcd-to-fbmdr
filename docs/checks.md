@@ -1,6 +1,6 @@
 # Checks before submission — the rule set
 
-**Status: implemented in `review/checks.py` (rule set `k1`).**
+**Status: implemented in `review/checks.py` (rule set `k2`).**
 
 Checks run when the resident presses **Submit**, not while merely opening or
 filling the form. Nothing is shown on first open: a question the resident has not
@@ -15,20 +15,26 @@ contradict each other?** They never suggest a clinical cause.
 - A check for a missing follow-up only runs when its parent answer is actually
   recorded and says the follow-up applies. A visible-but-unanswered parent does
   not produce a false “missing” error.
+- Specification fields are the exception: if the reviewer selects Medical
+  conditions or Others, the specification is required even when an upstream
+  answer is still unknown.
 
 ## Missing
 
 - [x] **Required registry fields** — primary diagnosis and cause of death 1.a
 - [x] **Abortion** — spontaneous → complete/incomplete; induced → legal/illegal; more than one centre → centres visited
-- [x] **ANC** — received → type of facility, provider, counselling and risk factor (warnings); facility “other” and provider “other specialist” must be specified (errors)
-- [x] **Referral** — referred from outside → number of places and the referral table (warnings)
+- [x] **ANC** — received → type of facility, provider and counselling (warnings); counselling → risk factor (warning); facility “other”, provider “other specialist”, Medical conditions and Others must be specified (errors)
+- [x] **ANC specification even when the upstream answer is unknown** — if Medical conditions or Others is selected in the risk list, its specification is required
+- [x] **Referral** — referred from outside → number of places (warning); the transport/referral/care table is not hidden for self-presenters, but is expected when referred
 - [x] **Delivery** — mode missing (warning); caesarean/instrumental → indication (warning); complications include “others” → specify (error)
-- [x] **Neonatal** — neonatal outcome missing (warning); baby died → time and probable cause (errors); cause includes “others” → specify (error)
-- [x] **Postnatal** — eventful → probable cause (error); cause includes “others” → specify (error)
+- [x] **Neonatal** — neonatal outcome missing (warning); baby died (fresh stillbirth, macerated stillbirth or neonatal death) → probable cause (error); cause includes “others” → specify (error)
+- [x] **Postnatal** — eventful → probable cause (error); cause includes Medical conditions → specify (error); cause includes “others” → specify (error)
+- [x] **Post-birth complication** — phase = post_birth → interval (error)
 - [x] **Transfusion** — given → units (error) and components (warning)
 - [x] **Autopsy** — performed → final diagnosis (error)
 - [x] **Timing** — admission time, death time and outcome of pregnancy missing (warnings; they limit what can be calculated or hidden)
 - [x] **Transfusion units = 0** while transfusion is recorded (error)
+- [x] **Anaesthesia = “No anaesthesia” plus a specific type** (error)
 
 ## Impossible
 
@@ -54,6 +60,7 @@ contradict each other?** They never suggest a clinical cause.
 - [x] **Outcome is a birth, but the mode says undelivered** — error
 - [x] **Outcome abortion/ectopic/undelivered, but the mode is a birth mode** — warning
 - [x] **Retained answer in a question that no longer applies** — warning naming the value and the reason; the answer is kept and not printed
+- [x] **Legacy answers from a retired field** — shown in the legacy panel/appendix, never reinterpreted as a current answer
 - [x] **Four or more errors at submission** — the toast says how many more there are
 
 ## Context warnings

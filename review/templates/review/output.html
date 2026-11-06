@@ -44,6 +44,26 @@
 </table>
 {% endfor %}
 
+{% if legacy_rows %}
+<h2>Previous form fields</h2>
+<p class="muted small">
+  These answers belong to an earlier version of Form 4. They are kept for the
+  record and are not part of the current form.
+</p>
+<table>
+  <thead><tr><th style="width:38%">Previous item</th><th style="width:38%">Value</th><th>Origin</th></tr></thead>
+  <tbody>
+  {% for row in legacy_rows %}
+    <tr>
+      <td>{{ row.label }}<div class="key">{{ row.key }}</div></td>
+      <td class="value">{{ row.display }}</td>
+      <td><span class="chip {{ row.mark }}">{{ row.mark }}</span></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
 {% if hidden_rows %}
 <h2>Questions that did not apply</h2>
 <p class="muted small">

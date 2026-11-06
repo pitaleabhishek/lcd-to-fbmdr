@@ -3,12 +3,12 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 135 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 150 tests passing. 99 Form 4 fields, 34 LCG variables._
 
 ## Built
 
 - [x] LCG model: 7 sections, 34 variables, values reconciled to the chart, validation trigger
-- [x] Form 4 model: 14 sections, 96 fields, three block schemas, validation trigger
+- [x] Form 4 model: 14 sections, 99 fields, three block schemas, validation trigger
 - [x] Case 0 (complete labour) and Case A (death after charted labour, clinically coherent)
 - [x] Labour record screen: form header, stage bands, birth marker, late-entry marking
 - [x] Review workspace: section nav with counts, progress, Show remaining, autosave (250ms + flush), error-only field feedback
@@ -27,8 +27,8 @@ _Last updated: 6 November 2026. 135 tests passing. 96 Form 4 fields, 34 LCG vari
 - [x] Versions and output (HTML + JSON) rendered from a version; resident handover note per version, never printed
 - [x] Review history: versions, returns with per-field comments, paginated activity (100/page), per-field filter, 2-minute grouping
 - [x] Dependency register (`docs/dependencies.md`)
-- [x] Overlap inventory generated and reconciled to the PDF (96/96 labels)
-- [x] Conditional Form 4: 2 whole-section gates and 30 field rules (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
+- [x] Overlap inventory generated and reconciled to the PDF (99/99 labels)
+- [x] Conditional Form 4 corrections: post-birth maternal timing replaces the retired neonatal-death-time field; ANC risks follow counselling; risk/cause specification fields; referral table available to self-presenters; anaesthesia available for abortion; retired answers preserved as legacy data (rule set `c2`) (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
 - [x] Review creation: one form for an existing woman or a new death; one-click from a labour record; `Review.source_document` is explicit; reporting facilities can be typed in and are created if absent; a no-LCG review says so plainly
 - [x] Checks before submission: deterministic missing/impossible/inconsistent rules (`review/checks.py`, `docs/checks.md`), plain-language panel shown only after Submit, inline messages, errors block, warnings need one confirmation
 
@@ -42,7 +42,7 @@ _Last updated: 6 November 2026. 135 tests passing. 96 Form 4 fields, 34 LCG vari
   supersessions; filterable by item and author, paginated.
 - [ ] **Cases B, C, D** — caesarean after labour, no labour record, referred in after delivery
 - [ ] **Amendments** — approved reviews frozen; needs an attributed amendment path
-- [ ] **Overlap analysis write-up** — per Dr Atter's four categories: counts, sources, false friends, 1/96 finding
+- [ ] **Overlap analysis write-up** — per Dr Atter's four categories: counts, sources, false friends, 1/99 finding
 - [ ] **Security note** — and close the gaps it exposes: non-owner DB role, author/facility scoping, login throttling
 - [ ] **Output provenance appendix** — "from where" per printed value
 

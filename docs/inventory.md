@@ -1,15 +1,15 @@
 # Form 4 overlap inventory
 
-96 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
+99 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
 
-**Direct reuse from the LCG: 2 of 96 fields (2.1%).** Everything else is entered by the clinician or copied from another recorded fact.
+**Direct reuse from the LCG: 1 of 99 fields (1.0%).** Everything else is entered by the clinician or copied from another recorded fact.
 
 ## By category
 
 | Category | Fields |
 |---|---|
 | 1. Patient info and admin records | 22 |
-| 2. Clinical and OBS information | 45 |
+| 2. Clinical and OBS information | 48 |
 | 3. Mx and interventions | 9 |
 | 4. Death ix and review | 20 |
 
@@ -17,23 +17,23 @@
 
 | Source | Fields |
 |---|---|
-| clinician | 78 |
+| clinician | 82 |
 | admin | 4 |
 | patient_record | 3 |
 | admission | 3 |
 | death | 2 |
 | delivery | 2 |
-| lcg | 2 |
 | pregnancy | 1 |
+| lcg | 1 |
 | neonate | 1 |
 
 ## By relationship
 
 | Relationship | Fields |
 |---|---|
-| reused | 14 |
+| reused | 13 |
 | derived | 4 |
-| none | 78 |
+| none | 82 |
 
 ## Fields
 
@@ -88,7 +88,9 @@
 | `f4.antenatal_care.provider_other` | 2 | clinician | 3.c Other specialist, specify | none | yes |
 | `f4.antenatal_care.counselled` | 2 | clinician | 3.d Told about a disorder / complication | none | yes |
 | `f4.antenatal_care.risks` | 2 | clinician | 3.e Risk factor identified | none | yes |
-| `f4.delivery.labour_pains` | 2 | lcg | 4.a Did she have labour pains | reused | yes |
+| `f4.antenatal_care.risks_medical` | 2 | clinician | 3.e Medical conditions, specify | none | yes |
+| `f4.antenatal_care.risks_others` | 2 | clinician | 3.e Others, specify | none | yes |
+| `f4.delivery.labour_pains` | 2 | clinician | 4.a Did she have labour pains | none | yes |
 | `f4.delivery.partograph_past` | 2 | clinician | 4.b.i Partograph used - past facility | none | yes |
 | `f4.delivery.partograph_current` | 2 | clinician | 4.b.ii Partograph used - current facility | none | yes |
 | `f4.delivery.complications` | 2 | clinician | 4.c Complications during labour | none | yes |
@@ -98,12 +100,13 @@
 | `f4.delivery.anaesthesia` | 3 | clinician | 4.e Anaesthesia | none | yes |
 | `f4.delivery.anaesthesia_reaction` | 3 | clinician | 4.e Any adverse reaction | none | yes |
 | `f4.delivery.phase` | 2 | clinician | 4.f Phase of labour at complication | none | yes |
+| `f4.delivery.post_birth_complication_time` | 2 | clinician | 4.f Post-birth complication interval | none | yes |
 | `f4.delivery.neonatal_outcome` | 2 | neonate | 4.g Neonatal outcome | reused | yes |
-| `f4.delivery.neonatal_death_time` | 2 | clinician | 4.h Time of neonatal death | none | yes |
-| `f4.delivery.neonatal_cause` | 2 | clinician | 4.h Probable cause of neonatal death | none | yes |
+| `f4.delivery.neonatal_cause` | 2 | clinician | 4.h Probable cause of death if baby died | none | yes |
 | `f4.delivery.neonatal_cause_other` | 2 | clinician | 4.h Others, specify | none | yes |
 | `f4.delivery.postnatal` | 2 | clinician | 4.i Postnatal period | none | yes |
 | `f4.delivery.postnatal_cause` | 2 | clinician | 4.i Probable cause if eventful | none | yes |
+| `f4.delivery.postnatal_cause_medical` | 2 | clinician | 4.i Medical conditions, specify | none | yes |
 | `f4.delivery.postnatal_cause_other` | 2 | clinician | 4.i Others, specify | none | yes |
 | `f4.interventions.matrix` | 3 | clinician | 5. Interventions matrix (phase x procedure) | none | yes |
 | `f4.interventions.transfusion_given` | 3 | clinician | 5. Blood transfusion given | none | yes |

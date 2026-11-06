@@ -128,7 +128,7 @@ One representation per block. Never a second editable copy in a child table.
 | `autopsy` | 9. Autopsy | Observation |
 | `summary` | 10. Case summary | none |
 
-The field inventory is **generated from the registry**, not hand-written, and reconciled page by page against the extracted Form 4 text (`docs/form4-source.txt`). All 14 printed sections are registered as data: 96 fields, including three declared block schemas (referral, diagnosis, interventions). Every field carries an overlap category, a source, a relationship, a one-sentence rationale, and terminology or precision notes where they differ — that is the overlap document, one row per field.
+The field inventory is **generated from the registry**, not hand-written, and reconciled page by page against the extracted Form 4 text (`docs/form4-source.txt`). All 14 printed sections are registered as data: 99 fields, including three declared block schemas (referral, diagnosis, interventions). Every field carries an overlap category, a source, a relationship, a one-sentence rationale, and terminology or precision notes where they differ — that is the overlap document, one row per field.
 
 ---
 

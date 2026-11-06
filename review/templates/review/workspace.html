@@ -111,6 +111,29 @@
 </details>
 {% endif %}
 
+{% if legacy_items %}
+<details class="not-shown">
+  <summary>{{ legacy_items|length }} previous form answer{{ legacy_items|length|pluralize }} kept</summary>
+  <p class="muted small">
+    These answers belong to an earlier version of Form 4. They are kept for the
+    record and are not used by the current form.
+  </p>
+  <table>
+    <thead><tr><th>Previous item</th><th>Value</th><th>Origin</th><th>Note</th></tr></thead>
+    <tbody>
+      {% for item in legacy_items %}
+        <tr>
+          <td>{{ item.label }}<div class="key">{{ item.key }}</div></td>
+          <td>{{ item.display }}</td>
+          <td><span class="chip {{ item.origin }}">{{ item.origin }}</span></td>
+          <td class="muted">{{ item.reason|default:"—" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endif %}
+
 {% if show_checks and check_issues %}
 <details class="checks"{% if check_errors %} open{% endif %}>
   <summary>
@@ -185,6 +208,7 @@
         {{ section.heading }}
         <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}{% if section.hidden %} · {{ section.hidden }} not shown{% endif %}</span>
       </h2>
+      {% if section.note %}<p class="muted small">{{ section.note }}</p>{% endif %}
       <table class="fields">
         <thead><tr><th style="width:30%">Item</th><th style="width:34%">Answer</th><th>Proposed</th></tr></thead>
         <tbody>
@@ -233,17 +257,17 @@
                   {% elif row.field.type == "enum" %}
                     <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}">
                       <option value="">—</option>
-                      {% for opt in row.field.options %}
-                        <option value="{{ opt }}" {% if row.item.value_json == opt %}selected{% endif %}>{{ opt }}</option>
+                      {% for opt in row.options %}
+                        <option value="{{ opt.value }}" {% if row.item.value_json == opt.value %}selected{% endif %}>{{ opt.label }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.field.type == "multi" %}
                     <details class="multi{% if row.is_na %} na-hidden{% endif %}">
                       <summary>{{ row.display }}</summary>
                       <div class="multi-list">
-                        {% for opt in row.field.options %}
-                          <label><input type="checkbox" name="value" value="{{ opt }}"
-                            {% if row.item.value_json and opt in row.item.value_json %}checked{% endif %}> {{ opt }}</label>
+                        {% for opt in row.options %}
+                          <label><input type="checkbox" name="value" value="{{ opt.value }}"
+                            {% if row.item.value_json and opt.value in row.item.value_json %}checked{% endif %}> {{ opt.label }}</label>
                         {% endfor %}
                       </div>
                     </details>

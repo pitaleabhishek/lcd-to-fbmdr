@@ -231,3 +231,56 @@ def test_warnings_need_one_confirmation_before_submitting(client, case_a, reside
     case_a.refresh_from_db()
     assert case_a.status == Review.Status.SUBMITTED
     assert case_a.versions.count() == 1
+
+
+def test_specification_fields_are_required_when_selected(case_a, resident):
+    # The upstream ANC answers are deliberately unknown: selecting the option
+    # itself establishes the specification requirement.
+    answer(case_a, "f4.antenatal_care.risks", ["medical_conditions"], resident)
+    issues = checks.run_checks(case_a)
+    found = issue(issues, "missing:f4.antenatal_care.risks_medical")
+    assert found is not None and found.severity == checks.ERROR
+
+    answer(case_a, "f4.antenatal_care.risks_medical", "cardiac disease", resident)
+    assert issue(checks.run_checks(case_a), "missing:f4.antenatal_care.risks_medical") is None
+
+    answer(case_a, "f4.timing.g", "live_birth", resident)
+    answer(case_a, "f4.delivery.postnatal", "eventful", resident)
+    answer(case_a, "f4.delivery.postnatal_cause", ["medical_conditions"], resident)
+    found = issue(checks.run_checks(case_a), "missing:f4.delivery.postnatal_cause_medical")
+    assert found is not None and found.severity == checks.ERROR
+
+
+def test_post_birth_timing_and_neonatal_cause_checks(case_a, resident):
+    answer(case_a, "f4.timing.g", "live_birth", resident)
+    answer(case_a, "f4.delivery.phase", "post_birth", resident)
+    found = issue(
+        checks.run_checks(case_a), "missing:f4.delivery.post_birth_complication_time"
+    )
+    assert found is not None and found.severity == checks.ERROR
+
+    answer(case_a, "f4.delivery.neonatal_outcome", "fresh_still_birth", resident)
+    found = issue(checks.run_checks(case_a), "missing:f4.delivery.neonatal_cause")
+    assert found is not None and found.severity == checks.ERROR
+
+    answer(case_a, "f4.delivery.neonatal_outcome", "alive", resident)
+    assert issue(checks.run_checks(case_a), "missing:f4.delivery.neonatal_cause") is None
+
+
+def test_anaesthesia_none_cannot_sit_beside_a_specific_type(case_a, resident):
+    answer(case_a, "f4.timing.g", "abortion", resident)
+    answer(case_a, "f4.delivery.anaesthesia", ["none", "general"], resident)
+    found = issue(checks.run_checks(case_a), "impossible:anaesthesia_none")
+    assert found is not None and found.severity == checks.ERROR
+
+    answer(case_a, "f4.delivery.anaesthesia", ["none"], resident)
+    assert issue(checks.run_checks(case_a), "impossible:anaesthesia_none") is None
+
+
+def test_referral_table_warning_only_when_she_was_referred(case_a, resident):
+    answer(case_a, "f4.condition.referred", "no", resident)
+    assert issue(checks.run_checks(case_a), "missing:f4.condition.referral") is None
+
+    answer(case_a, "f4.condition.referred", "yes", resident)
+    found = issue(checks.run_checks(case_a), "missing:f4.condition.referral")
+    assert found is not None and found.severity == checks.WARNING

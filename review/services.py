@@ -24,7 +24,7 @@ from .models import (
     TimePrecision,
 )
 from . import checks, conditions
-from .registry import registry
+from .registry import LEGACY_FIELDS, registry
 from .rules import RULES, Context, NotComputable, Value
 
 
@@ -594,6 +594,21 @@ def canonical_payload(review: Review) -> dict:
             "applies": seen.applies,
             "condition_reason": seen.reason,
         }
+    legacy = {}
+    for key, item in items.items():
+        if key in registry:
+            continue
+        legacy[key] = {
+            "label": LEGACY_FIELDS[key].label_printed if key in LEGACY_FIELDS else key,
+            "value": item.value_json,
+            "answer_state": item.answer_state,
+            "applicability_state": item.applicability_state,
+            "origin": item.origin,
+            "reason": item.reason,
+            "decided_by": item.decided_by.username if item.decided_by else None,
+            "decided_at": item.decided_at.isoformat() if item.decided_at else None,
+        }
+
     source = review.source_document
     return {
         "form": "FBMDR-2017",
@@ -609,6 +624,7 @@ def canonical_payload(review: Review) -> dict:
         },
         "generated_at": timezone.now().isoformat(),
         "fields": fields,
+        "legacy_fields": legacy,
     }
 
 
