@@ -5,13 +5,6 @@ list. `[x]` done, `[ ]` open, `[~]` partial.
 
 _Last updated: 6 November 2026. 82 tests passing. 96 Form 4 fields, 34 LCG variables._
 
-## Next
-
-- [ ] **LCG entry form** — one compact panel on the labour record: variable, time,
-  value, author, documented-at, stage. Append-only; late entries flagged.
-- [ ] **History screen for the labour record** — who wrote what, when, late entries,
-  supersessions. Same shape as the review history.
-
 ## Built
 
 - [x] LCG model: 7 sections, 34 variables, values reconciled to the chart, validation trigger
@@ -38,6 +31,12 @@ _Last updated: 6 November 2026. 82 tests passing. 96 Form 4 fields, 34 LCG varia
 
 ## Essential, open
 
+*(top two are next)*
+
+- [ ] **LCG entry form** — one compact panel on the labour record: variable, time,
+  value, author, documented-at, stage. Append-only; late entries flagged.
+- [ ] **History screen for the labour record** — who wrote what, when, late entries,
+  supersessions. Same shape as the review history; needs the entry form first.
 - [ ] **Cases B, C, D** — caesarean after labour, no labour record, referred in after delivery
 - [ ] **Amendments** — approved reviews frozen; needs an attributed amendment path
 - [ ] **Conditional form** — honour `applicability` (abortion branches, transfusion units, neonatal cause)
