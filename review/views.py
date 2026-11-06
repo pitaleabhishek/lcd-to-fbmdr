@@ -625,13 +625,16 @@ def _provenance(proposal, death):
         doc_at = _parse_dt(inp.get("documented_at"))
         late = bool(death and death.died_at and doc_at and doc_at > death.died_at)
         url = _ref_url(inp.get("ref", ""))
+        raw_value = inp.get("value", "")
+        is_timestamp = bool(_parse_dt(raw_value)) if isinstance(raw_value, str) else False
+        value = _fmt_when(raw_value) if is_timestamp else raw_value
         if url and inp.get("key"):
             url += f"?key={inp['key']}"
         out.append(
             {
                 "label": inp.get("label", ""),
-                "value": inp.get("value", ""),
-                "when": _fmt_when(inp.get("observed_at")),
+                "value": value,
+                "when": "" if is_timestamp else _fmt_when(inp.get("observed_at")),
                 "documented": _fmt_when(inp.get("documented_at")),
                 "author": inp.get("author", ""),
                 "late": late,

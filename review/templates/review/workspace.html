@@ -284,8 +284,7 @@
                 {% for pr in row.proposals %}
                   <div class="prop">
                     <span class="value">{{ pr.display }}</span>
-                    <span class="chip {{ pr.mark }}" title="{% if pr.mark == 'R' %}reused from the record{% else %}derived from recorded times{% endif %}">{{ pr.mark }}</span>
-                    <div class="why">{{ pr.p.rule_key }}@{{ pr.p.rule_version }}</div>
+                    <span class="chip {{ pr.mark }}" title="{{ pr.p.rule_key }}@{{ pr.p.rule_version }}">{{ pr.mark }}</span>
                     {% for inp in pr.inputs %}
                       <div class="why">
                         <b>{{ inp.label }}</b> = {{ inp.value }}
