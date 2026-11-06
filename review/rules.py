@@ -14,6 +14,12 @@ from typing import Any, Callable
 
 from .models import Observation, TimePrecision
 from .registry import Field
+from .source_time import (
+    current_admission,
+    current_death,
+    current_delivery,
+    current_source,
+)
 
 
 @dataclass

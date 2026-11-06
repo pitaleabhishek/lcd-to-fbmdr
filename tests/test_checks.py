@@ -101,8 +101,8 @@ def test_death_before_admission_is_a_warning_not_a_blocker(db, resident):
         pregnancy=pregnancy, died_at=dt(9, 0), time_precision=TimePrecision.EXACT
     )
     review = Review.objects.create(
-        pregnancy=pregnancy, reporting_facility=facility, created_by=resident,
-        assigned_to=resident,
+        pregnancy=pregnancy, reporting_facility=facility,
+        reporting_admission=admission, created_by=resident, assigned_to=resident,
     )
 
     issues = checks.run_checks(review)
@@ -117,28 +117,28 @@ def test_death_before_admission_is_a_warning_not_a_blocker(db, resident):
     assert review.status == Review.Status.SUBMITTED
 
 
-def test_discharge_before_admission_is_impossible(db, resident):
+def test_discharge_before_admission_is_a_warning(db, resident):
     facility = Facility.objects.create(name="PHC")
     patient = Patient.objects.create(name="Bad discharge", age=25)
     pregnancy = Pregnancy.objects.create(patient=patient, outcome="delivery")
-    Admission.objects.create(
+    admission = Admission.objects.create(
         pregnancy=pregnancy, facility=facility, admitted_at=dt(18, 0),
         discharged_at=dt(9, 0), time_precision=TimePrecision.EXACT,
     )
     review = Review.objects.create(
-        pregnancy=pregnancy, reporting_facility=facility, created_by=resident,
-        assigned_to=resident,
+        pregnancy=pregnancy, reporting_facility=facility,
+        reporting_admission=admission, created_by=resident, assigned_to=resident,
     )
 
     issues = checks.run_checks(review)
-    found = issue(issues, "impossible:discharge_before_admission")
+    found = issue(issues, "possible:discharge_before_admission")
     assert found is not None
-    assert found.severity == checks.ERROR
+    assert found.severity == checks.WARNING
 
     complete_required(review, resident)
-    with pytest.raises(ValidationError) as exc:
-        services.submit(review, resident)
-    assert "Discharge is before admission" in str(exc.value)
+    services.submit(review, resident)
+    review.refresh_from_db()
+    assert review.status == Review.Status.SUBMITTED
 
 
 def test_abortion_outcome_with_a_delivery_is_a_contradiction(case_a, resident):

@@ -26,6 +26,7 @@ from .models import (
 from . import checks, conditions
 from .registry import LEGACY_FIELDS, registry
 from .rules import RULES, Context, NotComputable, Value
+from .source_time import current_death, current_source
 
 
 def assert_can_author(review: Review, user) -> None:
@@ -244,6 +245,23 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
     if actor is not None:
         assert_can_author(review, actor)
 
+    # Refresh the current source head for an editable review. This is an explicit
+    # action (Refresh proposals), not a silent relink on page load. Frozen
+    # reviews never reach this branch.
+    previous_source_id = review.source_document_id
+    current = current_source(review)
+    if current is not None and current.pk != previous_source_id:
+        review.source_document = current
+        review.save(update_fields=["source_document"])
+        audit(
+            review,
+            actor,
+            "source_relinked",
+            "SourceDocument",
+            current.pk,
+            {"from": previous_source_id, "to": current.pk},
+        )
+
     ctx = build_context(review)
     visibility = conditions.visibility(review)
     created: list[Proposal] = []
@@ -363,11 +381,24 @@ def reject_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
         item.accepted_proposal = None
         item.save(update_fields=["accepted_proposal"])
 
+    # Rejecting the changed candidate is an explicit decision to keep the
+    # existing answer. Clear the reconsideration flag only when no other open
+    # candidate remains for the field.
+    other_open = review.proposals.filter(
+        field_key=proposal.field_key, status=Proposal.Status.PROPOSED
+    ).exists()
+    reconsideration_cleared = False
+    if item and item.needs_reconsideration and not other_open:
+        item.needs_reconsideration = False
+        item.save(update_fields=["needs_reconsideration"])
+        reconsideration_cleared = True
+
     review.edit_revision += 1
     review.last_saved_at = timezone.now()
     review.save(update_fields=["edit_revision", "last_saved_at"])
     audit(review, user, "proposal_rejected", "Proposal", proposal.pk,
-          {"field_key": proposal.field_key, "reason": reason})
+          {"field_key": proposal.field_key, "reason": reason,
+           "reconsideration_cleared": reconsideration_cleared})
 
 
 @transaction.atomic
@@ -403,6 +434,49 @@ def set_answer(review: Review, key: str, value, user, reason: str = "", correcte
 
 
 @transaction.atomic
+def set_not_known(review: Review, key: str, user, reason: str) -> ReviewItem:
+    """Record an applicable question whose answer is genuinely unavailable.
+
+    This is different from N/A: the question applies, but the clinician cannot
+    supply the value. The reason and decision are attributed.
+    """
+    review = Review.objects.select_for_update().get(pk=review.pk)
+    assert_can_author(review, user)
+    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
+        raise ValidationError("review is locked")
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("say why the answer is not known")
+    if key not in registry:
+        raise ValidationError("unknown Form 4 field")
+
+    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
+    previous = {
+        "from": item.value_json,
+        "from_origin": item.origin,
+        "from_state": item.answer_state,
+        "from_accepted": item.accepted_proposal_id,
+    }
+    item.answer_state = ReviewItem.AnswerState.NOT_KNOWN
+    item.applicability_state = ReviewItem.Applicability.APPLICABLE
+    item.value_json = None
+    item.origin = ReviewItem.Origin.NONE
+    item.accepted_proposal = None
+    item.reason = reason
+    item.decided_by = user
+    item.decided_at = timezone.now()
+    item.needs_reconsideration = False
+    item.save()
+
+    review.edit_revision += 1
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["edit_revision", "last_saved_at"])
+    audit(review, user, "answer_not_known", "ReviewItem", key,
+          {**previous, "reason": reason})
+    return item
+
+
+@transaction.atomic
 def set_applicability(review: Review, key: str, state: str, user, reason: str = "") -> ReviewItem:
     review = Review.objects.select_for_update().get(pk=review.pk)
     assert_can_author(review, user)
@@ -414,6 +488,9 @@ def set_applicability(review: Review, key: str, state: str, user, reason: str = 
     item.decided_by = user
     item.decided_at = timezone.now()
     if state == ReviewItem.Applicability.NOT_APPLICABLE:
+        item.answer_state = ReviewItem.AnswerState.UNANSWERED
+        item.value_json = None
+    elif item.answer_state == ReviewItem.AnswerState.NOT_KNOWN:
         item.answer_state = ReviewItem.AnswerState.UNANSWERED
         item.value_json = None
     item.save()
@@ -616,6 +693,7 @@ def canonical_payload(review: Review) -> dict:
         "registry_version": "r1",
         "template": "f4-2017@1",
         "conditions_version": conditions.CONDITIONS_VERSION,
+        "checks_version": checks.CHECK_VERSION,
         "source_document_id": review.source_document_id,
         "source": {
             "document_id": review.source_document_id,
@@ -660,7 +738,7 @@ def submit(review: Review, user, note: str = "") -> ReviewVersion:
     review.submitted_by = user
     review.submitted_at = timezone.now()
     review.last_saved_at = review.submitted_at
-    death = review.pregnancy.deaths.order_by("-died_at").first()
+    death = current_death(review.pregnancy, review.reporting_admission)
     if death and death.died_at and death.time_precision == TimePrecision.EXACT:
         review.deadline_at = death.died_at + timedelta(hours=24)
     review.save()
@@ -668,7 +746,14 @@ def submit(review: Review, user, note: str = "") -> ReviewVersion:
         ReviewReturn.objects.filter(review=review, resolved_at__isnull=True).update(
             resolved_at=timezone.now()
         )
-    audit(review, user, "submitted", "ReviewVersion", version.pk, {"version_no": version_no})
+    audit(
+        review,
+        user,
+        "submitted",
+        "ReviewVersion",
+        version.pk,
+        {"version_no": version_no, "checks_version": checks.CHECK_VERSION},
+    )
     return version
 
 

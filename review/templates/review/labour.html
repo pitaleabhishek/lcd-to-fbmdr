@@ -97,10 +97,10 @@
           {% for cell in row.cells %}
             <td>
               {% if cell %}
-                <a class="cell {% if cell.late %}late{% endif %}"
+                <a class="cell{% if cell.late %} late{% elif cell.late_uncertain %} late-uncertain{% endif %}"
                    href="{% url 'correct_observation' document.pk cell.pk %}"
-                   title="{{ cell.author }} · observed {{ cell.observed }} · documented {{ cell.documented }}{% if cell.late %} · late entry{% endif %} · click to correct">
-                  {{ cell.value }}{% if cell.late %}<sup>late</sup>{% endif %}
+                   title="{{ cell.author }} · observed {{ cell.observed }} · documented {{ cell.documented }}{% if cell.late %} · late entry{% elif cell.late_uncertain %} · same day as death; late entry cannot be established{% endif %} · click to correct">
+                  {{ cell.value }}{% if cell.late %}<sup>late</sup>{% elif cell.late_uncertain %}<sup>late?</sup>{% endif %}
                 </a>
               {% else %}
                 <span class="empty">·</span>
@@ -113,7 +113,7 @@
   </tbody>
 </table>
 </div>
-<p class="muted small">Hover a value for its author and timestamps. Click a value to correct it. “late” means documented after the time of death.</p>
+<p class="muted small">Hover a value for its author and timestamps. Click a value to correct it. “late” means documented after the time of death; “late?” means the death time is not precise enough to decide.</p>
 
 {{ variable_specs|json_script:"obs-specs" }}
 <script>

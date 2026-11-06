@@ -52,6 +52,7 @@
   <div class="stat"><b>{{ stats.needs }}</b> need review</div>
   <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
   {% if stats.hidden %}<div class="stat"><b>{{ stats.hidden }}</b> not shown</div>{% endif %}
+  {% if stats.not_known %}<div class="stat"><b>{{ stats.not_known }}</b> not known</div>{% endif %}
   {% if show_checks and check_errors %}<div class="stat warn"><b>{{ check_errors|length }}</b> to fix</div>{% endif %}
   {% if show_checks and check_warnings %}<div class="stat"><b>{{ check_warnings|length }}</b> warning{{ check_warnings|length|pluralize }}</div>{% endif %}
 </div>
@@ -206,7 +207,7 @@
       <section class="form-section" id="sec-{{ section.key }}">
       <h2>
         {{ section.heading }}
-        <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}{% if section.hidden %} · {{ section.hidden }} not shown{% endif %}</span>
+        <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.unknown %} · {{ section.unknown }} not known{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}{% if section.hidden %} · {{ section.hidden }} not shown{% endif %}</span>
       </h2>
       {% if section.note %}<p class="muted small">{{ section.note }}</p>{% endif %}
       <table class="fields">
@@ -214,15 +215,23 @@
         <tbody>
         {% for row in section.rows %}
           {% if not row.is_block %}
-          <tr id="f-{{ row.field.slug }}" class="{% if not row.is_answered and not row.is_na %}remaining {% endif %}{% if row.fno_comment %}{% if row.addressed %}addressed{% else %}commented{% endif %}{% endif %}">
+          <tr id="f-{{ row.field.slug }}" class="{% if not row.is_answered and not row.is_na and not row.is_unknown %}remaining {% endif %}{% if row.fno_comment %}{% if row.addressed %}addressed{% else %}commented{% endif %}{% endif %}">
             <td>
               <div class="label" title="{{ row.field.key }}">{{ row.field.label_printed }}</div>
               {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
             </td>
             <td>
               {% if locked or row.is_block or row.widget == "readonly" %}
-                <span class="value">{{ row.display }}</span>
-                <span class="chip {{ row.mark }}">{{ row.mark }}</span>
+                {% if row.is_unknown %}
+                  <span class="value">Not known</span>
+                  {% if row.item.reason %}<div class="key">{{ row.item.reason }}</div>{% endif %}
+                {% elif row.is_na %}
+                  <span class="value">Not applicable</span>
+                  {% if row.item.reason %}<div class="key">{{ row.item.reason }}</div>{% endif %}
+                {% else %}
+                  <span class="value">{{ row.display }}</span>
+                  <span class="chip {{ row.mark }}">{{ row.mark }}</span>
+                {% endif %}
                 {% if row.widget == "readonly" %}<span class="key">set by Month</span>{% endif %}
               {% else %}
                 <div class="answer-edit">
@@ -231,38 +240,38 @@
                       data-key="{{ row.field.key }}">{% csrf_token %}
                   <input type="hidden" name="key" value="{{ row.field.key }}">
                   {% if row.widget == "month" %}
-                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}" title="Month">
+                    <select name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" title="Month">
                       <option value="">—</option>
                       {% for m in months %}
                         <option value="{{ m.value }}" {% if row.current == m.value|stringformat:"s" %}selected{% endif %}>{{ m.label }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.widget == "year" %}
-                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}" title="Year">
+                    <select name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" title="Year">
                       <option value="">—</option>
                       {% for y in years %}
                         <option value="{{ y }}" {% if row.current == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.field.type == "date" %}
-                    <input type="date" name="value" class="val{% if row.is_na %} na-hidden{% endif %}" value="{{ row.current }}">
+                    <input type="date" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" value="{{ row.current }}">
                   {% elif row.field.type == "datetime" %}
-                    <input type="datetime-local" name="value" class="val{% if row.is_na %} na-hidden{% endif %}"
+                    <input type="datetime-local" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}"
                            title="Date and time" value="{{ row.current }}">
                   {% elif row.field.type == "int" %}
-                    <input type="number" name="value" class="val{% if row.is_na %} na-hidden{% endif %}" step="1" min="0"
+                    <input type="number" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" step="1" min="0"
                            inputmode="numeric" placeholder="{{ row.example }}"
                            title="Whole number only"
                            value="{{ row.current }}">
                   {% elif row.field.type == "enum" %}
-                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}">
+                    <select name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}">
                       <option value="">—</option>
                       {% for opt in row.options %}
                         <option value="{{ opt.value }}" {% if row.item.value_json == opt.value %}selected{% endif %}>{{ opt.label }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.field.type == "multi" %}
-                    <details class="multi{% if row.is_na %} na-hidden{% endif %}">
+                    <details class="multi{% if row.is_na or row.is_unknown %} na-hidden{% endif %}">
                       <summary>{{ row.display }}</summary>
                       <div class="multi-list">
                         {% for opt in row.options %}
@@ -272,10 +281,10 @@
                       </div>
                     </details>
                   {% elif row.field.type == "text" %}
-                    <textarea name="value" rows="1" class="val auto{% if row.is_na %} na-hidden{% endif %}"
+                    <textarea name="value" rows="1" class="val auto{% if row.is_na or row.is_unknown %} na-hidden{% endif %}"
                               placeholder="{{ row.field.slug|cut:"_" }}">{{ row.current }}</textarea>
                   {% else %}
-                    <input type="text" name="value" class="val{% if row.is_na %} na-hidden{% endif %}"
+                    <input type="text" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}"
                            {% if row.field.type == "duration" %}placeholder="e.g. 1d 6h"
                            title="Days / hours / minutes, e.g. 1d 6h, 7h 30m or 450"
                            {% elif row.field.type == "datetime" %}placeholder="2026-11-05 14:30"
@@ -283,18 +292,31 @@
                            {% else %}placeholder="{{ row.field.slug|cut:"_" }}"{% endif %}
                            value="{{ row.current }}">
                   {% endif %}
-                  <span class="na-echo" {% if not row.is_na %}hidden{% endif %}>Not applicable</span>
+                  <span class="na-echo" {% if not row.is_na and not row.is_unknown %}hidden{% endif %}>{% if row.is_unknown %}Not known{% else %}Not applicable{% endif %}{% if row.item.reason %} · {{ row.item.reason }}{% endif %}</span>
                   <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                   <span class="save-state"></span>
                   <details class="notewrap">
                     <summary title="Add a note to this field">note</summary>
-                    <input type="text" name="reason" class="why-in" placeholder="note (optional)">
+                    <input type="text" name="reason" class="why-in" placeholder="note / reason">
                   </details>
-                  <button type="button" class="linkish na-toggle"
-                          data-state="{% if row.is_na %}clear{% else %}na{% endif %}"
+                  <button type="button" class="linkish na-toggle state-na"
+                          data-state="na"
                           data-key="{{ row.field.key }}"
                           data-url="{% url 'na_field' review.pk %}"
-                          title="Toggle not applicable">{% if row.is_na %}clear{% else %}N/A{% endif %}</button>
+                          {% if row.is_na or row.is_unknown %}hidden{% endif %}
+                          title="Mark not applicable">N/A</button>
+                  <button type="button" class="linkish na-toggle state-unknown"
+                          data-state="unknown"
+                          data-key="{{ row.field.key }}"
+                          data-url="{% url 'na_field' review.pk %}"
+                          {% if row.is_na or row.is_unknown %}hidden{% endif %}
+                          title="Mark not known, with a reason">not known</button>
+                  <button type="button" class="linkish na-toggle state-clear"
+                          data-state="clear"
+                          data-key="{{ row.field.key }}"
+                          data-url="{% url 'na_field' review.pk %}"
+                          {% if not row.is_na and not row.is_unknown %}hidden{% endif %}
+                          title="Clear this state">clear</button>
                 </form>
                 </div>
               {% endif %}
@@ -310,7 +332,7 @@
                   {% for c in row.evidence %}
                     <div class="ev-line">
                       <b>{{ c.label }}</b> {{ c.value }}{% if c.unit %} {{ c.unit }}{% endif %} at {{ c.when }} — {{ c.text }}
-                      {% if c.late %}<span class="warn">late</span>{% endif %}
+                      {% if c.late %}<span class="warn">late</span>{% elif c.late_uncertain %}<span class="warn">late uncertain</span>{% endif %}
                       · <a class="see-source" href="{{ c.url }}" data-url="{{ c.url }}">see source</a>
                     </div>
                   {% endfor %}
@@ -391,7 +413,7 @@
                         <b>{{ inp.label }}</b> = {{ inp.value }}
                         {% if inp.when %} · {{ inp.when }}{% endif %}
                         {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
-                        {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
+                        {% if inp.late %} · <span class="warn">late entry</span>{% elif inp.late_uncertain %} · <span class="warn">late entry uncertain</span>{% endif %}
                         {% if inp.author %} · {{ inp.author }}{% endif %}
                         {% if inp.url %} · <a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a>{% endif %}
                       </div>
@@ -422,7 +444,7 @@
                           <b>{{ inp.label }}</b> = {{ inp.value }}
                           {% if inp.when %} · {{ inp.when }}{% endif %}
                           {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
-                          {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
+                          {% if inp.late %} · <span class="warn">late entry</span>{% elif inp.late_uncertain %} · <span class="warn">late entry uncertain</span>{% endif %}
                           {% if inp.author %} · {{ inp.author }}{% endif %}
                           {% if inp.url %} · <a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a>{% endif %}
                         </div>

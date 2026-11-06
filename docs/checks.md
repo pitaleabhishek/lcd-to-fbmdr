@@ -1,6 +1,6 @@
 # Checks before submission — the rule set
 
-**Status: implemented in `review/checks.py` (rule set `k2`).**
+**Status: implemented in `review/checks.py` (rule set `k3`).**
 
 Checks run when the resident presses **Submit**, not while merely opening or
 filling the form. Nothing is shown on first open: a question the resident has not
@@ -18,10 +18,16 @@ contradict each other?** They never suggest a clinical cause.
 - Specification fields are the exception: if the reviewer selects Medical
   conditions or Others, the specification is required even when an upstream
   answer is still unknown.
+- **Not known** is a first-class answer state, separate from N/A. It requires a
+  reason and is attributed. It permits submission with a warning for required
+  answers such as diagnosis, cause, abortion legality and unavailable autopsy
+  results.
+- **N/A** is for a question that does not apply. It cannot bypass an
+  always-applicable required question or an explicit specification requirement.
 
 ## Missing
 
-- [x] **Required registry fields** — primary diagnosis and cause of death 1.a
+- [x] **Required registry fields** — primary diagnosis and cause of death 1.a; unanswered blocks, Not known warns, N/A blocks
 - [x] **Abortion** — spontaneous → complete/incomplete; induced → legal/illegal; more than one centre → centres visited
 - [x] **ANC** — received → type of facility, provider and counselling (warnings); counselling → risk factor (warning); facility “other”, provider “other specialist”, Medical conditions and Others must be specified (errors)
 - [x] **ANC specification even when the upstream answer is unknown** — if Medical conditions or Others is selected in the risk list, its specification is required
@@ -36,13 +42,38 @@ contradict each other?** They never suggest a clinical cause.
 - [x] **Transfusion units = 0** while transfusion is recorded (error)
 - [x] **Anaesthesia = “No anaesthesia” plus a specific type** (error)
 
+## Reconsideration
+
+- [x] **Changed evidence after acceptance** — an active answered field with `needs_reconsideration` blocks until the clinician accepts, rejects or corrects the new proposal
+- [x] **Rejecting the last new candidate** — records the decision and clears reconsideration for that field; other open candidates keep it unresolved
+- [x] **Hidden historical answer** — remains a retained warning, not an active blocker
+- [x] **Never overwrite** the accepted answer merely because the source changed
+
+## Source records
+
+- [x] **Supersession first** — death/delivery/observation checks use the current head (`superseded_by IS NULL`), not the latest clock time
+- [x] **Reporting admission** — use the review's reporting admission, then its linked source admission; no fallback to an unrelated admission
+- [x] **Corrected source** — an editable review is flagged until Refresh proposals; that action relinks the source head and marks changed accepted answers for reconsideration
+- [x] **Frozen review** — submitted/approved reviews keep their linked source and frozen payload; they are never silently relinked
+- [x] **No source fallback** — a review with no linked source does not borrow another document
+
+## Precision
+
+- [x] **Exact + exact** — definite ordering
+- [x] **Date-only vs date-only** — different dates are definite; the same date is uncertain
+- [x] **Estimated or unknown** — cannot establish ordering; a warning explains the uncertainty
+- [x] **Future dates** — an exact or date-only future date is invalid; a date-only future date is caught without inventing a time
+- [x] **Late entries** — definite late only when the death time and entry time support it; same-day/date-only/estimated is reported as uncertain
+- [x] **Discharge** — `discharged_at` is treated as administrative closure unless defined otherwise; discharge after death is a warning, not an impossible clinical event
+
 ## Impossible
 
-- [x] **Discharge before admission** — error
-- [x] **Discharge after death** — error
+- [x] **Discharge before admission** — warning; `discharged_at` is treated as administrative closure until defined otherwise
+- [x] **Discharge after death** — warning; not an impossible clinical event without an explicit definition
 - [x] **Admission, death or delivery in the future** — error
-- [x] **Negative duration** in the hospital-stay, admission→delivery or admission→death interval — error
-- [x] **Impossible age** — zero/negative or over 120 — error
+- [x] **Negative duration** in the hospital-stay, ICU, admission→delivery or admission→death interval — error
+- [x] **Impossible review values** — zero/negative age is an error; age over 120 is a plausibility warning; negative gravida/para/abortions/living children and negative durations (including ICU) are errors
+- [x] **Source/review disagreement** — review age differing from the patient record is a warning, distinct from an internally impossible value
 
 ## Possible but unusual — warning, never blocking
 
@@ -63,11 +94,23 @@ contradict each other?** They never suggest a clinical cause.
 - [x] **Legacy answers from a retired field** — shown in the legacy panel/appendix, never reinterpreted as a current answer
 - [x] **Four or more errors at submission** — the toast says how many more there are
 
+## Consistency
+
+- [x] **Entered admission–death interval** — compared with entered 1.a/1.b, or exact source times when Form 4 times are absent; one-minute rounding tolerance; warning
+- [x] **Entered admission–delivery interval** — compared with exact source times only when delivery is not before admission and the reporting facility matches; warning
+- [x] **Entered ICU duration** — compared with exact ICU stay bounds; warning
+- [x] **Transfusion = no but intervention matrix records transfusion** — warning
+- [x] **Pregnancy outcome vs neonatal outcome** — warning for clarification, never automatic correction
+- [x] **Multiple births** — mixed outcomes are a warning, not an impossible state
+- [x] **No diagnosis-versus-observation rules** — missing evidence is not treated as a wrong diagnosis
+
 ## Context warnings
 
-- [x] **Late entries** — labour-record observations documented after the time of death
+- [x] **Late entries** — labour-record observations definitely documented after death; same-day/date-only/estimated entries are an uncertainty warning
 - [x] **No labour record** — only the death/admission records can supply values
 - [x] **No labour record linked but observations exist** — no false warning
+- [x] **Case summary empty** — nonblocking warning
+- [x] **Newer source correction** — warning, or error when an accepted document-sourced answer needs reconsideration
 
 ## Plain language
 
@@ -92,4 +135,5 @@ contradict each other?** They never suggest a clinical cause.
 - [x] Workspace panel and inline messages, shown after Submit — `review/views.py`, `workspace.html`
 - [x] Submission — `services.submit` refuses while any error remains
 - [x] Required-field helper — `services.missing_required` delegates to `checks.required_keys`
-- [x] Tests — `tests/test_checks.py`
+- [x] Checks version `k3` is in the frozen payload and submission audit event
+- [x] Tests — `tests/test_checks.py`, `tests/test_checks_advanced.py`, `tests/test_legacy.py`

@@ -32,7 +32,7 @@
   {% for row in section.rows %}
     <tr>
       <td>{{ row.field.label_printed }}<div class="key">{{ row.field.key }}</div></td>
-      <td class="value">{{ row.display }}</td>
+      <td class="value">{{ row.display }}{% if row.state_reason %}<div class="key">{{ row.state_reason }}</div>{% endif %}</td>
       <td>
         <span class="chip {{ row.mark }}">{{ row.mark }}</span>
         {% if row.entry and row.entry.decided_by %}<span class="muted">{{ row.entry.decided_by }}</span>{% endif %}
@@ -56,7 +56,7 @@
   {% for row in legacy_rows %}
     <tr>
       <td>{{ row.label }}<div class="key">{{ row.key }}</div></td>
-      <td class="value">{{ row.display }}</td>
+      <td class="value">{{ row.display }}{% if row.state_reason %}<div class="key">{{ row.state_reason }}</div>{% endif %}</td>
       <td><span class="chip {{ row.mark }}">{{ row.mark }}</span></td>
     </tr>
   {% endfor %}
@@ -76,7 +76,7 @@
   {% for row in hidden_rows %}
     <tr>
       <td>{{ row.field.label_printed }}<div class="key">{{ row.field.key }}</div></td>
-      <td class="value">{{ row.display }}</td>
+      <td class="value">{{ row.display }}{% if row.state_reason %}<div class="key">{{ row.state_reason }}</div>{% endif %}</td>
       <td class="muted">{{ row.reason }}</td>
     </tr>
   {% endfor %}

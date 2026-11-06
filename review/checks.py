@@ -16,10 +16,24 @@ from decimal import Decimal
 from django.utils import timezone
 
 from . import conditions
-from .models import Review, ReviewItem, SourceDocument, TimePrecision
+from .models import Review, ReviewItem, TimePrecision
 from .registry import registry
+from .source_time import (
+    AFTER,
+    BEFORE,
+    UNCERTAIN,
+    compare_instants,
+    current_admission,
+    current_death,
+    current_delivery,
+    current_neonates,
+    current_source,
+    future_status,
+    late_status,
+    source_has_newer_correction,
+)
 
-CHECK_VERSION = "k2"
+CHECK_VERSION = "k3"
 ERROR = "error"
 WARNING = "warning"
 
@@ -60,12 +74,27 @@ class CheckContext:
         item = self.item(key)
         return bool(item and item.answer_state == ReviewItem.AnswerState.ANSWERED)
 
+    def not_known(self, key: str) -> bool:
+        item = self.item(key)
+        return bool(item and item.answer_state == ReviewItem.AnswerState.NOT_KNOWN)
+
+    def not_applicable(self, key: str) -> bool:
+        item = self.item(key)
+        return bool(
+            item
+            and item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+        )
+
     def resolved(self, key: str) -> bool:
         item = self.item(key)
         return bool(
             item
             and (
-                item.answer_state == ReviewItem.AnswerState.ANSWERED
+                item.answer_state
+                in (
+                    ReviewItem.AnswerState.ANSWERED,
+                    ReviewItem.AnswerState.NOT_KNOWN,
+                )
                 or item.applicability_state
                 == ReviewItem.Applicability.NOT_APPLICABLE
             )
@@ -156,7 +185,11 @@ def required_keys(review: Review, visibility=None) -> list[str]:
         resolved = bool(
             item
             and (
-                item.answer_state == ReviewItem.AnswerState.ANSWERED
+                item.answer_state
+                in (
+                    ReviewItem.AnswerState.ANSWERED,
+                    ReviewItem.AnswerState.NOT_KNOWN,
+                )
                 or item.applicability_state
                 == ReviewItem.Applicability.NOT_APPLICABLE
             )
@@ -325,16 +358,55 @@ VISIBLE_FOLLOWUPS: dict[str, tuple[str, str, str]] = {
 
 def _required_fields(ctx: CheckContext) -> list[Issue]:
     out = []
-    for key in required_keys(ctx.review, ctx.visibility):
+    for field in registry.all():
+        if not field.required or not ctx.visible(field.key):
+            continue
+        item = ctx.item(field.key)
+        if (
+            item is not None
+            and item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+        ):
+            out.append(
+                _issue(
+                    ctx,
+                    f"na_required:{field.key}",
+                    ERROR,
+                    field.key,
+                    f"{field.label_printed} is marked not applicable, but it applies to every death.",
+                    "Answer it, or choose Not known with a reason.",
+                )
+            )
+        elif item is None or item.answer_state == ReviewItem.AnswerState.UNANSWERED:
+            out.append(
+                _issue(
+                    ctx,
+                    f"missing:{field.key}",
+                    ERROR,
+                    field.key,
+                    f"{field.label_printed} is missing.",
+                    "Enter it, or choose Not known with a reason.",
+                )
+            )
+    return out
+
+
+def _not_known(ctx: CheckContext) -> list[Issue]:
+    out = []
+    for key, item in ctx.items.items():
+        if key not in registry or not ctx.visible(key):
+            continue
+        if item.answer_state != ReviewItem.AnswerState.NOT_KNOWN:
+            continue
         field = registry[key]
+        reason = f" · {item.reason}" if item.reason else ""
         out.append(
             _issue(
                 ctx,
-                f"missing:{key}",
-                ERROR,
+                f"not_known:{key}",
+                WARNING,
                 key,
-                f"{field.label_printed} is missing.",
-                "Enter it, or mark it not applicable with a reason.",
+                f"{field.label_printed} is recorded as not known{reason}.",
+                "Provide an answer if it becomes available; otherwise continue.",
             )
         )
     return out
@@ -349,11 +421,20 @@ def _followups(ctx: CheckContext) -> list[Issue]:
             continue
         out.append(_issue(ctx, f"missing:{key}", severity, key, message, fix))
     for key, (severity, message, fix) in VISIBLE_FOLLOWUPS.items():
-        if (
-            ctx.visible(key)
-            and conditions.option_selected(key, ctx.answers)
-            and not ctx.resolved(key)
-        ):
+        if not ctx.visible(key) or not conditions.option_selected(key, ctx.answers):
+            continue
+        if ctx.not_applicable(key):
+            out.append(
+                _issue(
+                    ctx,
+                    f"conflict:{key}",
+                    ERROR,
+                    key,
+                    f"{message} It is marked not applicable, but the selected option requires it.",
+                    "Provide the specification, change the selection, or choose Not known with a reason.",
+                )
+            )
+        elif not ctx.resolved(key):
             out.append(_issue(ctx, f"missing:{key}", severity, key, message, fix))
     # The referral table is not gated on a formal referral, but when she was
     # referred the table is expected.
@@ -413,70 +494,108 @@ def _impossible_dates(ctx: CheckContext) -> list[Issue]:
     def warn(key, field, message, fix):
         out.append(_issue(ctx, key, WARNING, field, message, fix))
 
-    if a and a.admitted_at:
-        if a.admitted_at > now:
+    def future(value, precision, field, label):
+        status = future_status(value, precision, now)
+        if status is True:
             add(
-                "impossible:future_admission",
-                "f4.timing.a",
-                f"Date of admission ({_fmt(a.admitted_at)}) is in the future.",
-                "Check the admission date.",
-            )
-        if a.discharged_at and a.discharged_at < a.admitted_at:
-            add(
-                "impossible:discharge_before_admission",
-                "f4.timing.c",
-                "Discharge is before admission. Check the two times.",
-                "Correct the admission or discharge time.",
-            )
-        if a.discharged_at and d and d.died_at and a.discharged_at > d.died_at:
-            add(
-                "impossible:discharge_after_death",
-                "f4.timing.c",
-                f"Discharge ({_fmt(a.discharged_at)}) is after death ({_fmt(d.died_at)}).",
-                "Correct the discharge or death time.",
-            )
-        if d and d.died_at and d.died_at < a.admitted_at:
-            warn(
-                "possible:death_before_admission",
-                "f4.timing.b",
-                f"Date of death ({_fmt(d.died_at)}) is before date of admission ({_fmt(a.admitted_at)}). "
-                "If she was brought dead, this is expected; otherwise check both times.",
-                "Confirm whether she was brought dead.",
+                f"impossible:future_{field}",
+                field,
+                f"{label} is in the future.",
+                "Check the date.",
             )
 
-    if d and d.died_at and d.died_at > now:
-        add(
-            "impossible:future_death",
-            "f4.timing.b",
-            f"Date of death ({_fmt(d.died_at)}) is in the future.",
-            "Check the date of death.",
-        )
+    if a and a.admitted_at:
+        future(a.admitted_at, a.time_precision, "f4.timing.a", "Date of admission")
+        if a.discharged_at:
+            order = compare_instants(
+                a.discharged_at, TimePrecision.EXACT, a.admitted_at, a.time_precision
+            )
+            if order == BEFORE:
+                warn(
+                    "possible:discharge_before_admission",
+                    "f4.timing.c",
+                    "Discharge is recorded before admission. If this is administrative closure, clarify it; otherwise check the times.",
+                    "Confirm the discharge record.",
+                )
+            if d and d.died_at:
+                order = compare_instants(
+                    a.discharged_at, TimePrecision.EXACT, d.died_at, d.time_precision
+                )
+                if order == AFTER:
+                    warn(
+                        "possible:discharge_after_death",
+                        "f4.timing.c",
+                        "Discharge is recorded after death. If this is administrative closure, clarify it; otherwise check the times.",
+                        "Confirm the discharge record.",
+                    )
+        if d and d.died_at:
+            order = compare_instants(
+                d.died_at, d.time_precision, a.admitted_at, a.time_precision
+            )
+            if order == BEFORE:
+                warn(
+                    "possible:death_before_admission",
+                    "f4.timing.b",
+                    f"Date of death ({_fmt(d.died_at)}) is before date of admission ({_fmt(a.admitted_at)}). "
+                    "If she was brought dead, this is expected; otherwise check both times.",
+                    "Confirm whether she was brought dead.",
+                )
+            elif order == UNCERTAIN:
+                warn(
+                    "uncertain:death_admission_order",
+                    "f4.timing.b",
+                    "The recorded precision cannot establish whether death preceded admission. Check the source times.",
+                    "Record exact times if they are known.",
+                )
+
+    if d and d.died_at:
+        future(d.died_at, d.time_precision, "f4.timing.b", "Date of death")
 
     if delivery and delivery.delivered_at:
-        if delivery.delivered_at > now:
-            add(
-                "impossible:future_delivery",
-                "f4.timing.e",
-                f"Delivery ({_fmt(delivery.delivered_at)}) is in the future.",
-                "Check the delivery date.",
+        future(delivery.delivered_at, delivery.time_precision, "f4.timing.e", "Delivery")
+        if a and a.admitted_at:
+            order = compare_instants(
+                delivery.delivered_at,
+                delivery.time_precision,
+                a.admitted_at,
+                a.time_precision,
             )
-        if a and a.admitted_at and delivery.delivered_at < a.admitted_at:
-            warn(
-                "possible:delivery_before_admission",
-                "f4.timing.e",
-                f"Delivery ({_fmt(delivery.delivered_at)}) is before admission ({_fmt(a.admitted_at)}). "
-                "If she was referred in after delivery, this is expected; the admission–delivery interval will not apply.",
-                "Confirm whether she delivered before arriving.",
+            if order == BEFORE:
+                warn(
+                    "possible:delivery_before_admission",
+                    "f4.timing.e",
+                    f"Delivery ({_fmt(delivery.delivered_at)}) is before admission ({_fmt(a.admitted_at)}). "
+                    "If she was referred in after delivery, this is expected; the admission–delivery interval will not apply.",
+                    "Confirm whether she delivered before arriving.",
+                )
+            elif order == UNCERTAIN:
+                warn(
+                    "uncertain:delivery_admission_order",
+                    "f4.timing.e",
+                    "The recorded precision cannot establish whether delivery preceded admission.",
+                    "Record exact times if they are known.",
+                )
+        if d and d.died_at:
+            order = compare_instants(
+                delivery.delivered_at, delivery.time_precision, d.died_at, d.time_precision
             )
-        if d and d.died_at and delivery.delivered_at > d.died_at:
-            warn(
-                "possible:delivery_after_death",
-                "f4.timing.e",
-                f"Delivery ({_fmt(delivery.delivered_at)}) is after death ({_fmt(d.died_at)}). "
-                "If this was a perimortem delivery, confirm; otherwise check the times.",
-                "Confirm whether the delivery was perimortem.",
-            )
+            if order == AFTER:
+                warn(
+                    "possible:delivery_after_death",
+                    "f4.timing.e",
+                    f"Delivery ({_fmt(delivery.delivered_at)}) is after death ({_fmt(d.died_at)}). "
+                    "If this was a perimortem delivery, confirm; otherwise check the times.",
+                    "Confirm whether the delivery was perimortem.",
+                )
+            elif order == UNCERTAIN:
+                warn(
+                    "uncertain:delivery_death_order",
+                    "f4.timing.e",
+                    "The recorded precision cannot establish whether delivery followed death.",
+                    "Record exact times if they are known.",
+                )
 
+    # Form 4 timestamps are entered as exact date-times by the form control.
     form_a = _dt(ctx.value("f4.timing.a"))
     form_b = _dt(ctx.value("f4.timing.b"))
     if form_a and form_b and form_b < form_a:
@@ -488,19 +607,22 @@ def _impossible_dates(ctx: CheckContext) -> list[Issue]:
             "Confirm whether she was brought dead.",
         )
     if form_a and form_a > now:
-        add("impossible:form_future_admission", "f4.timing.a", "Form 4 admission is in the future.", "Correct 1.a.")
+        add(
+            "impossible:form_future_admission",
+            "f4.timing.a",
+            "Form 4 admission is in the future.",
+            "Correct 1.a.",
+        )
     if form_b and form_b > now:
-        add("impossible:form_future_death", "f4.timing.b", "Form 4 death is in the future.", "Correct 1.b.")
+        add(
+            "impossible:form_future_death",
+            "f4.timing.b",
+            "Form 4 death is in the future.",
+            "Correct 1.b.",
+        )
 
-    for key in ("f4.timing.c", "f4.timing.e", "f4.timing.f"):
-        value = ctx.value(key)
-        if isinstance(value, dict) and isinstance(value.get("minutes"), int) and value["minutes"] < 0:
-            add(
-                f"impossible:negative:{key}",
-                key,
-                "A duration cannot be negative.",
-                "Check the two times behind this interval.",
-            )
+    # Negative durations are validated in _review_values, where active answers
+    # and hidden retained answers are separated.
     return out
 
 
@@ -567,7 +689,7 @@ def _outcome_consistency(ctx: CheckContext) -> list[Issue]:
             )
         )
 
-    mode = ctx.value("f4.delivery.mode")
+    mode = ctx.value("f4.delivery.mode") if ctx.visible("f4.delivery.mode") else None
     if form_outcome in ("live_birth", "still_birth") and mode == "undelivered":
         out.append(
             _issue(
@@ -632,21 +754,39 @@ def _late_entries(ctx: CheckContext) -> list[Issue]:
     late = [
         o
         for o in ctx.observations
-        if o.documented_at and o.documented_at > ctx.death.died_at
+        if late_status(o.documented_at, ctx.death) == AFTER
     ]
-    if not late:
-        return []
-    return [
-        _issue(
-            ctx,
-            "warning:late_entries",
-            WARNING,
-            "",
-            f"{len(late)} labour-record entr{'y was' if len(late) == 1 else 'ies were'} "
-            "written after the time of death. They are marked late on the chart.",
-            "Review the labour-record history.",
+    uncertain = [
+        o
+        for o in ctx.observations
+        if o.documented_at and late_status(o.documented_at, ctx.death) == UNCERTAIN
+    ]
+    out = []
+    if late:
+        out.append(
+            _issue(
+                ctx,
+                "warning:late_entries",
+                WARNING,
+                "",
+                f"{len(late)} labour-record entr{'y was' if len(late) == 1 else 'ies were'} "
+                "written after the time of death. They are marked late on the chart.",
+                "Review the labour-record history.",
+            )
         )
-    ]
+    if uncertain:
+        out.append(
+            _issue(
+                ctx,
+                "uncertain:late_entries",
+                WARNING,
+                "",
+                f"{len(uncertain)} labour-record entr{'y is' if len(uncertain) == 1 else 'ies are'} "
+                "on a date where the recorded death time cannot establish whether it was written after death.",
+                "Record an exact death time if it is known, or review the chart.",
+            )
+        )
+    return out
 
 
 def _no_labour_record(ctx: CheckContext) -> list[Issue]:
@@ -664,52 +804,341 @@ def _no_labour_record(ctx: CheckContext) -> list[Issue]:
     ]
 
 
-def _age(ctx: CheckContext) -> list[Issue]:
-    age = ctx.pregnancy.patient.age
-    if age is not None and (age <= 0 or age > 120):
-        return [
-            _issue(
-                ctx,
-                "impossible:age",
-                ERROR,
+def _review_values(ctx: CheckContext) -> list[Issue]:
+    out = []
+
+    def error(key, message, fix):
+        out.append(_issue(ctx, f"invalid:{key}", ERROR, key, message, fix))
+
+    def warn(key, message, fix):
+        out.append(_issue(ctx, f"warning:{key}", WARNING, key, message, fix))
+
+    source_age = ctx.pregnancy.patient.age
+    if source_age is not None:
+        if source_age <= 0:
+            error(
                 "f4.background.age",
-                f"The recorded age ({age}) is not possible.",
+                f"The patient record age ({source_age}) is not possible.",
                 "Correct the age in the patient record.",
             )
-        ]
-    return []
+        elif source_age > 120:
+            warn(
+                "f4.background.age",
+                f"The patient record age ({source_age}) is unusually high; check it.",
+                "Confirm the patient record.",
+            )
+
+    review_age = ctx.value("f4.background.age")
+    if ctx.visible("f4.background.age") and ctx.answered("f4.background.age"):
+        if isinstance(review_age, int):
+            if review_age <= 0:
+                error(
+                    "f4.background.age",
+                    "The review age must be a positive number.",
+                    "Enter a positive age.",
+                )
+            elif review_age > 120:
+                warn(
+                    "f4.background.age",
+                    f"The review age ({review_age}) is unusually high; check it.",
+                    "Confirm the age or correct it.",
+                )
+            if source_age is not None and review_age != source_age:
+                warn(
+                    "f4.background.age",
+                    f"The review age ({review_age}) differs from the patient record ({source_age}).",
+                    "Confirm which age is correct.",
+                )
+
+    for key in (
+        "f4.admission.gravida",
+        "f4.admission.para",
+        "f4.admission.abortions",
+        "f4.admission.living_children",
+    ):
+        if not ctx.visible(key) or not ctx.answered(key):
+            continue
+        value = ctx.value(key)
+        if isinstance(value, int) and value < 0:
+            error(
+                key,
+                f"{registry[key].label_printed} cannot be negative.",
+                "Enter zero or a positive number.",
+            )
+
+    for key in ("f4.timing.c", "f4.timing.d", "f4.timing.e", "f4.timing.f"):
+        if not ctx.visible(key) or not ctx.answered(key):
+            continue
+        value = ctx.value(key)
+        if (
+            isinstance(value, dict)
+            and isinstance(value.get("minutes"), int)
+            and value["minutes"] < 0
+        ):
+            error(
+                key,
+                "A duration cannot be negative.",
+                "Check the two times behind this interval.",
+            )
+
+    return out
+
+
+def _consistency(ctx: CheckContext) -> list[Issue]:
+    out = []
+
+    def warn(key, field, message, fix):
+        out.append(_issue(ctx, key, WARNING, field, message, fix))
+
+    def minutes(key):
+        value = ctx.value(key)
+        if isinstance(value, dict) and isinstance(value.get("minutes"), int):
+            return value["minutes"]
+        return None
+
+    def compare_interval(key, expected, label):
+        if not ctx.visible(key) or not ctx.answered(key):
+            return
+        actual = minutes(key)
+        if actual is None or expected is None:
+            return
+        if abs(actual - expected) > 1:  # one-minute tolerance for rounding
+            warn(
+                f"inconsistent:interval:{key}",
+                key,
+                f"{label} says {_display({'minutes': actual})}, but the recorded times give "
+                f"{_display({'minutes': expected})}. Check the interval and the times.",
+                "Correct the interval or the timestamps.",
+            )
+
+    form_a = _dt(ctx.value("f4.timing.a"))
+    form_b = _dt(ctx.value("f4.timing.b"))
+    if form_a and form_b and form_b >= form_a:
+        expected = int((form_b - form_a).total_seconds() // 60)
+        compare_interval(
+            "f4.timing.f",
+            expected,
+            "1.f Admission – death interval",
+        )
+        # 1.c is a hospital-stay duration. Only compare it when there is no
+        # discharge record, whose administrative meaning is not defined.
+        if ctx.admission is not None and ctx.admission.discharged_at is None:
+            compare_interval(
+                "f4.timing.c",
+                expected,
+                "1.c Duration of hospital stay",
+            )
+
+    # Source admission/death is a fallback only when the form timestamps were
+    # not entered. It never overrides the Form 4 answers.
+    if (
+        ctx.admission
+        and ctx.admission.admitted_at
+        and ctx.death
+        and ctx.death.died_at
+        and not (form_a and form_b)
+    ):
+        if (
+            ctx.admission.time_precision == TimePrecision.EXACT
+            and ctx.death.time_precision == TimePrecision.EXACT
+            and ctx.death.died_at >= ctx.admission.admitted_at
+        ):
+            compare_interval(
+                "f4.timing.f",
+                int(
+                    (ctx.death.died_at - ctx.admission.admitted_at).total_seconds()
+                    // 60
+                ),
+                "1.f Admission – death interval",
+            )
+
+    if (
+        ctx.visible("f4.timing.e")
+        and ctx.answered("f4.timing.e")
+        and ctx.admission
+        and ctx.delivery
+        and ctx.admission.admitted_at
+        and ctx.delivery.delivered_at
+        and ctx.admission.time_precision == TimePrecision.EXACT
+        and ctx.delivery.time_precision == TimePrecision.EXACT
+        and ctx.delivery.delivered_at >= ctx.admission.admitted_at
+        and (
+            ctx.delivery.facility_id is None
+            or ctx.delivery.facility_id == ctx.review.reporting_facility_id
+        )
+    ):
+        compare_interval(
+            "f4.timing.e",
+            int(
+                (ctx.delivery.delivered_at - ctx.admission.admitted_at).total_seconds()
+                // 60
+            ),
+            "1.e Admission – delivery interval",
+        )
+
+    if ctx.visible("f4.timing.d") and ctx.admission:
+        stays = list(ctx.admission.icu_stays.all())
+        if stays and all(
+            s.from_at and s.to_at
+            and s.from_precision == TimePrecision.EXACT
+            and s.to_precision == TimePrecision.EXACT
+            for s in stays
+        ):
+            expected = int(
+                sum((s.to_at - s.from_at).total_seconds() for s in stays) // 60
+            )
+            compare_interval("f4.timing.d", expected, "1.d ICU stay")
+
+    transfusion_given = ctx.value("f4.interventions.transfusion_given")
+    matrix = ctx.value("f4.interventions.matrix")
+    if (
+        transfusion_given == "no"
+        and ctx.visible("f4.interventions.matrix")
+        and isinstance(matrix, list)
+        and any(
+            isinstance(row, dict) and row.get("procedure") == "transfusion"
+            for row in matrix
+        )
+    ):
+        warn(
+            "inconsistent:transfusion_matrix",
+            "f4.interventions.transfusion_given",
+            "Blood transfusion is recorded as 'no', but the intervention matrix records a transfusion.",
+            "Reconcile the two answers.",
+        )
+
+    form_outcome = ctx.value("f4.timing.g")
+    neonatal = ctx.value("f4.delivery.neonatal_outcome")
+    if (
+        ctx.visible("f4.delivery.neonatal_outcome")
+        and ctx.answered("f4.delivery.neonatal_outcome")
+    ):
+        if form_outcome == "live_birth" and neonatal in (
+            "fresh_still_birth",
+            "macerated_still_birth",
+        ):
+            warn(
+                "inconsistent:live_birth_stillbirth",
+                "f4.delivery.neonatal_outcome",
+                "The pregnancy outcome is live birth, but the neonatal outcome is a stillbirth.",
+                "Confirm the outcome; multiple births may need a note.",
+            )
+        if form_outcome == "still_birth" and neonatal == "alive":
+            warn(
+                "inconsistent:stillbirth_alive",
+                "f4.delivery.neonatal_outcome",
+                "The pregnancy outcome is stillbirth, but the neonatal outcome is alive.",
+                "Confirm the outcome; multiple births may need a note.",
+            )
+        if len(ctx.neonates) > 1:
+            outcomes = {n.outcome for n in ctx.neonates}
+            if len(outcomes) > 1:
+                warn(
+                    "inconsistent:mixed_neonates",
+                    "f4.delivery.neonatal_outcome",
+                    "Multiple babies have different outcomes. Form 4 records one neonatal outcome; confirm what should be recorded.",
+                    "Add the mixture to the case summary if needed.",
+                )
+            elif neonatal not in outcomes:
+                warn(
+                    "inconsistent:neonate_record",
+                    "f4.delivery.neonatal_outcome",
+                    f"Form 4 neonatal outcome is {_display(neonatal)}, but the recorded baby outcome is {_display(next(iter(outcomes)))}.",
+                    "Confirm which outcome should be recorded.",
+                )
+        elif len(ctx.neonates) == 1 and neonatal != ctx.neonates[0].outcome:
+            warn(
+                "inconsistent:neonate_record",
+                "f4.delivery.neonatal_outcome",
+                f"Form 4 neonatal outcome is {_display(neonatal)}, but the recorded baby outcome is {_display(ctx.neonates[0].outcome)}.",
+                "Confirm which outcome should be recorded.",
+            )
+
+    return out
+
+
+def _reconsideration(ctx: CheckContext) -> list[Issue]:
+    out = []
+    for key, item in ctx.items.items():
+        if key not in registry or not ctx.visible(key):
+            continue
+        if item.needs_reconsideration and item.answer_state == ReviewItem.AnswerState.ANSWERED:
+            field = registry[key]
+            out.append(
+                _issue(
+                    ctx,
+                    f"reconsideration:{key}",
+                    ERROR,
+                    key,
+                    f"{field.label_printed} changed after its evidence was accepted. Review the new proposal and keep, accept or correct this answer.",
+                    "Accept, reject or correct the new proposal.",
+                )
+            )
+    return out
+
+
+def _summary(ctx: CheckContext) -> list[Issue]:
+    key = "f4.summary.text"
+    if not ctx.visible(key) or ctx.resolved(key):
+        return []
+    return [
+        _issue(
+            ctx,
+            "missing:summary",
+            WARNING,
+            key,
+            "The case summary is empty. A short clinical summary helps the reviewer.",
+            "Add a brief summary, or mark it not applicable.",
+        )
+    ]
+
+
+def _source_updated(ctx: CheckContext) -> list[Issue]:
+    if not source_has_newer_correction(ctx.review):
+        return []
+    accepted_document_answer = any(
+        item.answer_state == ReviewItem.AnswerState.ANSWERED
+        and item.accepted_proposal is not None
+        and item.accepted_proposal.source_kind == "document"
+        for item in ctx.items.values()
+    )
+    return [
+        _issue(
+            ctx,
+            "source:newer_correction",
+            ERROR if accepted_document_answer else WARNING,
+            "",
+            "The linked labour record has a newer correction. Refresh proposals and review any changed answers.",
+            "Refresh proposals before submitting.",
+            link=False,
+        )
+    ]
 
 
 CHECKS = (
     _required_fields,
+    _not_known,
     _followups,
+    _reconsideration,
     _impossible_dates,
     _outcome_consistency,
+    _review_values,
+    _consistency,
     _retained_answers,
     _late_entries,
     _no_labour_record,
-    _age,
+    _summary,
+    _source_updated,
 )
 
 
 def run_checks(review: Review, visibility=None) -> list[Issue]:
     seen = visibility or conditions.visibility(review)
     pregnancy = review.pregnancy
-    admission = (
-        review.reporting_admission
-        or pregnancy.admissions.order_by("-admitted_at").first()
-    )
-    delivery = pregnancy.deliveries.order_by("-delivered_at").first()
-    death = pregnancy.deaths.order_by("-died_at").first()
-    source = review.source_document
-    if source is None:
-        source = (
-            SourceDocument.objects.filter(
-                pregnancy=pregnancy, kind=SourceDocument.Kind.LCG
-            )
-            .order_by("id")
-            .first()
-        )
+    admission = current_admission(review)
+    delivery = current_delivery(pregnancy)
+    death = current_death(pregnancy, admission)
+    source = current_source(review)
     observations = (
         list(source.observations.current()) if source is not None else []
     )
@@ -722,7 +1151,7 @@ def run_checks(review: Review, visibility=None) -> list[Issue]:
         admission=admission,
         delivery=delivery,
         death=death,
-        neonates=list(delivery.neonates.all()) if delivery else [],
+        neonates=current_neonates(delivery),
         observations=observations,
         now=timezone.now(),
     )

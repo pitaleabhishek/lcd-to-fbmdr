@@ -48,7 +48,7 @@
   </thead>
   <tbody>
     {% for row in rows %}
-      <tr class="{% if row.correction %}superseded{% endif %}{% if row.late %} late-row{% endif %}">
+      <tr class="{% if row.correction %}superseded{% endif %}{% if row.late %} late-row{% elif row.late_uncertain %} uncertain-row{% endif %}">
         <td class="nowrap">
           {{ row.obs.observed_at|date:"d M H:i" }}
           <div class="key">{{ row.obs.get_stage_display }}</div>
@@ -61,7 +61,7 @@
         <td>{{ row.obs.author|default:"—" }}</td>
         <td class="nowrap">
           {{ row.obs.documented_at|date:"d M H:i" }}
-          {% if row.late %}<div class="warn small">documented after death</div>{% endif %}
+          {% if row.late %}<div class="warn small">documented after death</div>{% elif row.late_uncertain %}<div class="warn small">same day as death; cannot establish late entry</div>{% endif %}
         </td>
         <td class="nowrap">
           {{ row.obs.entered_at|date:"d M H:i" }}

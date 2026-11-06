@@ -15,6 +15,8 @@ from typing import Any, Callable
 from django.urls import reverse
 from django.utils import timezone
 
+from .source_time import AFTER, UNCERTAIN, late_status
+
 RULE_SET = "lcg_2021"
 RULE_VERSION = 1
 CITATION = "WHO Labour Care Guide 2021, chart alert column"
@@ -92,6 +94,7 @@ def _crossing(obs, text: str) -> dict:
         "citation": CITATION,
         "url": reverse("source", args=["observation", obs.pk]),
         "late": False,
+        "late_uncertain": False,
     }
 
 
@@ -113,8 +116,10 @@ def crossings(document, death=None) -> list[dict]:
         threshold = THRESHOLDS.get(obs.variable.key)
         if threshold is not None and threshold.test(_value(obs)):
             hit = _crossing(obs, threshold.text)
-            if death and death.died_at and obs.documented_at and obs.documented_at > death.died_at:
-                hit["late"] = True
+            if death and death.died_at and obs.documented_at:
+                status = late_status(obs.documented_at, death)
+                hit["late"] = status == AFTER
+                hit["late_uncertain"] = status == UNCERTAIN
             out.append(hit)
 
         if obs.variable.key == "cervix" and obs.value_num is not None:

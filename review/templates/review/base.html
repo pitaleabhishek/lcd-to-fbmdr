@@ -183,6 +183,8 @@
   .chart .empty { color:#c4ccd3; }
   .chart .late { color:var(--warn); font-weight:700; }
   .chart .late sup { font-size:9px; margin-left:2px; }
+  .chart .late-uncertain { color:var(--warn); }
+  .chart .late-uncertain sup { font-size:9px; margin-left:2px; }
   a.cell { color:inherit; text-decoration:none; border-bottom:1px dotted #c4ccd3; }
   a.cell:hover { color:var(--accent); border-bottom-color:var(--accent); }
   a.cell.late { color:var(--warn); }
@@ -207,6 +209,7 @@
   table.history tr.superseded td { color:var(--muted); background:#fbfcfd; }
   table.history tr.superseded .value { text-decoration:line-through; }
   table.history tr.late-row td:first-child { box-shadow:inset 3px 0 0 var(--warn); }
+  table.history tr.uncertain-row td:first-child { box-shadow:inset 3px 0 0 #c9a24a; }
   .nowrap { white-space:nowrap; }
   .correction-form { background:#fff; border:1px solid var(--line); border-radius:6px;
                      padding:12px; max-width:680px; }
@@ -566,28 +569,44 @@
     var echo = edit.querySelector('.na-echo');
     var controls = edit.querySelectorAll('[name=value], details.multi');
     var reasonInput = edit.querySelector('input[name=reason]');
+    var stateNa = edit.querySelector('.state-na');
+    var stateUnknown = edit.querySelector('.state-unknown');
+    var stateClear = edit.querySelector('.state-clear');
+    var saveState = edit.querySelector('.save-state');
+
+    function showState(state) {
+      var isState = state === 'na' || state === 'unknown';
+      controls.forEach(function (c) { c.classList.toggle('na-hidden', isState); });
+      if (echo) {
+        echo.hidden = !isState;
+        echo.textContent = state === 'unknown' ? 'Not known' : state === 'na' ? 'Not applicable' : '';
+      }
+      if (stateNa) stateNa.hidden = isState;
+      if (stateUnknown) stateUnknown.hidden = isState;
+      if (stateClear) stateClear.hidden = !isState;
+      if (!isState) {
+        var value = edit.querySelector('input[name=value]');
+        if (value) value.value = '';
+      }
+    }
+
+    var wanted = btn.dataset.state;
     var body = new FormData();
     body.append('key', btn.dataset.key);
-    body.append('state', btn.dataset.state);
+    body.append('state', wanted);
     body.append('reason', reasonInput ? (reasonInput.value || '') : '');
     body.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
     fetch(btn.dataset.url, { method: 'POST', body: body, credentials: 'same-origin' })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (!j.ok) return;
-        if (j.state === 'not_applicable') {
-          controls.forEach(function (c) { c.classList.add('na-hidden'); });
-          if (echo) echo.hidden = false;
-          btn.dataset.state = 'clear';
-          btn.textContent = 'clear';
-        } else {
-          controls.forEach(function (c) { c.classList.remove('na-hidden'); });
-          if (echo) echo.hidden = true;
-          btn.dataset.state = 'na';
-          btn.textContent = 'N/A';
-          var value = edit.querySelector('input[name=value]');
-          if (value) value.value = '';
+        if (!j.ok) {
+          if (saveState) {
+            saveState.className = 'save-state error';
+            saveState.textContent = j.error || 'not saved';
+          }
+          return;
         }
+        showState(j.state === 'not_known' ? 'unknown' : j.state === 'not_applicable' ? 'na' : null);
       });
   });
 

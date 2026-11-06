@@ -31,6 +31,15 @@ from .registry import CATEGORIES, LEGACY_FIELDS, registry
 from .evidence import EVIDENCE
 from .rules import CALCULATIONS, RULES
 from . import thresholds
+from .source_time import (
+    AFTER,
+    BEFORE,
+    UNCERTAIN,
+    current_death,
+    current_delivery,
+    current_source,
+    late_status,
+)
 from .registry_lcg import SECTIONS as LCG_SECTIONS, VARIABLES
 
 
@@ -74,6 +83,16 @@ def field_display(field, value) -> str:
     if field.type == "multi" and isinstance(value, list):
         return ", ".join(field.label_for(str(v)) for v in value) if value else "—"
     return fmt(value)
+
+
+def entry_display(field, entry) -> str:
+    if not entry:
+        return "—"
+    if entry.get("applicability_state") == "not_applicable":
+        return "Not applicable"
+    if entry.get("answer_state") == "not_known":
+        return "Not known"
+    return field_display(field, entry.get("value"))
 
 
 def chip(origin: str) -> str:
@@ -382,7 +401,7 @@ def labour(request, pk: int):
         .select_related("variable__section")
         .order_by("observed_at")
     )
-    death = doc.pregnancy.deaths.order_by("-died_at").first()
+    death = current_death(doc.pregnancy)
     times = sorted({o.observed_at for o in obs})
 
     columns = [
@@ -395,7 +414,7 @@ def labour(request, pk: int):
     ]
 
     # the printed chart marks the birth between the second-stage columns
-    delivery = doc.pregnancy.deliveries.order_by("-delivered_at").first()
+    delivery = current_delivery(doc.pregnancy)
     if delivery and delivery.delivered_at and (not times or delivery.delivered_at > times[-1]):
         columns.append(
             {
@@ -416,7 +435,9 @@ def labour(request, pk: int):
         g["label"] = "ACTIVE FIRST STAGE" if g["stage"] == "first" else "SECOND STAGE"
 
     def cell(o):
-        late = bool(death and o.documented_at and death.died_at and o.documented_at > death.died_at)
+        status = late_status(o.documented_at, death)
+        late = status == AFTER
+        late_uncertain = bool(o.documented_at) and status == UNCERTAIN
         return {
             "pk": o.pk,
             "value": o.value_text if o.value_text not in ("", None) else _num(o.value_num),
@@ -426,6 +447,7 @@ def labour(request, pk: int):
             "documented": timezone.localtime(o.documented_at).strftime("%H:%M")
             if o.documented_at else "",
             "late": late,
+            "late_uncertain": late_uncertain,
         }
 
     index = {(o.variable.key, o.observed_at): cell(o) for o in obs}
@@ -510,7 +532,7 @@ def labour_history(request, pk: int):
     from .models import LCGVariable, SourceDocument
 
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
-    death = doc.pregnancy.deaths.order_by("-died_at").first()
+    death = current_death(doc.pregnancy)
 
     qs = doc.observations.select_related("variable__section").order_by(
         "-observed_at", "-pk"
@@ -525,15 +547,14 @@ def labour_history(request, pk: int):
     page_obj = Paginator(qs, 100).get_page(request.GET.get("page"))
     rows = []
     for o in page_obj:
-        late = bool(
-            death and death.died_at and o.documented_at and o.documented_at > death.died_at
-        )
+        status = late_status(o.documented_at, death)
         correction = o.superseded_by.first()
         rows.append(
             {
                 "obs": o,
                 "value": services.observation_display(o),
-                "late": late,
+                "late": status == AFTER,
+                "late_uncertain": bool(o.documented_at) and status == UNCERTAIN,
                 "correction": correction,
                 "correction_value": services.observation_display(correction)
                 if correction
@@ -676,16 +697,8 @@ def workspace(request, pk: int):
 
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
     locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
-    death = review.pregnancy.deaths.order_by("-died_at").first()
-    lcg = review.source_document
-    if lcg is None:
-        # Legacy reviews created before the explicit link: fall back to the
-        # woman's only labour record, if there is one.
-        lcg = (
-            SourceDocument.objects.filter(
-                pregnancy=review.pregnancy, kind=SourceDocument.Kind.LCG
-            ).first()
-        )
+    death = current_death(review.pregnancy, review.reporting_admission)
+    lcg = current_source(review)
     crossing_list = thresholds.crossings(lcg, death) if lcg else []
     crossings_by_var: dict[str, list] = {}
     for c in crossing_list:
@@ -776,7 +789,7 @@ def workspace(request, pk: int):
     sections = []
     for section, heading, fields in registry.by_section():
         rows = []
-        answered_n = needs_n = na_n = hidden_n = 0
+        answered_n = needs_n = na_n = unknown_n = hidden_n = 0
         for f in fields:
             item = items.get(f.key)
             seen = visibility[f.key]
@@ -813,6 +826,10 @@ def workspace(request, pk: int):
                 item
                 and item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
             )
+            is_unknown = bool(
+                item
+                and item.answer_state == ReviewItem.AnswerState.NOT_KNOWN
+            )
             needs = bool(item and item.needs_reconsideration)
             decision = _decision(item, decisions.get(f.key), mark)
             if (
@@ -825,6 +842,7 @@ def workspace(request, pk: int):
                 decision["calculation"] = CALCULATIONS.get(f.key, "")
             answered_n += int(is_answered)
             na_n += int(is_na)
+            unknown_n += int(is_unknown)
             needs_n += int(needs)
             rows.append(
                 {
@@ -852,6 +870,7 @@ def workspace(request, pk: int):
                     "decision": decision,
                     "is_answered": is_answered,
                     "is_na": is_na,
+                    "is_unknown": is_unknown,
                     "needs": needs,
                     "is_block": f.type == "block",
                     "block_cols": list((f.block_schema or {}).get("fields", {}).items()),
@@ -902,6 +921,7 @@ def workspace(request, pk: int):
                     "total": len(rows),
                     "answered": answered_n,
                     "na": na_n,
+                    "unknown": unknown_n,
                     "needs": needs_n,
                     "hidden": hidden_n,
                 }
@@ -920,7 +940,13 @@ def workspace(request, pk: int):
         if f.key in items
         and items[f.key].applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
     )
-    resolved = answered_total + na_total
+    unknown_total = sum(
+        1
+        for f in visible_fields
+        if f.key in items
+        and items[f.key].answer_state == ReviewItem.AnswerState.NOT_KNOWN
+    )
+    resolved = answered_total + na_total + unknown_total
     stats = {
         "fields": len(visible_fields),
         "hidden": len(hidden_fields),
@@ -928,6 +954,7 @@ def workspace(request, pk: int):
         "resolved": resolved,
         "to_enter": len(visible_fields) - resolved,
         "na": na_total,
+        "not_known": unknown_total,
         "proposed": sum(
             len(v) for k, v in open_proposals.items() if visibility[k].applies
         ),
@@ -940,7 +967,10 @@ def workspace(request, pk: int):
             1
             for f in visible_fields
             if f.required
-            and (f.key not in items or items[f.key].answer_state != "answered")
+            and (
+                f.key not in items
+                or items[f.key].answer_state == ReviewItem.AnswerState.UNANSWERED
+            )
         ),
         "percent": round(100 * resolved / max(1, len(visible_fields))),
     }
@@ -1192,7 +1222,9 @@ def _provenance(proposal, death):
     out = []
     for inp in proposal.frozen_inputs:
         doc_at = _parse_dt(inp.get("documented_at"))
-        late = bool(death and death.died_at and doc_at and doc_at > death.died_at)
+        status = late_status(doc_at, death)
+        late = status == AFTER
+        late_uncertain = bool(doc_at) and status == UNCERTAIN
         url = _ref_url(inp.get("ref", ""))
         raw_value = inp.get("value", "")
         is_timestamp = bool(_parse_dt(raw_value)) if isinstance(raw_value, str) else False
@@ -1207,6 +1239,7 @@ def _provenance(proposal, death):
                 "documented": _fmt_when(inp.get("documented_at")),
                 "author": inp.get("author", ""),
                 "late": late,
+                "late_uncertain": late_uncertain,
                 "url": url,
             }
         )
@@ -1383,18 +1416,33 @@ def na_field(request, pk: int):
     key = request.POST.get("key", "")
     if key not in registry:
         return JsonResponse({"ok": False, "error": "unknown field"}, status=400)
-    state = (
-        ReviewItem.Applicability.NOT_APPLICABLE
-        if request.POST.get("state") == "na"
-        else ReviewItem.Applicability.APPLICABLE
-    )
+    state = request.POST.get("state", "")
+    reason = request.POST.get("reason", "")
     try:
-        services.set_applicability(
-            review, key, state, request.user, request.POST.get("reason", "")
-        )
+        if state == "unknown":
+            services.set_not_known(review, key, request.user, reason)
+            returned = "not_known"
+        elif state == "na":
+            services.set_applicability(
+                review,
+                key,
+                ReviewItem.Applicability.NOT_APPLICABLE,
+                request.user,
+                reason,
+            )
+            returned = "not_applicable"
+        else:
+            services.set_applicability(
+                review,
+                key,
+                ReviewItem.Applicability.APPLICABLE,
+                request.user,
+                "",
+            )
+            returned = "applicable"
     except ValidationError as exc:
         return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
-    return JsonResponse({"ok": True, "state": state, "reason": request.POST.get("reason", "")})
+    return JsonResponse({"ok": True, "state": returned, "reason": reason})
 
 
 @login_required
@@ -1721,8 +1769,9 @@ def output(request, pk: int):
                         {
                             "field": f,
                             "entry": entry,
-                            "display": field_display(f, entry.get("value")),
+                            "display": entry_display(f, entry),
                             "reason": entry.get("condition_reason", ""),
+                            "state_reason": entry.get("reason", ""),
                         }
                     )
                 continue
@@ -1730,7 +1779,8 @@ def output(request, pk: int):
                 {
                     "field": f,
                     "entry": entry,
-                    "display": field_display(f, entry.get("value")) if entry else "—",
+                    "display": entry_display(f, entry),
+                    "state_reason": entry.get("reason", ""),
                     "mark": chip(entry["origin"]) if entry else "—",
                 }
             )
