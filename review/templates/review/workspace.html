@@ -126,8 +126,8 @@
           {% if not row.is_block %}
           <tr id="f-{{ row.field.slug }}" class="{% if not row.is_answered and not row.is_na %}remaining {% endif %}{% if row.fno_comment %}{% if row.addressed %}addressed{% else %}commented{% endif %}{% endif %}">
             <td>
-              <div class="label">{{ row.field.label_printed }}</div>
-              <div class="key">{{ row.field.key }}{% if row.field.required %} · <span class="req">required</span>{% endif %}</div>
+              <div class="label" title="{{ row.field.key }}">{{ row.field.label_printed }}</div>
+              {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
             </td>
             <td>
               {% if locked or row.is_block or row.widget == "readonly" %}
