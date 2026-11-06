@@ -3,7 +3,7 @@
 Living list for the seven-day build. Check things off here; do not keep a second
 list. `[x]` done, `[ ]` open, `[~]` partial.
 
-_Last updated: 6 November 2026. 122 tests passing. 96 Form 4 fields, 34 LCG variables._
+_Last updated: 6 November 2026. 123 tests passing. 96 Form 4 fields, 34 LCG variables._
 
 ## Built
 
@@ -15,7 +15,7 @@ _Last updated: 6 November 2026. 122 tests passing. 96 Form 4 fields, 34 LCG vari
 - [x] Blocks: referral (four places, keyed by place), diagnosis rows, interventions matrix — all autosaving
 - [x] Inputs: enums as selects, multi as checkboxes, native date/time pickers, month/year selects, durations in d/h/m
 - [x] Accept / reject / correct, revert last change, no-op saves that never flip origin
-- [x] Proposals with a source drawer; every input line shows its time and original author and has **see source** opening the chart column or record, value highlighted; derived values name their calculation
+- [x] Proposals with a source drawer; every input line shows its time and original author and has **see source** opening the chart column or record, value highlighted; derived values name their calculation, and an accepted proposal keeps its inputs and calculation in the row
 - [x] Alert crossings computed from immutable observations (`review/thresholds.py`, `lcg_2021@1`), shown as evidence on 5 Form 4 fields; map in `docs/evidence-map.md`
 - [x] N/A toggles in place — reads "Not applicable", note and clear stay in position, no reload
 - [x] Internal field keys hidden from the form; kept as tooltips and in JSON output

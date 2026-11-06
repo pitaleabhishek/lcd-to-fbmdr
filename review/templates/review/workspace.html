@@ -359,6 +359,17 @@
                       <span class="value">{{ row.decision.display }}</span>
                       <span class="chip {{ row.decision.mark }}">{{ row.decision.mark }}</span>
                       <span class="why">{{ row.decision.kind }}{% if row.decision.reason %} · {{ row.decision.reason }}{% endif %}</span>
+                      {% for inp in row.decision.inputs %}
+                        <div class="why">
+                          <b>{{ inp.label }}</b> = {{ inp.value }}
+                          {% if inp.when %} · {{ inp.when }}{% endif %}
+                          {% if inp.documented and inp.documented != inp.when %} · documented {{ inp.documented }}{% endif %}
+                          {% if inp.late %} · <span class="warn">late entry</span>{% endif %}
+                          {% if inp.author %} · {{ inp.author }}{% endif %}
+                          {% if inp.url %} · <a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a>{% endif %}
+                        </div>
+                      {% endfor %}
+                      {% if row.decision.calculation %}<div class="why">calculated as {{ row.decision.calculation }}</div>{% endif %}
                     </div>
                   {% else %}
                     <span class="muted small">—</span>

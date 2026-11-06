@@ -756,6 +756,15 @@ def workspace(request, pk: int):
                 and item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
             )
             needs = bool(item and item.needs_reconsideration)
+            decision = _decision(item, decisions.get(f.key), mark)
+            if (
+                decision
+                and decision.get("kind") == "accepted"
+                and item
+                and item.accepted_proposal_id
+            ):
+                decision["inputs"] = _provenance(item.accepted_proposal, death)
+                decision["calculation"] = CALCULATIONS.get(f.key, "")
             answered_n += int(is_answered)
             na_n += int(is_na)
             needs_n += int(needs)
@@ -779,7 +788,7 @@ def workspace(request, pk: int):
                          "calculation": CALCULATIONS.get(p.field_key, ""),
                          "inputs": _provenance(p, death)} for p in proposals
                     ],
-                    "decision": _decision(item, decisions.get(f.key), mark),
+                    "decision": decision,
                     "is_answered": is_answered,
                     "is_na": is_na,
                     "needs": needs,

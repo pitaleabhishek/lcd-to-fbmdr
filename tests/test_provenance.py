@@ -54,3 +54,16 @@ def test_the_workspace_shows_the_calculation_and_the_author(client, case_a):
     assert "calculated as death time − admission time" in page
     assert "calculated as delivery time − admission time" in page
     assert "Dr A. Rane" in page
+
+
+def test_an_accepted_derived_value_keeps_its_inputs_and_calculation(client, case_a):
+    from review import services
+
+    user = User.objects.get(username="resident")
+    proposal = case_a.proposals.get(field_key="f4.timing.f", status="proposed")
+    services.accept_proposal(case_a, proposal, user)
+
+    client.force_login(user)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert "calculated as death time − admission time" in page
+    assert "/source/death/" in page
