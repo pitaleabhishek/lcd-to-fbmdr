@@ -28,15 +28,18 @@ do two answers contradict each other?** They never suggest a clinical cause.
 
 ## Impossible
 
-- [x] **Death before admission** — error with both times in the message
 - [x] **Discharge before admission** — error
 - [x] **Discharge after death** — error
-- [x] **Delivery before admission** — error
-- [x] **Delivery after death** — error
 - [x] **Admission, death or delivery in the future** — error
-- [x] **Form 4 death time before Form 4 admission time** — error
 - [x] **Negative duration** in the hospital-stay, admission→delivery or admission→death interval — error
 - [x] **Impossible age** — zero/negative or over 120 — error
+
+## Possible but unusual — warning, never blocking
+
+- [x] **Death before admission** — a woman can be brought dead
+- [x] **Delivery before admission** — a woman can be referred in after delivery; the interval then does not apply
+- [x] **Delivery after death** — perimortem delivery is possible
+- [x] **Form 4 death time before Form 4 admission time** — brought dead again
 
 ## Inconsistent
 

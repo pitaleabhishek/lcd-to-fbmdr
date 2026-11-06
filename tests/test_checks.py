@@ -89,9 +89,9 @@ def test_transfusion_units_must_be_positive(case_a, resident):
     assert issue(issues, "impossible:transfusion_units") is None
 
 
-def test_death_before_admission_is_impossible(db, resident):
+def test_death_before_admission_is_a_warning_not_a_blocker(db, resident):
     facility = Facility.objects.create(name="PHC")
-    patient = Patient.objects.create(name="Impossible dates", age=25)
+    patient = Patient.objects.create(name="Brought dead", age=25)
     pregnancy = Pregnancy.objects.create(patient=patient, outcome="delivery")
     admission = Admission.objects.create(
         pregnancy=pregnancy, facility=facility, admitted_at=dt(18, 0),
@@ -106,15 +106,39 @@ def test_death_before_admission_is_impossible(db, resident):
     )
 
     issues = checks.run_checks(review)
-    found = issue(issues, "impossible:death_before_admission")
+    found = issue(issues, "possible:death_before_admission")
+    assert found is not None
+    assert found.severity == checks.WARNING
+    assert "brought dead" in found.message
+
+    complete_required(review, resident)
+    services.submit(review, resident)
+    review.refresh_from_db()
+    assert review.status == Review.Status.SUBMITTED
+
+
+def test_discharge_before_admission_is_impossible(db, resident):
+    facility = Facility.objects.create(name="PHC")
+    patient = Patient.objects.create(name="Bad discharge", age=25)
+    pregnancy = Pregnancy.objects.create(patient=patient, outcome="delivery")
+    Admission.objects.create(
+        pregnancy=pregnancy, facility=facility, admitted_at=dt(18, 0),
+        discharged_at=dt(9, 0), time_precision=TimePrecision.EXACT,
+    )
+    review = Review.objects.create(
+        pregnancy=pregnancy, reporting_facility=facility, created_by=resident,
+        assigned_to=resident,
+    )
+
+    issues = checks.run_checks(review)
+    found = issue(issues, "impossible:discharge_before_admission")
     assert found is not None
     assert found.severity == checks.ERROR
-    assert "before date of admission" in found.message
 
     complete_required(review, resident)
     with pytest.raises(ValidationError) as exc:
         services.submit(review, resident)
-    assert "before date of admission" in str(exc.value)
+    assert "Discharge is before admission" in str(exc.value)
 
 
 def test_abortion_outcome_with_a_delivery_is_a_contradiction(case_a, resident):

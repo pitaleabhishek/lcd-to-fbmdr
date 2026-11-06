@@ -359,6 +359,9 @@ def _impossible_dates(ctx: CheckContext) -> list[Issue]:
     def add(key, field, message, fix):
         out.append(_issue(ctx, key, ERROR, field, message, fix))
 
+    def warn(key, field, message, fix):
+        out.append(_issue(ctx, key, WARNING, field, message, fix))
+
     if a and a.admitted_at:
         if a.admitted_at > now:
             add(
@@ -382,11 +385,12 @@ def _impossible_dates(ctx: CheckContext) -> list[Issue]:
                 "Correct the discharge or death time.",
             )
         if d and d.died_at and d.died_at < a.admitted_at:
-            add(
-                "impossible:death_before_admission",
+            warn(
+                "possible:death_before_admission",
                 "f4.timing.b",
-                f"Date of death ({_fmt(d.died_at)}) is before date of admission ({_fmt(a.admitted_at)}).",
-                "Check both times.",
+                f"Date of death ({_fmt(d.died_at)}) is before date of admission ({_fmt(a.admitted_at)}). "
+                "If she was brought dead, this is expected; otherwise check both times.",
+                "Confirm whether she was brought dead.",
             )
 
     if d and d.died_at and d.died_at > now:
@@ -406,28 +410,31 @@ def _impossible_dates(ctx: CheckContext) -> list[Issue]:
                 "Check the delivery date.",
             )
         if a and a.admitted_at and delivery.delivered_at < a.admitted_at:
-            add(
-                "impossible:delivery_before_admission",
+            warn(
+                "possible:delivery_before_admission",
                 "f4.timing.e",
-                f"Delivery ({_fmt(delivery.delivered_at)}) is before admission ({_fmt(a.admitted_at)}).",
-                "Check the admission and delivery times.",
+                f"Delivery ({_fmt(delivery.delivered_at)}) is before admission ({_fmt(a.admitted_at)}). "
+                "If she was referred in after delivery, this is expected; the admission–delivery interval will not apply.",
+                "Confirm whether she delivered before arriving.",
             )
         if d and d.died_at and delivery.delivered_at > d.died_at:
-            add(
-                "impossible:delivery_after_death",
+            warn(
+                "possible:delivery_after_death",
                 "f4.timing.e",
-                f"Delivery ({_fmt(delivery.delivered_at)}) is after death ({_fmt(d.died_at)}).",
-                "Check the delivery and death times.",
+                f"Delivery ({_fmt(delivery.delivered_at)}) is after death ({_fmt(d.died_at)}). "
+                "If this was a perimortem delivery, confirm; otherwise check the times.",
+                "Confirm whether the delivery was perimortem.",
             )
 
     form_a = _dt(ctx.value("f4.timing.a"))
     form_b = _dt(ctx.value("f4.timing.b"))
     if form_a and form_b and form_b < form_a:
-        add(
-            "impossible:form_death_before_admission",
+        warn(
+            "possible:form_death_before_admission",
             "f4.timing.b",
-            f"Form 4 says death ({_fmt(form_b)}) is before admission ({_fmt(form_a)}).",
-            "Correct 1.a or 1.b.",
+            f"Form 4 says death ({_fmt(form_b)}) is before admission ({_fmt(form_a)}). "
+            "If she was brought dead, this is expected; otherwise correct 1.a or 1.b.",
+            "Confirm whether she was brought dead.",
         )
     if form_a and form_a > now:
         add("impossible:form_future_admission", "f4.timing.a", "Form 4 admission is in the future.", "Correct 1.a.")
