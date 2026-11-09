@@ -227,6 +227,17 @@ Full rules:
 - [`docs/checks.md`](docs/checks.md)
 - [`docs/conditions.md`](docs/conditions.md)
 
+## Reference PDFs
+
+The source documents are in [`docs/reference/`](docs/reference/):
+
+- [Digitising Maternal Death Review](docs/reference/Digitising%20Maternal%20Death%20Review.pdf)
+- [Digitising Maternal Death Review: answered](docs/reference/Digitising%20Maternal%20Death%20Review_answered.pdf)
+- [IPHS](docs/reference/IPHS.pdf)
+- [MDSR](docs/reference/MDSR.pdf)
+- [WHO LCG](docs/reference/WHO%20LCG.pdf)
+- [WHO Labour Care Guide form](docs/reference/who-labour-care-guide%20form.pdf)
+
 ## Project documents
 
 - Setup: [`docs/setup.md`](docs/setup.md)
