@@ -1,165 +1,178 @@
 # LCG storage model
 
-How the WHO Labour Care Guide is stored. Sources: *WHO Labour Care Guide: User's
-Manual* (2021) and the printed chart in `docs/`-adjacent PDFs. Nothing here is
-clinical interpretation except the alert column, which is application code.
+This document describes how the app stores the WHO Labour Care Guide (LCG). 
 
 ## Tables
 
 | Table | Rows per chart | Stores |
 |---|---|---|
-| `review_lcgsection` | reference | the 7 printed sections: order, key, label |
-| `review_lcgvariable` | reference | each printed row: key, section, label, order, type, unit, allowed values, numeric bounds, alert text |
-| `review_sourcedocument` | 1 | the chart as an object: `kind=lcg`, format, author, entered_by, documented_at, received_at, entered_at, time precision, `header_json` |
-| `review_observation` | one per cell | variable, stage, value, unit, observed_at, observed_at_precision, documented_at, entered_at, author, author_role, supersedes |
+| `review_lcgsection` | reference | The 7 printed sections: order, key and label |
+| `review_lcgvariable` | reference | Each printed row: key, section, label, order, type, unit, values, numeric limits and alert text |
+| `review_sourcedocument` | 1 | The chart object: `kind=lcg`, format, author, entered_by, documented_at, received_at, entered_at, time precision and `header_json` |
+| `review_observation` | One for each cell | Variable, stage, value, unit, observed_at, observed_at_precision, documented_at, entered_at, author, author_role and supersedes |
 
-Two reference tables (the form), two instance tables (a filled chart). No column
-entity: time columns are derived by grouping observations on `observed_at`.
+Two tables hold the form. Two tables hold a filled chart. The app has no column
+table. It derives time columns by grouping observations on `observed_at`.
 
-```
-section 1 ── N variable
-document 1 ── N observation
-variable 1 ── N observation
-```
 
-## How data is stored
+## Data storage
 
-- **One document per chart.** A labour over 12 h continues on the same document,
-  with more observations; there is no continuation-sheet entity.
-- **Section 1 is `header_json`** on the document: name, parity, labour onset,
-  active-labour diagnosis, ruptured membranes, risk factors. These occur once per
-  chart, so they are not rows on the time axis.
-- **Sections 2–7 are observations.** One row per variable per time column. A
-  variable charted seven times is seven rows.
-- **Stage is stamped on each row** (`first` / `second`), because that is what a
-  reader queries. Rows are append-only, so it cannot change after insert.
-- **Three timestamps**: `observed_at` (clinical time), `documented_at` (what the
-  chart says), `entered_at` (server). `author` ≠ `entered_by`; transcription never
-  transfers authorship.
-- **The enum value is the value.** No parsing and no second copy: `clear`, `meconium_3`, `2+`, `supine` are stored in the form's own vocabulary, and anything else is rejected by the trigger. The printed marks (`C`, `M+++`, `P 2+`) are a one-to-one reading of these codes, not a separate field.
-- **Gaps are absent rows.** A missed observation is found by comparing observed
-  times against the cadence a rule set requires; the paper chart's time axis is
-  blank, so there is no printed empty cell to store.
-- **Corrections** are a new row with `supersedes_id`. UPDATE and DELETE are
-  blocked by a trigger on `observation`, `sourcedocument`, `delivery`, `death`,
-  `carecontact`. The chart, the rules and the alert crossings read only the head
-  of each chain (`superseded_by IS NULL`), so a corrected 150 stops firing; the
-  history screen reads every row and shows both.
+- **One document for each chart.** A labour over 12 hours stays on the same
+  document. The app adds observations. The app has no continuation-sheet table.
+- **Section 1 is `header_json`** on the document. It holds name, parity, labour
+  onset, active-labour diagnosis, ruptured membranes and risk factors. These occur
+  once for each chart. They are not rows on the time axis.
+- **Sections 2 to 7 are observations.** The app stores one row for each variable at
+  each time column. A variable charted seven times has seven rows.
+- **The app stores the stage on each row** (`first` or `second`). Rows are
+  append-only. The stage cannot change after insert.
+- **The app stores three timestamps.** `observed_at` is the clinical time.
+  `documented_at` is the time on the chart. `entered_at` is the server time.
+  `author` is not `entered_by`. Transcription does not transfer authorship.
+- **The enum value is the value.** The app does not parse it and does not keep a
+  second copy. Values such as `clear`, `meconium_3`, `2+` and `supine` use the
+  form vocabulary. The trigger rejects any other value. Printed marks such as `C`,
+  `M+++` and `P 2+` map one-to-one to these codes. They are not separate fields.
+- **A gap is an absent row.** The paper chart has a blank time axis. The chart
+  shows columns only for recorded times. It lists those times. It uses a dot for a
+  variable that is not recorded at a column. It does not apply a
+  monitoring-frequency limit and does not call an interval a clinical gap. The app
+  stores nothing and creates no review answer from a missing observation.
+- **A correction is a new row with `supersedes_id`.** A trigger blocks UPDATE and
+  DELETE on `observation`, `sourcedocument`, `delivery`, `death` and
+  `carecontact`. The chart, rules and alerts read only the current row
+  (`superseded_by IS NULL`). A corrected 150 stops firing. The history screen
+  reads every row and shows both.
 
 ## Value rules
 
 `review_lcgvariable` declares what the printed chart permits. A `BEFORE INSERT OR
-UPDATE` trigger on `review_observation` rejects anything else: an enum value not in
-`options`, a number outside `min_num`/`max_num`, a unit that does not match, or a
-stage other than `first`/`second`. `Observation.clean()` mirrors this for form
-errors. Alerts are **not** enforced here — see below.
+UPDATE` trigger on `review_observation` rejects these cases:
+
+- an enum value is not in `options`;
+- a number is outside `min_num` or `max_num`;
+- the unit does not match;
+- the stage is not `first` or `second`.
+
+`Observation.clean()` repeats these checks for form errors. The trigger does not
+enforce alerts.
 
 ## Alert rules
 
-Thresholds live in application code, versioned and cited, never in SQL.
+Thresholds live in application code. They have a version and a citation. They do
+not live in SQL.
 
-- `alert_rule` on the variable is a **display projection** of the code (the printed
-  alert text), so a reader of `lcg_chart` sees it. It is never evaluated.
-- Crossings are **computed** from immutable observations and shown as *computed
-  evidence* beside the relevant review item. They are never stored, so they cannot
-  drift from the data they came from.
-- The rule set is named `lcg_2021@1`; the review version records it.
+- `alert_rule` on the variable is a display copy of the code. It shows the printed
+  alert text in `lcg_chart`. The app never evaluates it.
+- The app computes crossings from immutable observations. It shows them as
+  *computed evidence* beside the review item. It does not store them. They cannot
+  drift from the source data.
+- The rule set is `lcg_2021@1`. The review version records it.
 
-## Variables, by section
+## Variables by section
 
-Values are canonical codes; the printed mark is in brackets. Alerts are the
-printed alert column.
+The values are canonical codes. The printed mark is in brackets. The alert column
+shows the printed alert.
 
-### 1. Identifying information and labour characteristics at admission
+### 1. Admission: identity and labour characteristics
 
-Header, not time series. Manual Table 2.
+This is header data, not a time series. See Manual Table 2.
 
 | Key | Values |
 |---|---|
 | `name` | text |
-| `parity` | integer (local coding, e.g. P1) |
-| `labour_onset` | `spontaneous` / `induced` |
+| `parity` | integer (local code, for example P1) |
+| `labour_onset` | `spontaneous` or `induced` |
 | `active_labour_dx` | date |
-| `ruptured_membranes` | date + time |
+| `ruptured_membranes` | date and time |
 | `risk_factors` | text |
 
 ### 2. Supportive care
 
-Manual Table 3. All three Y/N/D rows alert on `no`; posture alerts on `supine`.
+See Manual Table 3. The three Y/N/D rows alert on `no`. Posture alerts on
+`supine`.
 
 | Key | Values | Alert |
 |---|---|---|
-| `companion` (Companionship) | `yes` / `no` / `declined` | no |
-| `pain_relief` | `yes` / `no` / `declined` | no |
-| `oral_fluid` | `yes` / `no` / `declined` | no |
-| `posture` | `supine` / `mobile` | supine |
+| `companion` (Companionship) | `yes`, `no` or `declined` | no |
+| `pain_relief` | `yes`, `no` or `declined` | no |
+| `oral_fluid` | `yes`, `no` or `declined` | no |
+| `posture` | `supine` or `mobile` | supine |
 
-`mobile` includes walking, swaying, left lateral, squatting, kneeling and standing
-— that is why there are only two postures.
+`mobile` includes walking, swaying, left lateral, squatting, kneeling and
+standing. That is why there are only two postures.
 
 ### 3. Care of the baby
 
-Manual Table 4. FHR in /min, 50–250.
+See Manual Table 4. FHR is in /min and ranges from 50 to 250.
 
 | Key | Values | Alert |
 |---|---|---|
 | `baseline_fhr` | number | <110, ≥160 |
 | `fhr` | number | <110, ≥160 |
-| `fhr_deceleration` | `no` / `early` / `late` / `variable` | late |
-| `amniotic_fluid` | `intact` / `clear` / `meconium_1` / `meconium_2` / `meconium_3` / `blood` | meconium_3, blood |
-| `fetal_position` | `anterior` / `posterior` / `transverse` | posterior, transverse |
-| `caput` | `0` / `+` / `++` / `+++` | +++ |
-| `moulding` | `0` / `+` / `++` / `+++` | +++ |
+| `fhr_deceleration` | `no`, `early`, `late` or `variable` | late |
+| `amniotic_fluid` | `intact`, `clear`, `meconium_1`, `meconium_2`, `meconium_3` or `blood` | meconium_3, blood |
+| `fetal_position` | `anterior`, `posterior` or `transverse` | posterior, transverse |
+| `caput` | `0`, `+`, `++` or `+++` | +++ |
+| `moulding` | `0`, `+`, `++` or `+++` | +++ |
 
-`meconium_1/2/3` are non-significant, medium and thick meconium (`M+`, `M++`,
-`M+++`). `anterior` is normal, which is why only P and T alert.
+`meconium_1`, `meconium_2` and `meconium_3` are non-significant, medium and thick
+meconium (`M+`, `M++`, `M+++`). `anterior` is normal. That is why only P and T
+alert.
 
 ### 4. Care of the woman
 
-Manual Table 5.
+See Manual Table 5.
 
 | Key | Values | Unit | Range | Alert |
 |---|---|---|---|---|
-| `pulse` | number | /min | 20–220 | <60, ≥120 |
-| `systolic_bp` | number | mmHg | 40–300 | <80, ≥140 |
-| `diastolic_bp` | number | mmHg | 20–200 | ≥90 |
-| `temperature` | number | C | 30–45 | <35.0, ≥37.5 |
-| `urine_protein` | `negative` / `trace` / `1+` / `2+` / `3+` / `4+` | — | — | 2+ |
-| `urine_acetone` | `negative` / `trace` / `1+` / `2+` / `3+` / `4+` | — | — | 2+ |
+| `pulse` | number | /min | 20-220 | <60, ≥120 |
+| `systolic_bp` | number | mmHg | 40-300 | <80, ≥140 |
+| `diastolic_bp` | number | mmHg | 20-200 | ≥90 |
+| `temperature` | number | C | 30-45 | <35.0, ≥37.5 |
+| `urine_protein` | `negative`, `trace`, `1+`, `2+`, `3+` or `4+` | none | none | 2+ |
+| `urine_acetone` | `negative`, `trace`, `1+`, `2+`, `3+` or `4+` | none | none | 2+ |
 
-Urine is a reagent strip, read as protein (P) and acetone (A). The printed legend
-lists P–…P3+ and A–…A4+; Table 5 says record negative, trace, +, ++, +++, ++++ for
-both, so both carry six values. One printed row, two variables — a cell cannot hold
+Urine uses a reagent strip. Staff read protein (P) and acetone (A). The printed
+legend lists P- to P3+ and A- to A4+. Table 5 says to record negative, trace, +,
+++, +++ and ++++ for both. One printed row holds two variables. A cell cannot hold
 two grades.
 
 ### 5. Labour progress
 
-Manual Table 6.
+See Manual Table 6.
 
 | Key | Values | Unit | Range | Alert |
 |---|---|---|---|---|
-| `contractions` | number | /10min | 0–10 | ≤2, >5 |
-| `contraction_duration` | number | s | 0–120 | <20, >60 |
-| `cervix` | number | cm | 0–10 | lag time for current dilatation |
-| `descent` | number | station | 0–5 | — |
+| `contractions` | number | /10min | 0-10 | ≤2, >5 |
+| `contraction_duration` | number | s | 0-120 | <20, >60 |
+| `cervix` | number | cm | 0-10 | lag time for current dilatation |
+| `descent` | number | station | 0-5 | none |
 
-Cervical lag is not a fixed threshold: 10 cm ≥2 h, 9 ≥2.5 h, 8 ≥3 h, 7 ≥5 h,
-6 ≥6 h. That is a rule, not an `alert_rule` string.
+Cervical lag is not a fixed threshold:
+
+- 10 cm: 2 hours or more;
+- 9 cm: 2.5 hours or more;
+- 8 cm: 3 hours or more;
+- 7 cm: 5 hours or more;
+- 6 cm: 6 hours or more.
+
+This is a rule, not an `alert_rule` string.
 
 ### 6. Medication
 
-Manual §6. The chart asks oxytocin as **U/L and drops/min**, so it is two rows.
+See Manual section 6. The chart records oxytocin as U/L and drops/min. The app uses
+two rows.
 
 | Key | Values | Unit |
 |---|---|---|
 | `oxytocin` | number | U/L |
 | `oxytocin_drops` | number | drops/min |
-| `medicine` | text (name, dose, route) | — |
-| `iv_fluids` | `yes` / `no` | — |
+| `medicine` | text (name, dose, route) | none |
+| `iv_fluids` | `yes` or `no` | none |
 
 ### 7. Shared decision-making
 
-Manual Table 8. All free text, per column.
 
 | Key | Values |
 |---|---|
@@ -171,17 +184,17 @@ Manual Table 8. All free text, per column.
 
 | Chart element | Why |
 |---|---|
-| ALERT column | fixed guideline text; thresholds are code |
-| Circled alerts | computed crossings, not annotations |
-| Plot glyphs X / O / P | values are stored; glyphs are rendering |
-| Urine volume | not a row on the chart |
-| "Pushing" | not a row — a `P` marker on the descent line; stage records it |
-| Continuation sheets | more columns on the same document |
+| ALERT column | Fixed guideline text. Thresholds are code. |
+| Circled alerts | Computed crossings, not notes. |
+| Plot glyphs X, O and P | The app stores values. Glyphs are rendering. |
+| Urine volume | Not a chart row. |
+| “Pushing” | Not a row. A `P` marker shows on the descent line. The stage records it. |
+| Continuation sheets | More columns on the same document. |
 
 ## Views
 
-| View | One row per |
+| View | One row for each |
 |---|---|
-| `lcg_chart` | variable, cells across time in IST |
-| `lcg_cells` | cell, with computed column number and stage |
-| `lcg_header` | Section 1 key/value |
+| `lcg_chart` | Variable, with cells across time in IST |
+| `lcg_cells` | Cell, with column number and stage |
+| `lcg_header` | Section 1 key and value |

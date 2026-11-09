@@ -28,35 +28,160 @@
     </div>
   </div>
   <div class="head-actions">
-    <button type="button" id="toggle-remaining" data-count="{{ stats.to_enter }}">Show remaining ({{ stats.to_enter }})</button>
-    {% if not locked %}
+    <button type="button" id="toggle-remaining" data-count="{{ stats.to_enter }}"
+            title="Highlight fields still to enter"
+            {% if not stats.to_enter %}hidden{% endif %}>Show remaining ({{ stats.to_enter }})</button>
+    {% if not locked and not is_amendment %}
       <form method="post">{% csrf_token %}<input type="hidden" name="action" value="reevaluate">
         <button>Refresh proposals</button></form>
-      <a class="button primary-link" href="#sec-note">Review &amp; submit</a>
     {% endif %}
 
-    <a class="button" href="{% url 'history' review.pk %}">History</a>
-    {% if review.current_version %}
-      <a class="button" href="{% url 'output' review.pk %}">Output</a>
+    {% if is_amendment %}
+      {% if amendment.is_open %}
+        <a class="button" href="{% url 'amendment_output' review.pk amendment.pk %}">Draft output</a>
+      {% endif %}
+      {% if official_version %}
+        <a class="head-link" href="{% url 'output' review.pk %}">Approved version</a>
+      {% endif %}
+      <details class="more-menu">
+        <summary>More ▾</summary>
+        <div class="menu-list">
+          <a href="{% url 'history' review.pk %}">History</a>
+          <a href="{% url 'form1_output' review.pk %}">Form 1</a>
+        </div>
+      </details>
+    {% else %}
+      {% if not locked %}
+        <a class="button primary-link" href="#sec-note">Review &amp; submit</a>
+      {% endif %}
+      <a class="button" href="{% url 'history' review.pk %}">History</a>
+      <a class="button" href="{% url 'form1_output' review.pk %}">Form 1</a>
+      {% if official_version %}
+        <a class="button" href="{% url 'output' review.pk %}">Output</a>
+      {% endif %}
     {% endif %}
   </div>
 </div>
 
-<div class="progress" title="{{ stats.resolved }} of {{ stats.fields }} resolved{% if stats.hidden %} · {{ stats.hidden }} not shown{% endif %}">
-  <span style="width:{{ stats.percent }}%"></span>
+{% if is_amendment %}
+<div class="statebox amendment">
+  <div><b>Amendment of version {{ amendment.base_version.version_no }}</b>
+    <span class="statusbig">{{ amendment.get_status_display }}</span></div>
+  <div class="muted small">Reason: {{ amendment.reason }}</div>
+  <div class="muted small">
+    Opened by {{ amendment.by.username|default:"—" }}
+    {% if amendment.submitted_by %}· submitted by {{ amendment.submitted_by.username }}{% endif %}
+    {% if amendment.status == "proposed" %}· the approved Form 4 remains the official record until this is approved{% endif %}
+  </div>
+  {% if can_discard_amendment %}
+    <form method="post" class="inline">{% csrf_token %}
+      <input type="hidden" name="action" value="discard_amendment">
+      <button class="danger">Discard amendment</button>
+    </form>
+  {% endif %}
+</div>
+<div class="returnbar amendmentbar" id="amendmentbar"
+     data-base-version="{{ amendment.base_version.version_no }}"
+     {% if not amendment_change_count %}hidden{% endif %}>
+  <div class="rb-main">
+    <div class="rb-head">
+      <b>Changed fields</b>
+      <span id="am-summary" class="muted">· {{ amendment_change_count }} changed field{{ amendment_change_count|pluralize }} vs approved version {{ amendment.base_version.version_no }}</span>
+    </div>
+  </div>
+  <div class="rb-nav">
+    <span id="am-count" class="count">{{ amendment_change_count }} changed</span>
+    <button type="button" id="am-prev" title="Previous changed field">↑</button>
+    <button type="button" id="am-next" title="Next changed field">↓</button>
+  </div>
+</div>
+{% if is_amendment and amendment.status == "returned" and amendment.return_comment %}
+<div class="returnbar">
+  <div class="rb-main">
+    <div class="rb-head"><b>Returned by {{ amendment.decided_by.username|default:"FNO" }}</b>
+      <span class="muted">· {{ amendment.decided_at|date:"d M H:i" }}</span></div>
+    <div class="rb-overall" title="{{ amendment.return_comment }}">“{{ amendment.return_comment }}”</div>
+  </div>
+</div>
+{% endif %}
+{% elif open_amendment %}
+<div class="statebox amendment">
+  <div><b>Amendment in progress</b> · {{ open_amendment.get_status_display }}
+    · opened by {{ open_amendment.by.username|default:"—" }}</div>
+  <div class="muted small">{{ open_amendment.reason }}</div>
+  <div class="muted small">The approved Form 4 remains the official record until the amendment is approved.</div>
+  <a class="button" href="{% url 'amendment_workspace' review.pk open_amendment.pk %}">Open amendment</a>
+</div>
+{% elif can_start_amendment or can_request_amendment %}
+<div class="statebox amendment-compact">
+  <button type="button" id="amendment-open" class="primary">
+    {% if can_start_amendment %}Propose amendment{% else %}Request amendment{% endif %}
+  </button>
+  <form method="post" class="bar amendment-form" id="amendment-form" hidden>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="start_amendment">
+    {% if can_request_amendment and not can_start_amendment %}
+      <input type="hidden" name="as_request" value="yes">
+    {% endif %}
+    <textarea name="reason" rows="1" class="reason-input auto"
+              placeholder="why is this amendment needed?" required></textarea>
+    <button class="primary">{% if can_start_amendment %}Create draft amendment{% else %}Send request{% endif %}</button>
+    <button type="button" id="amendment-cancel">Cancel</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="progress" id="workspace-progress"
+     title="{{ stats.resolved }} of {{ stats.fields }} resolved{% if stats.hidden %} · {{ stats.hidden }} not shown{% endif %}">
+  <span id="workspace-progress-fill" style="width:{{ stats.percent }}%"></span>
 </div>
 <div class="stats">
-  <div class="stat"><b>{{ stats.resolved }}</b> / {{ stats.fields }} resolved</div>
-  <div class="stat"><b>{{ stats.to_enter }}</b> to enter</div>
-  <div class="stat"><b>{{ stats.proposed }}</b> open proposals</div>
-  <div class="stat"><b>{{ stats.needs }}</b> need review</div>
-  <div class="stat"><b>{{ stats.gaps }}</b> required gaps</div>
+  <div class="stat"><b id="stat-resolved">{{ stats.resolved }}</b> / <span id="stat-fields">{{ stats.fields }}</span> resolved</div>
+  <div class="stat"><b id="stat-to-enter">{{ stats.to_enter }}</b> to enter</div>
+  <div class="stat"><b id="stat-proposed">{{ stats.proposed }}</b> open proposals</div>
+  <div class="stat"><b id="stat-needs">{{ stats.needs }}</b> need review</div>
+  <div class="stat"><b id="stat-gaps">{{ stats.gaps }}</b> required gaps</div>
   {% if stats.hidden %}<div class="stat"><b>{{ stats.hidden }}</b> not shown</div>{% endif %}
-  {% if stats.not_known %}<div class="stat"><b>{{ stats.not_known }}</b> not known</div>{% endif %}
   {% if show_checks and check_errors %}<div class="stat warn"><b>{{ check_errors|length }}</b> to fix</div>{% endif %}
   {% if show_checks and check_warnings %}<div class="stat"><b>{{ check_warnings|length }}</b> warning{{ check_warnings|length|pluralize }}</div>{% endif %}
 </div>
 <div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected · questions hide when they cannot apply</div>
+{% if show_checks and check_issues %}
+<details class="checks sticky-checks" id="checks">
+  <summary>
+    <span>
+      {% if check_errors %}<b class="warn">{{ check_errors|length }} to fix before submission</b>{% endif %}
+      {% if check_errors and check_warnings %} · {% endif %}
+      {% if check_warnings %}{{ check_warnings|length }} warning{{ check_warnings|length|pluralize }}{% endif %}
+      · what the checks found
+    </span>
+    <span class="checks-nav">
+      <span id="check-count" class="count">{{ check_issues|length }} issue{{ check_issues|length|pluralize }}</span>
+      <button type="button" id="check-prev" title="Previous issue">↑</button>
+      <button type="button" id="check-next" title="Next issue">↓</button>
+    </span>
+  </summary>
+  <p class="muted small">
+    Deterministic checks only: missing answers, impossible dates and contradictions.
+    Errors block submission; warnings do not. Fix what you can, then check again.
+  </p>
+  {% for group in check_groups %}
+    <h4 class="check-group">{{ group.label }} <span class="count">{{ group.issues|length }}</span></h4>
+    <table>
+      <thead><tr><th style="width:8%">Kind</th><th>Problem</th><th style="width:26%">Where</th></tr></thead>
+      <tbody>
+        {% for issue in group.issues %}
+          <tr class="check-row {{ issue.severity }}" data-check-target="{{ issue.target }}">
+            <td>{% if issue.severity == "error" %}<b class="warn">Fix</b>{% else %}Check{% endif %}</td>
+            <td>{{ issue.message }}{% if issue.fix %}<div class="muted small">{{ issue.fix }}</div>{% endif %}</td>
+            <td>{% if issue.target %}<a href="#{{ issue.target }}">{{ issue.label }}</a>{% else %}{{ issue.label|default:"Review" }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endfor %}
+</details>
+{% endif %}
 {% if submission_note %}
   <div class="returnbar resident-note">
     <div class="rb-main">
@@ -101,10 +226,20 @@
     <thead><tr><th>Question</th><th>Why it is not shown</th><th>Kept answer</th></tr></thead>
     <tbody>
       {% for h in hidden_fields %}
-        <tr>
+        <tr id="h-{{ h.field.slug }}">
           <td>{{ h.field.label_printed }}<div class="key">{{ h.section }}</div></td>
           <td class="muted">{{ h.reason }}</td>
-          <td>{% if h.display %}{{ h.display }}{% elif h.na %}<span class="muted">Not applicable</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td>
+            {% if h.display %}{{ h.display }}{% elif h.na %}<span class="muted">Not applicable</span>{% else %}<span class="muted">—</span>{% endif %}
+            {% if not locked %}{% if h.display or h.na %}
+              <form method="post" class="inline">{% csrf_token %}
+                <input type="hidden" name="action" value="clear">
+                <input type="hidden" name="key" value="{{ h.field.key }}">
+                {% if is_amendment %}<input type="hidden" name="amendment" value="{{ amendment.pk }}">{% endif %}
+                <button class="linkish" title="Discard this kept answer">clear kept answer</button>
+              </form>
+            {% endif %}{% endif %}
+          </td>
         </tr>
       {% endfor %}
     </tbody>
@@ -135,42 +270,28 @@
 </details>
 {% endif %}
 
-{% if show_checks and check_issues %}
-<details class="checks"{% if check_errors %} open{% endif %}>
-  <summary>
-    {% if check_errors %}<b class="warn">{{ check_errors|length }} to fix before submission</b>{% endif %}
-    {% if check_errors and check_warnings %} · {% endif %}
-    {% if check_warnings %}{{ check_warnings|length }} warning{{ check_warnings|length|pluralize }}{% endif %}
-    · what the checks found
-  </summary>
-  <p class="muted small">
-    Deterministic checks only: missing answers, impossible dates and contradictions.
-    Errors block submission; warnings do not. Press Submit again to re-check.
-  </p>
-  <table>
-    <thead><tr><th style="width:8%">Kind</th><th>Problem</th><th style="width:26%">Where</th></tr></thead>
-    <tbody>
-      {% for issue in check_issues %}
-        <tr class="check-row {{ issue.severity }}">
-          <td>{% if issue.severity == "error" %}<b class="warn">Fix</b>{% else %}Check{% endif %}</td>
-          <td>{{ issue.message }}{% if issue.fix %}<div class="muted small">{{ issue.fix }}</div>{% endif %}</td>
-          <td>{% if issue.slug %}<a href="#f-{{ issue.slug }}">{{ issue.label }}</a>{% else %}{{ issue.label|default:"Review" }}{% endif %}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</details>
-{% endif %}
-
 
 {% if locked %}
   <div class="statebox">
-    {% if review.status == "draft" or review.status == "returned" %}
+    {% if is_amendment %}
+      {% if can_review_amendment %}
+        This amendment is proposed. Review the changed fields, then approve or
+        return it. The approved Form 4 remains version
+        {{ official_version.version_no|default:"—" }} until you approve.
+      {% elif amendment.status == "proposed" %}
+        Waiting for FNO approval of this amendment. The approved Form 4 remains
+        version {{ official_version.version_no|default:"—" }}.
+      {% elif amendment.status == "returned" %}
+        This amendment was returned for changes.
+      {% else %}
+        This amendment is {{ amendment.get_status_display|lower }}.
+      {% endif %}
+    {% elif review.status == "draft" or review.status == "returned" %}
       View only — this review belongs to another author.
     {% elif review.status == "submitted" %}
       Waiting for FNO review. You will be able to edit again if it is returned.
     {% elif review.status == "approved" %}
-      Approved and closed. Later changes would need an amendment, which is not built yet.
+      Approved and closed. Changes require an amendment.
     {% else %}
       This review is {{ review.get_status_display|lower }}.
     {% endif %}
@@ -194,6 +315,12 @@
         <span class="count">{{ s.answered }}/{{ s.total }}</span>
       </a>
     {% endfor %}
+    {% if form1_preview and can_edit_form1 %}
+      <a href="#sec-form1">
+        <span>Form 1 details</span>
+        <span class="count">{{ form1_preview.not_recorded }} missing</span>
+      </a>
+    {% endif %}
     {% if not locked %}
       <a href="#sec-note">
         <span>Note for the FNO</span>
@@ -207,25 +334,26 @@
       <section class="form-section" id="sec-{{ section.key }}">
       <h2>
         {{ section.heading }}
-        <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.unknown %} · {{ section.unknown }} not known{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}{% if section.hidden %} · {{ section.hidden }} not shown{% endif %}</span>
+        <span class="count">{{ section.answered }}/{{ section.total }}{% if section.na %} · {{ section.na }} N/A{% endif %}{% if section.needs %} · {{ section.needs }} to review{% endif %}{% if section.hidden %} · {{ section.hidden }} not shown{% endif %}</span>
       </h2>
       {% if section.note %}<p class="muted small">{{ section.note }}</p>{% endif %}
       <table class="fields">
-        <thead><tr><th style="width:30%">Item</th><th style="width:34%">Answer</th><th>Proposed</th></tr></thead>
+        <thead><tr><th style="width:30%">Item</th><th style="width:34%">Answer</th><th>{% if is_amendment %}Approved version{% else %}Proposed{% endif %}</th></tr></thead>
         <tbody>
         {% for row in section.rows %}
           {% if not row.is_block %}
-          <tr id="f-{{ row.field.slug }}" class="{% if not row.is_answered and not row.is_na and not row.is_unknown %}remaining {% endif %}{% if row.fno_comment %}{% if row.addressed %}addressed{% else %}commented{% endif %}{% endif %}">
+          <tr id="f-{{ row.field.slug }}" class="{% if not row.is_answered and not row.is_na %}remaining {% endif %}{% if row.fno_comment %}{% if row.addressed %}addressed{% else %}commented{% endif %}{% endif %}{% if row.changed %} amended{% endif %}">
             <td>
               <div class="label" title="{{ row.field.key }}">{{ row.field.label_printed }}</div>
               {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
+              <a class="see-source prov-link"
+                 href="{% url 'field_provenance' review.pk row.field.key %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
+                 data-url="{% url 'field_provenance' review.pk row.field.key %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
+                 title="Where this answer came from">provenance</a>
             </td>
             <td>
               {% if locked or row.is_block or row.widget == "readonly" %}
-                {% if row.is_unknown %}
-                  <span class="value">Not known</span>
-                  {% if row.item.reason %}<div class="key">{{ row.item.reason }}</div>{% endif %}
-                {% elif row.is_na %}
+                {% if row.is_na %}
                   <span class="value">Not applicable</span>
                   {% if row.item.reason %}<div class="key">{{ row.item.reason }}</div>{% endif %}
                 {% else %}
@@ -236,42 +364,54 @@
               {% else %}
                 <div class="answer-edit">
                 <form method="post" class="answer"
-                      data-autosave="{% url 'save_field' review.pk %}"
+                      data-autosave="{% url 'save_field' review.pk %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
                       data-key="{{ row.field.key }}">{% csrf_token %}
                   <input type="hidden" name="key" value="{{ row.field.key }}">
                   {% if row.widget == "month" %}
-                    <select name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" title="Month">
+                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}" title="Month">
                       <option value="">—</option>
                       {% for m in months %}
                         <option value="{{ m.value }}" {% if row.current == m.value|stringformat:"s" %}selected{% endif %}>{{ m.label }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.widget == "year" %}
-                    <select name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" title="Year">
+                    <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}" title="Year">
                       <option value="">—</option>
                       {% for y in years %}
                         <option value="{{ y }}" {% if row.current == y|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
                       {% endfor %}
                     </select>
                   {% elif row.field.type == "date" %}
-                    <input type="date" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" value="{{ row.current }}">
+                    <input type="date" name="value" class="val{% if row.is_na %} na-hidden{% endif %}" value="{{ row.current }}">
                   {% elif row.field.type == "datetime" %}
-                    <input type="datetime-local" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}"
+                    <input type="datetime-local" name="value" class="val{% if row.is_na %} na-hidden{% endif %}"
                            title="Date and time" value="{{ row.current }}">
                   {% elif row.field.type == "int" %}
-                    <input type="number" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}" step="1" min="0"
+                    <input type="number" name="value" class="val{% if row.is_na %} na-hidden{% endif %}" step="1" min="0"
                            inputmode="numeric" placeholder="{{ row.example }}"
                            title="Whole number only"
                            value="{{ row.current }}">
                   {% elif row.field.type == "enum" %}
-                    <select name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}">
-                      <option value="">—</option>
-                      {% for opt in row.options %}
-                        <option value="{{ opt.value }}" {% if row.item.value_json == opt.value %}selected{% endif %}>{{ opt.label }}</option>
-                      {% endfor %}
-                    </select>
+                    {% if row.widget == "radio" or row.options|length <= 3 %}
+                      <div class="radio-group{% if row.is_na %} na-hidden{% endif %}"{% if row.is_na %} hidden{% endif %}>
+                        {% for opt in row.options %}
+                          <label class="radio-pill">
+                            <input type="radio" name="value" value="{{ opt.value }}"
+                                   {% if row.item.value_json == opt.value %}checked{% endif %}>
+                            {{ opt.label }}
+                          </label>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <select name="value" class="val{% if row.is_na %} na-hidden{% endif %}">
+                        <option value="">—</option>
+                        {% for opt in row.options %}
+                          <option value="{{ opt.value }}" {% if row.item.value_json == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                        {% endfor %}
+                      </select>
+                    {% endif %}
                   {% elif row.field.type == "multi" %}
-                    <details class="multi{% if row.is_na or row.is_unknown %} na-hidden{% endif %}">
+                    <details class="multi{% if row.is_na %} na-hidden{% endif %}">
                       <summary>{{ row.display }}</summary>
                       <div class="multi-list">
                         {% for opt in row.options %}
@@ -281,10 +421,10 @@
                       </div>
                     </details>
                   {% elif row.field.type == "text" %}
-                    <textarea name="value" rows="1" class="val auto{% if row.is_na or row.is_unknown %} na-hidden{% endif %}"
+                    <textarea name="value" rows="1" class="val auto{% if row.is_na %} na-hidden{% endif %}"
                               placeholder="{{ row.field.slug|cut:"_" }}">{{ row.current }}</textarea>
                   {% else %}
-                    <input type="text" name="value" class="val{% if row.is_na or row.is_unknown %} na-hidden{% endif %}"
+                    <input type="text" name="value" class="val{% if row.is_na %} na-hidden{% endif %}"
                            {% if row.field.type == "duration" %}placeholder="e.g. 1d 6h"
                            title="Days / hours / minutes, e.g. 1d 6h, 7h 30m or 450"
                            {% elif row.field.type == "datetime" %}placeholder="2026-11-05 14:30"
@@ -292,7 +432,7 @@
                            {% else %}placeholder="{{ row.field.slug|cut:"_" }}"{% endif %}
                            value="{{ row.current }}">
                   {% endif %}
-                  <span class="na-echo" {% if not row.is_na and not row.is_unknown %}hidden{% endif %}>{% if row.is_unknown %}Not known{% else %}Not applicable{% endif %}{% if row.item.reason %} · {{ row.item.reason }}{% endif %}</span>
+                  <span class="na-echo" {% if not row.is_na %}hidden{% endif %}>Not applicable{% if row.item.reason %} · {{ row.item.reason }}{% endif %}</span>
                   <span class="chip {{ row.mark }}">{{ row.mark }}</span>
                   <span class="save-state"></span>
                   <details class="notewrap">
@@ -302,22 +442,22 @@
                   <button type="button" class="linkish na-toggle state-na"
                           data-state="na"
                           data-key="{{ row.field.key }}"
-                          data-url="{% url 'na_field' review.pk %}"
-                          {% if row.is_na or row.is_unknown %}hidden{% endif %}
+                          data-url="{% url 'na_field' review.pk %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
+                          {% if row.is_na %}hidden{% endif %}
                           title="Mark not applicable">N/A</button>
-                  <button type="button" class="linkish na-toggle state-unknown"
-                          data-state="unknown"
-                          data-key="{{ row.field.key }}"
-                          data-url="{% url 'na_field' review.pk %}"
-                          {% if row.is_na or row.is_unknown %}hidden{% endif %}
-                          title="Mark not known, with a reason">not known</button>
                   <button type="button" class="linkish na-toggle state-clear"
                           data-state="clear"
                           data-key="{{ row.field.key }}"
-                          data-url="{% url 'na_field' review.pk %}"
-                          {% if not row.is_na and not row.is_unknown %}hidden{% endif %}
+                          data-url="{% url 'na_field' review.pk %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
+                          {% if not row.is_na %}hidden{% endif %}
                           title="Clear this state">clear</button>
                 </form>
+                </div>
+              {% endif %}
+              {% if row.changed %}
+                <div class="why amendment-change">
+                  <b>Approved version:</b> {{ row.before_display|truncatechars:140 }}
+                  → <b>Draft amendment:</b> {{ row.after_display|truncatechars:140 }}
                 </div>
               {% endif %}
               {% for c in row.checks %}
@@ -353,13 +493,6 @@
                 </details>
               {% endif %}
               {% if row.item.accepted_proposal_id %}<div class="key">from proposal {{ row.item.accepted_proposal_id }}</div>{% endif %}
-              {% if row.revertible %}
-                <form method="post" class="inline">{% csrf_token %}
-                  <input type="hidden" name="action" value="revert">
-                  <input type="hidden" name="key" value="{{ row.field.key }}">
-                  <button class="linkish" title="Undo the last change to this field">revert</button>
-                </form>
-              {% endif %}
             </td>
             <td>
               {% if row.is_block %}
@@ -368,7 +501,7 @@
                     {% for name, spec in row.block_cols %}<span>{{ name|cut:"_"|title }}</span>{% endfor %}<span></span>
                   </form>
                   {% for r in row.block_rows %}
-                    <form method="post" class="brow" data-autosave="{% url 'save_field' review.pk %}"
+                    <form method="post" class="brow" data-autosave="{% url 'save_field' review.pk %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
                       style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 150px">{% csrf_token %}
                       <input type="hidden" name="action" value="block_row">
                       <input type="hidden" name="key" value="{{ row.field.key }}">
@@ -404,6 +537,12 @@
                   {% endif %}
                 </div>
               {% else %}
+                {% if is_amendment %}
+                  <div class="prop approved-value">
+                    <span class="value">{{ row.before_display|default:"—" }}</span>
+                    <span class="why">approved value</span>
+                  </div>
+                {% else %}
                 {% for pr in row.proposals %}
                   <div class="prop">
                     <span class="value">{{ pr.display }}</span>
@@ -455,6 +594,7 @@
                     <span class="muted small">—</span>
                   {% endif %}
                 {% endfor %}
+                {% endif %}
               {% endif %}
             </td>
           </tr>
@@ -465,8 +605,19 @@
 
       {% for row in section.rows %}
         {% if row.is_block %}
-        <div class="block-card{% if not row.is_answered and not row.is_na %} remaining{% endif %}{% if row.fno_comment %}{% if row.addressed %} addressed{% else %} commented{% endif %}{% endif %}" id="b-{{ row.field.slug }}">
-          <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span></h3>
+        <div class="block-card{% if not row.is_answered and not row.is_na %} remaining{% endif %}{% if row.fno_comment %}{% if row.addressed %} addressed{% else %} commented{% endif %}{% endif %}{% if row.changed %} amended{% endif %}" id="b-{{ row.field.slug }}">
+          <h3>{{ row.field.label_printed }} <span class="count">{{ row.display }}</span>
+            <a class="see-source prov-link"
+               href="{% url 'field_provenance' review.pk row.field.key %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
+               data-url="{% url 'field_provenance' review.pk row.field.key %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
+               title="Where this block came from">provenance</a>
+          </h3>
+          {% if row.changed %}
+            <div class="why amendment-change">
+              <b>Approved version:</b> {{ row.before_display|truncatechars:140 }}
+              → <b>Draft amendment:</b> {{ row.after_display|truncatechars:140 }}
+            </div>
+          {% endif %}
           {% if fno_can_comment %}
             <details class="fc">
               <summary>comment on this block</summary>
@@ -489,7 +640,7 @@
           {% elif row.places %}
             {% for p in row.places %}
               <form method="post" class="place"
-                    data-autosave="{% url 'save_field' review.pk %}">{% csrf_token %}
+                    data-autosave="{% url 'save_field' review.pk %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}">{% csrf_token %}
                 <input type="hidden" name="action" value="block_place">
                 <input type="hidden" name="key" value="{{ row.field.key }}">
                 <input type="hidden" name="place" value="{{ p.place }}">
@@ -534,7 +685,7 @@
                 {% for name, spec in row.block_cols %}<span>{{ name|cut:"_"|title }}</span>{% endfor %}<span></span>
               </form>
               {% for r in row.block_rows %}
-                <form method="post" class="brow" data-autosave="{% url 'save_field' review.pk %}"
+                <form method="post" class="brow" data-autosave="{% url 'save_field' review.pk %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
                       style="grid-template-columns:repeat({{ row.block_cols|length }},minmax(84px,1fr)) 150px">{% csrf_token %}
                   <input type="hidden" name="action" value="block_row">
                   <input type="hidden" name="key" value="{{ row.field.key }}">
@@ -578,24 +729,49 @@
       </section>
     {% endfor %}
 
+    {% if form1_preview and can_edit_form1 %}
+      <section class="form-section" id="sec-form1">
+        <h2>Form 1 details <span class="count">not part of Form 4</span></h2>
+        <p class="muted small">
+          Form 1 is generated from this review. Name, age, MCTS, mobile, death
+          time, facility and place are taken from the existing records; fill only
+          the Form 1 details below. Form 1 stays editable and changes are
+          audited; Form 4 itself remains frozen after approval.
+        </p>
+        <details class="form1-panel">
+          <summary>Fill the Form 1 details ({{ form1_preview.not_recorded }} not recorded)</summary>
+          {% include "review/_form1_edit.html" with form1=form1_preview form1_place_types=form1_place_types next_value="workspace" show_open=True %}
+        </details>
+      </section>
+    {% endif %}
+
     {% if not locked %}
       <section class="form-section" id="sec-note">
         <h2>Note for the FNO <span class="count">not printed</span></h2>
         <form method="post" class="note-panel">{% csrf_token %}
-          <input type="hidden" name="action" value="submit">
+          <input type="hidden" name="action" value="{% if is_amendment %}submit_amendment{% else %}submit{% endif %}">
           <textarea name="note" rows="3" class="auto"
                     placeholder="Anything the reviewer should know before deciding — for example where a time came from. Not printed on Form 4.">{{ draft_note }}</textarea>
+          {% if show_checks %}
+            <div class="check-msg {% if check_errors %}error{% elif check_warnings %}warning{% else %}ok{% endif %}">
+              {% if check_errors %}
+                {{ check_errors|length }} problem{{ check_errors|length|pluralize }} to fix before submitting.
+              {% elif check_warnings %}
+                {{ check_warnings|length }} warning{{ check_warnings|length|pluralize }} — review them before submitting.
+              {% else %}
+                No problems found — ready to submit.
+              {% endif %}
+              {% if check_issues %}<a href="#checks" class="view-checks">View all checks</a>{% endif %}
+            </div>
+          {% endif %}
           <div class="bar">
-            {% if show_checks and check_errors %}
-              <span class="check-msg error">Fix {{ check_errors|length }} problem{{ check_errors|length|pluralize }} before submitting; the server will refuse until they are cleared.</span>
-            {% endif %}
+            <button name="check_only" value="yes">Check before submitting</button>
             {% if show_checks and check_warnings and not check_errors %}
               <button class="primary" name="confirm" value="yes">Submit anyway</button>
-              <span class="muted small">{{ check_warnings|length }} warning{{ check_warnings|length|pluralize }} — review them above, then submit.</span>
             {% else %}
-              <button class="primary">Submit for review</button>
-              <span class="muted small">Checks run when you submit.</span>
+              <button class="primary">{% if is_amendment %}Submit amendment for approval{% else %}Submit for review{% endif %}</button>
             {% endif %}
+            <span class="muted small">Checks run before a version is created.</span>
           </div>
         </form>
       </section>
@@ -605,9 +781,8 @@
 {{ controller_keys|json_script:"condition-controllers" }}
 {% if fno_can_comment %}
   <div class="decision-bar">
-    <input type="text" name="comment" class="return-comment"
-           value="{{ overall_value }}"
-           placeholder="overall comment (optional if you comment a field)">
+    <textarea name="comment" rows="1" class="return-comment auto"
+              placeholder="overall comment (optional if you comment a field)">{{ overall_value }}</textarea>
     {% if review.status == "submitted" %}
       <button name="action" value="return" class="danger">Return</button>
       <button name="action" value="approve" class="primary" id="approve-btn">Approve</button>
@@ -615,6 +790,16 @@
       <button name="action" value="return_update" class="primary">Update return</button>
     {% endif %}
   </div>
+  </form>
+{% endif %}
+{% if can_review_amendment %}
+  <form method="post">{% csrf_token %}
+    <div class="decision-bar">
+      <textarea name="comment" rows="1" class="return-comment auto"
+                placeholder="overall comment (required to return)">{{ overall_value }}</textarea>
+      <button name="action" value="return_amendment" class="danger">Return amendment</button>
+      <button name="action" value="approve_amendment" class="primary">Approve amendment</button>
+    </div>
   </form>
 {% endif %}
 {% endblock %}

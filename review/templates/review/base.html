@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}MDR Reuse{% endblock %}</title>
+<title>{% block title %}LCD to FBMDR{% endblock %}</title>
 <style>
   :root { --ink:#1a1f24; --muted:#5d6b78; --line:#d9e0e6; --bg:#f7f9fa;
           --accent:#0f5c6b; --warn:#8a4b00; --ok:#1f6b3a; --chip:#eef3f5;
@@ -55,6 +55,54 @@
   button.danger { color:var(--warn); }
   input[type=text], input[type=number] { font:inherit; padding:2px 5px; width:120px;
            border:1px solid var(--line); border-radius:4px; }
+  select {
+    font:inherit; color:var(--ink); background-color:#fff; cursor:pointer;
+    border:1px solid var(--line); border-radius:5px;
+    padding:4px 28px 4px 8px;
+    appearance:none; -webkit-appearance:none; -moz-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23626f79' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 9px center;
+    background-size:10px 6px;
+  }
+  select:hover { border-color:#9bb3c0; }
+  select:focus { outline:2px solid #cfe1e6; outline-offset:1px;
+                 border-color:var(--accent); }
+  select:disabled { background-color:#f4f7f9; color:var(--muted);
+                    cursor:not-allowed; }
+  select option { background:#fff; color:var(--ink); }
+  .select-shell { position:relative; display:inline-flex; vertical-align:middle;
+                  max-width:100%; }
+  .select-shell[hidden] { display:none !important; }
+  .select-shell > select { width:100%; }
+  .select-hit { position:absolute; inset:0; z-index:2; padding:0; border:0;
+                background:transparent; cursor:pointer; }
+  .select-hit:focus { outline:none; }
+  .select-hit:disabled { cursor:not-allowed; }
+  .select-menu { position:fixed; z-index:90; background:#fff;
+                 border:1px solid var(--line); border-radius:6px;
+                 box-shadow:0 8px 24px rgba(20,40,50,.16); padding:4px;
+                 max-height:280px; overflow-y:auto; overscroll-behavior:contain; }
+  .select-option { padding:6px 9px; border-radius:0; font-size:12px;
+                   color:var(--ink); cursor:pointer; white-space:normal;
+                   border-bottom:1px solid #edf1f3; }
+  .select-option:last-child { border-bottom:0; }
+  .select-option:first-child { border-radius:4px 4px 0 0; }
+  .select-option:last-child { border-radius:0 0 4px 4px; }
+  .select-option:hover, .select-option.active { background:#eef3f5;
+                   color:var(--accent); }
+  .select-option.selected { font-weight:600; }
+  .select-option.disabled { color:var(--muted); cursor:not-allowed; }
+  .form1-grid .select-shell { width:100%; }
+  .answer .select-shell { flex:1 1 180px; }
+  .correction-form .select-shell { display:block; width:100%; max-width:420px;
+                                   margin-top:3px; }
+  .correction-form .select-shell > select { margin-top:0; }
+  .form1-grid .select-shell { display:block; }
+  .place-grid .select-shell, .brow .select-shell { display:block; width:100%; }
+  .form1-grid select { padding-right:24px; }
+  .obs-form select, .filter-form select { padding-right:24px; }
+  .correction-form select { padding-right:24px; }
+  .place-grid select, .brow select { padding-right:18px; }
   .toasts { position:fixed; right:16px; bottom:16px; z-index:50;
             display:flex; flex-direction:column; gap:6px; max-width:360px; }
   .msg { background:#fff4e5; border:1px solid #f0d3a8; padding:8px 10px;
@@ -66,16 +114,21 @@
   .decision-bar { position:fixed; left:0; right:0; bottom:0; z-index:30;
                   background:#fff; border-top:1px solid var(--line);
                   padding:8px 16px; display:flex; gap:8px; justify-content:flex-end;
-                  align-items:center; box-shadow:0 -4px 14px rgba(0,0,0,.06); }
+                  align-items:flex-end; box-shadow:0 -4px 14px rgba(0,0,0,.06); }
   .decision-bar .return-comment { width:320px; }
+  .decision-bar textarea.return-comment { min-height:28px; max-height:140px;
+                  resize:none; overflow-y:auto; line-height:1.35; }
+  .reason-input { flex:1 1 320px; min-height:44px; max-height:160px;
+                  resize:none; overflow-y:auto; line-height:1.35; }
+  .statebox .bar { align-items:flex-end; }
   .review-form { padding-bottom:56px; }
   .fc summary { font-size:11px; color:var(--accent); cursor:pointer; }
   .fc textarea { width:100%; margin-top:3px; }
   .warn { color:var(--warn); font-weight:700; }
   tr.hit td { background:#fdf9e8; font-weight:600; }
   body.show-remaining tr.remaining td { background:#fffaf2; }
-  body.show-remaining tr.remaining td:first-child { box-shadow:inset 3px 0 0 var(--warn); }
-  body.show-remaining .block-card.remaining { border-left:3px solid var(--warn); background:#fffaf2; }
+  body.show-remaining tr.remaining td:first-child { box-shadow:inset 3px 0 0 #e0a52a; }
+  body.show-remaining .block-card.remaining { border-left:3px solid #e0a52a; background:#fffaf2; }
   .source-slot { margin-top:4px; }
   .source-slot table { margin:2px 0 0; }
   .source-slot th, .source-slot td { padding:3px 5px; font-size:11px; }
@@ -88,13 +141,24 @@
   .drawer-head { display:flex; justify-content:space-between; align-items:center;
             gap:8px; border-bottom:1px solid var(--line); padding-bottom:6px;
             margin-bottom:8px; font-size:13px; }
-  tr.commented td { background:#fff8e1; }
+  tr.commented td { background:#fffaf2; }
   tr.commented td:first-child { box-shadow:inset 3px 0 0 #e0a52a; }
-  tr.addressed td { background:#fff8e1; }   /* still an FNO comment, not accepted */
-  .block-card.commented { border-left:3px solid #e0a52a; background:#fff8e1; }
+  tr.addressed td { background:#fffaf2; }   /* still an FNO comment, not accepted */
+  .block-card.commented { border-left:3px solid #e0a52a; background:#fffaf2; }
   .block-card.addressed { border-left:3px solid var(--accent); }
+  tr.amended td { background:#faf8ff; }
+  tr.amended td:first-child { box-shadow:inset 3px 0 0 #7a5ab5; }
+  .block-card.amended { border-left:3px solid #7a5ab5; background:#faf8ff; }
   button:disabled { opacity:.45; cursor:not-allowed; }
   .na-hidden { display:none !important; }
+  .radio-group { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .radio-group[hidden] { display:none !important; }
+  .radio-pill { display:inline-flex; align-items:center; gap:4px; cursor:pointer;
+                font-size:12px; padding:2px 8px; border:1px solid var(--line);
+                border-radius:12px; background:#fff; white-space:nowrap; }
+  .radio-pill input { margin:0; }
+  .radio-pill:has(input:checked) { border-color:var(--accent); color:var(--accent);
+                background:#eef3f5; font-weight:600; }
   .not-shown { margin:10px 0; background:#fff; border:1px solid var(--line);
                border-radius:6px; padding:7px 10px; }
   .not-shown summary { font-size:12px; color:var(--accent); }
@@ -103,6 +167,18 @@
   .checks { margin:10px 0; background:#fff; border:1px solid var(--line);
             border-left:3px solid var(--warn); border-radius:6px; padding:8px 10px; }
   .checks summary { font-size:12px; color:var(--accent); }
+  .sticky-checks { margin:6px 0 0; }
+  .sticky-checks > summary { display:flex; justify-content:space-between;
+                             align-items:center; gap:10px; }
+  .sticky-checks .checks-nav { display:flex; gap:6px; align-items:center;
+                               flex-shrink:0; margin:0; }
+  #checks { scroll-margin-top:calc(var(--stack-h) + 20px); }
+  .check-group { margin:10px 0 2px; padding-bottom:2px; font-size:11px;
+                 text-transform:uppercase; letter-spacing:.05em;
+                 color:var(--muted); border-bottom:1px solid var(--line); }
+  .checks-nav { display:flex; gap:6px; align-items:center; justify-content:flex-end;
+                margin:4px 0; }
+  .checks-nav button { padding:1px 8px; font-size:13px; }
   .checks table { margin-top:6px; }
   .checks th, .checks td { padding:4px 6px; font-size:12px; }
   .check-row.error td { background:#fdf2f2; }
@@ -111,6 +187,8 @@
                line-height:1.35; }
   .check-msg.error { background:#fdf2f2; border-left:3px solid #b33; color:#7a1f1f; }
   .check-msg.warning { background:#fffaf2; border-left:3px solid #e0a52a; color:var(--warn); }
+  .check-msg.ok { background:#eef7f1; border-left:3px solid var(--ok); color:var(--ok); }
+  .check-msg a { color:inherit; }
   .na-echo { flex:1 1 180px; min-width:140px; font-size:13px; color:var(--muted);
              font-style:italic; }
   .evidence { margin-top:5px; padding:5px 7px; background:#f4f7f9;
@@ -134,6 +212,42 @@
   .statusbig.approved { background:#eef7f1; color:var(--ok); }
   .statebox { background:#fff; border:1px solid var(--line); border-left:3px solid var(--accent);
               border-radius:5px; padding:8px 10px; margin:10px 0; font-size:13px; }
+  .statebox.amendment { border-left-color:#7a5ab5; background:#faf8ff; }
+  .amendment-compact { display:flex; justify-content:flex-end; padding:0;
+                       border:0; background:transparent; margin:6px 0; }
+  .amendment-form { width:100%; margin:0; }
+  .amendment-form[hidden] { display:none !important; }
+  .amendment-change { background:#f4f7f9; border-left:3px solid #7a5ab5;
+              border-radius:4px; padding:3px 6px; margin-top:4px; font-size:11.5px; }
+  .draft-stamp { display:inline-block; background:#fdecec; color:#8a1f1f;
+              border:1px solid #e3b4b4; border-radius:4px; padding:4px 10px;
+              font-weight:700; letter-spacing:.06em; font-size:12px; }
+  .prov-meta { background:#f4f7f9; border-left:3px solid var(--accent);
+              border-radius:4px; padding:5px 8px; margin:8px 0; font-size:12px; }
+  table.provenance { margin:6px 0 14px; }
+  table.provenance th, table.provenance td { padding:4px 6px; font-size:11.5px;
+              vertical-align:top; }
+  table.provenance td { border-bottom:1px solid var(--line); }
+  .form1-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+              gap:8px; margin:8px 0; }
+  .form1-grid label { display:flex; flex-direction:column; gap:3px; font-size:12px; }
+  .form1-grid input, .form1-grid select { font:inherit; font-size:12px;
+              padding:4px 6px; border:1px solid var(--line); border-radius:4px; }
+  .form1-grid select { padding-right:24px; }
+  @media (max-width:600px) { .form1-grid { grid-template-columns:1fr; } }
+  .form1-table { width:100%; border-collapse:collapse; margin:6px 0 14px; }
+  .form1-table th, .form1-table td { border-bottom:1px solid var(--line);
+              padding:5px 6px; font-size:12px; text-align:left; vertical-align:top; }
+  .form1-table th { background:#f4f7f9; font-weight:600; }
+  .blank-line { display:inline-block; min-width:65%; height:1.1em;
+                border-bottom:1px solid #000; }
+  .signature-line { height:30px; border-bottom:1px solid #000; }
+  .prov-input { margin-bottom:3px; line-height:1.35; }
+  .prov-link { display:inline-block; margin-top:3px; font-size:10px;
+              color:var(--accent); background:#fff; border:1px solid var(--line);
+              border-radius:10px; padding:1px 7px; text-decoration:none; }
+  .prov-link:hover { border-color:var(--accent); }
+  .field-value { font-size:16px; margin:5px 0; }
   .lastreturn { background:#f4f7f9; border:1px solid var(--line); border-radius:5px;
                 padding:6px 10px; margin:8px 0; font-size:12px; }
   .comment-list { margin:4px 0 0; padding-left:16px; font-size:12px; }
@@ -155,9 +269,11 @@
   .rb-overall { color:#6b4a12; margin-top:2px; font-style:italic; }
   .rb-nav { display:flex; gap:6px; align-items:center; flex-shrink:0; }
   .rb-nav button { padding:1px 8px; font-size:13px; }
+  .amendmentbar[hidden] { display:none !important; }
   tr[id], .block-card[id] { scroll-margin-top:calc(var(--stack-h) + 46px); }
-  tr.flash td { background:#fff3c4 !important; }
-  .block-card.flash { outline:2px solid var(--warn); outline-offset:2px; }
+  tr.flash td { background:#fffaf2 !important; }
+  tr.flash td:first-child { box-shadow:inset 5px 0 0 var(--accent); }
+  .block-card.flash { outline:2px solid var(--accent); outline-offset:2px; }
   .returned { background:#fffaf2; border:1px solid #f0d3a8; border-radius:6px;
               padding:8px 10px; margin:10px 0; font-size:13px; }
   .return-comment { width:220px; }
@@ -170,7 +286,9 @@
                 z-index:2; width:118px; min-width:118px; max-width:118px;
                 font-size:11px; }
   table.chart thead th { position:sticky; top:0; background:#f2f5f7; z-index:1;
-                white-space:nowrap; font-size:10px; padding:4px 2px; }
+                white-space:nowrap; font-size:10px; padding:4px 2px;
+                text-align:center; }
+  table.chart thead th.sticky { text-align:left; }
   table.chart thead th.sticky { z-index:3; }
   table.chart td { text-align:center; padding:3px 2px; font-size:10.5px;
                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -198,6 +316,7 @@
                 font:inherit; font-size:13px; padding:3px 5px; border:1px solid var(--line);
                 border-radius:4px; background:#fff; color:var(--ink);
                 text-transform:none; letter-spacing:0; }
+  .obs-form select, .filter-form select { padding-right:24px; }
   .obs-form input[type=text], .obs-form input[type=number],
   .obs-form #obs-value-slot input, .obs-form #obs-value-slot select { width:140px; }
   .obs-form input[type=datetime-local] { width:190px; }
@@ -219,10 +338,27 @@
                      font:inherit; font-size:13px; padding:4px 6px; border:1px solid var(--line);
                      border-radius:4px; width:100%; max-width:420px;
                      text-transform:none; letter-spacing:0; }
+  .correction-form select { padding-right:24px; }
   .correction-form label.wide input { max-width:560px; }
   .small { font-size:12px; }
   .review-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }
   .head-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .head-link { font-size:12px; color:var(--accent); text-decoration:none;
+               border-bottom:1px dotted #9bb3c0; white-space:nowrap; }
+  .head-link:hover { text-decoration:underline; }
+  .more-menu { position:relative; }
+  .more-menu > summary { list-style:none; cursor:pointer; white-space:nowrap;
+               border:1px solid var(--line); border-radius:4px; padding:4px 9px;
+               background:#fff; font-size:12px; color:var(--ink); }
+  .more-menu > summary::-webkit-details-marker { display:none; }
+  .more-menu[open] > summary { border-color:var(--accent); color:var(--accent); }
+  .menu-list { position:absolute; right:0; top:calc(100% + 4px); z-index:40;
+               min-width:150px; background:#fff; border:1px solid var(--line);
+               border-radius:5px; box-shadow:0 6px 18px rgba(20,40,50,.12);
+               padding:4px; display:flex; flex-direction:column; }
+  .menu-list a { padding:5px 8px; border-radius:3px; font-size:12px;
+                 color:var(--ink); text-decoration:none; white-space:nowrap; }
+  .menu-list a:hover { background:#eef3f5; color:var(--accent); }
   .status { text-transform:uppercase; font-size:11px; letter-spacing:.06em;
             color:var(--accent); font-weight:700; }
   .legend { font-size:10.5px; color:var(--muted); margin:4px 0 0; }
@@ -310,7 +446,7 @@
   table.fields td:first-child { padding-right:10px; }
   .block-card { background:#fff; border:1px solid var(--line); border-radius:6px;
                 padding:8px 10px; margin:10px 0 16px; }
-  .block-card h3 { font-size:13px; margin:0 0 6px; }
+  .block-card h3 { font-size:14px; margin:0 0 6px; }
   .readonly-block { font-size:12px; color:var(--ink); }
   .readonly-block div { padding:2px 0; border-bottom:1px dotted var(--line); }
   .place { border-top:1px solid var(--line); padding:6px 0; }
@@ -323,13 +459,15 @@
                 text-transform:uppercase; letter-spacing:.03em; }
   .place-grid input, .place-grid select { font:inherit; font-size:12px; padding:3px 5px;
                 border:1px solid var(--line); border-radius:3px; width:100%; }
+  .place-grid select { padding-right:18px; }
   .block-wrap { margin-top:6px; border:1px solid var(--line); border-radius:5px;
                 background:#fcfdfd; overflow-x:auto; padding:4px; }
   .brow { display:grid; gap:4px; align-items:center; padding:3px 2px; }
   .brow.bhead { border-bottom:1px solid var(--line); color:var(--muted);
-                font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
-  .brow input, .brow select { width:100%; font:inherit; font-size:11.5px; padding:1px 4px;
+                font-size:11.5px; text-transform:uppercase; letter-spacing:.03em; }
+  .brow input, .brow select { width:100%; font:inherit; font-size:12.5px; padding:2px 5px;
                 border:1px solid var(--line); border-radius:3px; background:#fff; }
+  .brow select { padding-right:16px; background-position:right 4px center; }
   .row-actions { display:flex; gap:4px; }
   .row-actions button { padding:2px 7px; }
   @media (max-width:860px) {
@@ -340,11 +478,22 @@
     .secnav { position:static; display:flex; overflow-x:auto; }
     .secnav a { border-bottom:0; border-right:1px solid var(--line); white-space:nowrap; }
   }
+  @media print {
+    body { background:#fff; color:#000; }
+    nav, .bar, .toasts, .decision-bar, .sticky-top, .drawer,
+    .no-print, form, button { display:none !important; }
+    main { margin:0; padding:0; max-width:none; }
+    h2 { page-break-after:avoid; }
+    table { page-break-inside:auto; }
+    tr { page-break-inside:avoid; }
+    .chip { border:1px solid #000; background:#fff !important; color:#000 !important; }
+    #provenance { page-break-before:always; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <a href="/">MDR Reuse</a>
+  <a href="/">LCD to FBMDR</a>
   <span class="muted">Form 4 from labour documentation</span>
   <span class="spacer"></span>
   {% if user.is_authenticated %}
@@ -401,6 +550,37 @@
     return Math.floor(m / 60) + 'h ago';
   }
 
+  function applyStats(stats) {
+    if (!stats) return;
+    function set(id, value) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = value;
+    }
+    set('stat-resolved', stats.resolved);
+    set('stat-fields', stats.fields);
+    set('stat-to-enter', stats.to_enter);
+    set('stat-proposed', stats.proposed);
+    set('stat-needs', stats.needs);
+    set('stat-gaps', stats.gaps);
+
+    var fill = document.getElementById('workspace-progress-fill');
+    if (fill) fill.style.width = stats.percent + '%';
+    var progress = document.getElementById('workspace-progress');
+    if (progress) {
+      progress.title = stats.resolved + ' of ' + stats.fields + ' resolved';
+    }
+
+    var remaining = document.getElementById('toggle-remaining');
+    if (remaining) {
+      remaining.dataset.count = stats.to_enter;
+      remaining.hidden = !stats.to_enter;
+      if (!stats.to_enter) document.body.classList.remove('show-remaining');
+      remaining.textContent = document.body.classList.contains('show-remaining')
+        ? 'Hide remaining (' + stats.to_enter + ')'
+        : 'Show remaining (' + stats.to_enter + ')';
+    }
+  }
+
   setInterval(function () {
     document.querySelectorAll('.saved-stamp').forEach(function (el) {
       if (el.dataset.at) el.textContent = 'saved ' + human(Date.parse(el.dataset.at));
@@ -411,14 +591,22 @@
     var parts = [];
     f.querySelectorAll('input, select, textarea').forEach(function (c) {
       if (c.name === 'csrfmiddlewaretoken') return;
-      if (c.type === 'checkbox') parts.push(c.name + '=' + (c.checked ? c.value : ''));
-      else parts.push(c.name + '=' + (c.value || ''));
+      if (c.type === 'radio') {
+        if (c.checked) parts.push(c.name + '=' + c.value);
+      } else if (c.type === 'checkbox') {
+        parts.push(c.name + '=' + (c.checked ? c.value : ''));
+      } else {
+        parts.push(c.name + '=' + (c.value || ''));
+      }
     });
     return parts.join('|');
   }
 
   function wireAutosave(f, hasValue) {
     var state = f.querySelector('.save-state');
+    if (!state && f.classList.contains('form1-form')) {
+      state = document.getElementById('form1-save-state');
+    }
     if (!state) return;
     var timer = null, inflight = false, dirty = false;
     var last = snapshot(f);
@@ -447,6 +635,7 @@
           stamp.dataset.at = new Date().toISOString();
           stamp.textContent = 'saved just now';
         }
+        applyStats(res.j.stats);
         var chipEl = f.querySelector('.chip');
         if (chipEl && res.j.mark) {
           chipEl.className = 'chip ' + res.j.mark;
@@ -470,8 +659,8 @@
     f.querySelectorAll('input, select, textarea').forEach(function (c) {
       if (c.type === 'hidden') return;
       var instant = c.tagName === 'SELECT' || c.type === 'checkbox' ||
-                    c.type === 'number' || c.type === 'date' || c.type === 'month' ||
-                    c.type === 'datetime-local';
+                    c.type === 'radio' || c.type === 'number' || c.type === 'date' ||
+                    c.type === 'month' || c.type === 'datetime-local';
       if (instant) {
         c.addEventListener('change', post);
       } else {
@@ -498,9 +687,17 @@
       if (boxes.length) {
         return Array.prototype.some.call(boxes, function (b) { return b.checked; });
       }
+      var radios = f.querySelectorAll('input[type=radio][name=value]');
+      if (radios.length) {
+        return Array.prototype.some.call(radios, function (r) { return r.checked; });
+      }
       var input = f.querySelector('input[name=value], textarea[name=value]');
       return !!(input && (input.value || '').trim());
     });
+  });
+
+  document.querySelectorAll('form.form1-form[data-autosave]').forEach(function (f) {
+    wireAutosave(f, function () { return true; });
   });
 
   document.querySelectorAll('form.place[data-autosave], form.brow[data-autosave]').forEach(function (f) {
@@ -521,6 +718,27 @@
     autoGrow(t);
     t.addEventListener('input', function () { autoGrow(t); });
   });
+
+  var amendmentOpen = document.getElementById('amendment-open');
+  var amendmentForm = document.getElementById('amendment-form');
+  if (amendmentOpen && amendmentForm) {
+    amendmentOpen.addEventListener('click', function () {
+      amendmentForm.hidden = false;
+      amendmentOpen.hidden = true;
+      var reason = amendmentForm.querySelector('textarea[name=reason]');
+      if (reason) {
+        reason.focus();
+        autoGrow(reason);
+      }
+    });
+    var amendmentCancel = document.getElementById('amendment-cancel');
+    if (amendmentCancel) {
+      amendmentCancel.addEventListener('click', function () {
+        amendmentForm.hidden = true;
+        amendmentOpen.hidden = false;
+      });
+    }
+  }
 
   var rbNext = document.getElementById('rb-next');
   if (rbNext) {
@@ -553,6 +771,178 @@
     if (rbCount) rbCount.textContent = marks.length + ' marked';
   }
 
+  var amBar = document.getElementById('amendmentbar');
+  if (amBar) {
+    var amCount = document.getElementById('am-count');
+    var amSummary = document.getElementById('am-summary');
+    var amBase = amBar.getAttribute('data-base-version') || '';
+    function amMarks() {
+      return Array.prototype.slice.call(
+        document.querySelectorAll('tr.amended, .block-card.amended')
+      );
+    }
+    function amRefresh() {
+      var marks = amMarks();
+      if (amCount) amCount.textContent = marks.length + ' changed';
+      if (amSummary) {
+        amSummary.textContent = '· ' + marks.length + ' changed field' +
+          (marks.length === 1 ? '' : 's') + ' vs approved version ' + amBase;
+      }
+      amBar.hidden = marks.length === 0;
+    }
+    function amMark(el) {
+      if (!el) return;
+      el.classList.add('amended');
+      amRefresh();
+    }
+    function amUnmark(el) {
+      if (!el) return;
+      el.classList.remove('amended');
+      amRefresh();
+    }
+    function answerSnapshot(f) {
+      var parts = [];
+      f.querySelectorAll('[name=value]').forEach(function (c) {
+        if (c.type === 'radio') {
+          if (c.checked) parts.push(c.value);
+        } else if (c.type === 'checkbox') {
+          parts.push(c.value + '=' + (c.checked ? '1' : '0'));
+        } else {
+          parts.push(c.value || '');
+        }
+      });
+      return parts.join('|');
+    }
+    function blockSnapshot(f) {
+      var parts = [];
+      f.querySelectorAll('[name^=col_]').forEach(function (c) {
+        parts.push(c.value || '');
+      });
+      return parts.join('|');
+    }
+    function blockChanged(card) {
+      return Array.prototype.some.call(
+        card.querySelectorAll('form.brow[data-autosave]'),
+        function (r) { return blockSnapshot(r) !== r.dataset.initialSnapshot; }
+      );
+    }
+    document.querySelectorAll('form.answer[data-autosave]').forEach(function (f) {
+      var row = f.closest('tr');
+      if (!row) return;
+      var initial = answerSnapshot(f);
+      function check() {
+        if (answerSnapshot(f) === initial) amUnmark(row);
+        else amMark(row);
+      }
+      f.querySelectorAll('[name=value]').forEach(function (c) {
+        c.addEventListener('input', check);
+        c.addEventListener('change', check);
+      });
+      f.querySelectorAll('.na-toggle').forEach(function (b) {
+        b.addEventListener('click', function () { amMark(row); });
+      });
+    });
+    document.querySelectorAll('form.brow[data-autosave]').forEach(function (f) {
+      var card = f.closest('.block-card');
+      if (!card) return;
+      f.dataset.initialSnapshot = blockSnapshot(f);
+      function checkCard() {
+        if (blockChanged(card)) amMark(card);
+        else amUnmark(card);
+      }
+      f.querySelectorAll('[name^=col_]').forEach(function (c) {
+        c.addEventListener('input', checkCard);
+        c.addEventListener('change', checkCard);
+      });
+    });
+    function amIndex() {
+      var idx = -1;
+      amMarks().forEach(function (el, i) {
+        if (el.getBoundingClientRect().top < 220) idx = i;
+      });
+      return idx;
+    }
+    function amGo(i) {
+      var marks = amMarks();
+      if (!marks.length) return;
+      if (i >= marks.length) i = 0;
+      if (i < 0) i = marks.length - 1;
+      marks[i].scrollIntoView({ block: 'start' });
+      marks[i].classList.add('flash');
+      setTimeout(function () { marks[i].classList.remove('flash'); }, 1400);
+      if (amCount) amCount.textContent = (i + 1) + ' of ' + marks.length;
+    }
+    var amNext = document.getElementById('am-next');
+    var amPrev = document.getElementById('am-prev');
+    if (amNext) amNext.addEventListener('click', function () { amGo(amIndex() + 1); });
+    if (amPrev) amPrev.addEventListener('click', function () { amGo(amIndex() - 1); });
+    amRefresh();
+  }
+
+  var checkNext = document.getElementById('check-next');
+  if (checkNext) {
+    var checkRows = Array.prototype.slice.call(
+      document.querySelectorAll('#checks tr.check-row')
+    );
+    var checkCount = document.getElementById('check-count');
+    function checkIndex() {
+      var idx = -1;
+      checkRows.forEach(function (el, i) {
+        if (el.getBoundingClientRect().top < 220) idx = i;
+      });
+      return idx;
+    }
+    function checkGo(i) {
+      if (!checkRows.length) return;
+      if (i >= checkRows.length) i = 0;
+      if (i < 0) i = checkRows.length - 1;
+      var panel = document.getElementById('checks');
+      if (panel && panel.open) panel.open = false;
+      var targetId = checkRows[i].getAttribute('data-check-target');
+      var target = targetId ? document.getElementById(targetId) : null;
+      if (!target) target = document.getElementById('checks');
+      if (target) {
+        var holder = target.closest ? target.closest('details') : null;
+        if (holder) holder.open = true;
+        target.scrollIntoView({ block: 'start' });
+        target.classList.add('flash');
+        setTimeout(function () { target.classList.remove('flash'); }, 1400);
+      }
+      if (checkCount) checkCount.textContent = (i + 1) + ' of ' + checkRows.length;
+    }
+    checkNext.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      checkGo(checkIndex() + 1);
+    });
+    var checkPrev = document.getElementById('check-prev');
+    if (checkPrev) {
+      checkPrev.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        checkGo(checkIndex() - 1);
+      });
+    }
+    if (checkCount) checkCount.textContent = checkRows.length + ' issue' + (checkRows.length === 1 ? '' : 's');
+  }
+  document.querySelectorAll('a.view-checks').forEach(function (a) {
+    a.addEventListener('click', function () {
+      var panel = document.getElementById('checks');
+      if (panel) panel.open = true;
+    });
+  });
+
+  // A Where link may point inside a collapsed "questions not shown" panel.
+  // Open the panel before the browser jumps to the row.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href^="#"]') : null;
+    if (!a) return;
+    var id = a.getAttribute('href').slice(1);
+    var target = id ? document.getElementById(id) : null;
+    var holder = target && target.closest ? target.closest('details') : null;
+    if (holder) holder.open = true;
+  });
+
   if (document.querySelector('.decision-bar')) {
     document.body.classList.add('has-decision');
   }
@@ -568,24 +958,37 @@
     var edit = cell.querySelector('.answer-edit');
     var echo = edit.querySelector('.na-echo');
     var controls = edit.querySelectorAll('[name=value], details.multi');
+    var radioGroup = edit.querySelector('.radio-group');
     var reasonInput = edit.querySelector('input[name=reason]');
     var stateNa = edit.querySelector('.state-na');
-    var stateUnknown = edit.querySelector('.state-unknown');
     var stateClear = edit.querySelector('.state-clear');
     var saveState = edit.querySelector('.save-state');
 
     function showState(state) {
-      var isState = state === 'na' || state === 'unknown';
+      var isState = state === 'na';
       controls.forEach(function (c) { c.classList.toggle('na-hidden', isState); });
+      if (radioGroup) {
+        radioGroup.classList.toggle('na-hidden', isState);
+        radioGroup.hidden = isState;
+      }
       if (echo) {
         echo.hidden = !isState;
-        echo.textContent = state === 'unknown' ? 'Not known' : state === 'na' ? 'Not applicable' : '';
+        echo.textContent = state === 'na' ? 'Not applicable' : '';
       }
       if (stateNa) stateNa.hidden = isState;
-      if (stateUnknown) stateUnknown.hidden = isState;
       if (stateClear) stateClear.hidden = !isState;
       if (!isState) {
-        var value = edit.querySelector('input[name=value]');
+        edit.querySelectorAll('input[type=radio][name=value]').forEach(function (r) {
+          r.checked = false;
+        });
+        edit.querySelectorAll('input[type=checkbox][name=value]').forEach(function (c) {
+          c.checked = false;
+        });
+        var selectValue = edit.querySelector('select[name=value]');
+        if (selectValue) selectValue.selectedIndex = 0;
+        var value = edit.querySelector(
+          'input[name=value]:not([type=radio]):not([type=checkbox]), textarea[name=value]'
+        );
         if (value) value.value = '';
       }
     }
@@ -606,7 +1009,7 @@
           }
           return;
         }
-        showState(j.state === 'not_known' ? 'unknown' : j.state === 'not_applicable' ? 'na' : null);
+        showState(j.state === 'not_applicable' ? 'na' : null);
       });
   });
 
@@ -629,7 +1032,13 @@
   if (remaining) {
     remaining.addEventListener('click', function () {
       var on = document.body.classList.toggle('show-remaining');
-      remaining.textContent = (on ? 'Hide remaining' : 'Show remaining (' + remaining.dataset.count + ')');
+      remaining.textContent = on
+        ? 'Hide remaining (' + remaining.dataset.count + ')'
+        : 'Show remaining (' + remaining.dataset.count + ')';
+      if (on) {
+        var first = document.querySelector('tr.remaining, .block-card.remaining');
+        if (first) first.scrollIntoView({ block: 'start' });
+      }
     });
   }
 
@@ -656,7 +1065,7 @@
     });
   }
 
-  document.querySelectorAll('.prev-return').forEach(function (d) {
+  document.querySelectorAll('.prev-return, .sticky-checks').forEach(function (d) {
     d.addEventListener('toggle', function () { fitStack(); });
   });
 
@@ -671,6 +1080,126 @@
   addEventListener('resize', fitStack);
   addEventListener('load', fitStack);
   fitStack();
+
+  // Custom dropdown menu. The native <select> stays in the DOM for form
+  // submission and keyboard use; the mouse gets a styled white menu.
+  var openSelect = null;
+
+  function closeSelect() {
+    if (openSelect) {
+      openSelect.menu.remove();
+      openSelect = null;
+    }
+  }
+
+  function openSelectMenu(select, hit) {
+    if (openSelect && openSelect.select === select) {
+      closeSelect();
+      return;
+    }
+    closeSelect();
+    var menu = document.createElement('div');
+    menu.className = 'select-menu';
+    menu.setAttribute('role', 'listbox');
+
+    Array.prototype.forEach.call(select.options, function (option, index) {
+      var item = document.createElement('div');
+      item.className = 'select-option' +
+        (index === select.selectedIndex ? ' selected' : '') +
+        (option.disabled ? ' disabled' : '');
+      item.textContent = option.text;
+      item.setAttribute('role', 'option');
+      item.setAttribute('aria-selected', index === select.selectedIndex ? 'true' : 'false');
+      if (!option.disabled) {
+        item.addEventListener('click', function (event) {
+          event.stopPropagation();
+          select.selectedIndex = index;
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          closeSelect();
+        });
+      }
+      menu.appendChild(item);
+    });
+
+    document.body.appendChild(menu);
+    var rect = hit.getBoundingClientRect();
+    menu.style.minWidth = rect.width + 'px';
+    menu.style.width = 'max-content';
+    menu.style.maxWidth = '360px';
+    menu.style.left = rect.left + 'px';
+    menu.style.top = (rect.bottom + 4) + 'px';
+
+    var menuWidth = menu.getBoundingClientRect().width;
+    if (rect.left + menuWidth > window.innerWidth - 8) {
+      menu.style.left = Math.max(4, window.innerWidth - menuWidth - 8) + 'px';
+    }
+
+    var menuHeight = menu.getBoundingClientRect().height;
+    if (rect.bottom + 4 + menuHeight > window.innerHeight) {
+      menu.style.top = Math.max(4, rect.top - menuHeight - 4) + 'px';
+    }
+
+    openSelect = { menu: menu, select: select };
+  }
+
+  function enhanceSelect(select) {
+    if (select.dataset.customSelect) return;
+    select.dataset.customSelect = '1';
+
+    var shell = document.createElement('span');
+    shell.className = 'select-shell';
+    select.parentNode.insertBefore(shell, select);
+    shell.appendChild(select);
+
+    var hit = document.createElement('button');
+    hit.type = 'button';
+    hit.className = 'select-hit';
+    hit.tabIndex = -1;
+    hit.setAttribute('aria-haspopup', 'listbox');
+    hit.disabled = select.disabled;
+    hit.addEventListener('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (select.disabled) return;
+      openSelectMenu(select, hit);
+    });
+    shell.appendChild(hit);
+
+    function syncNaState() {
+      shell.hidden = select.classList.contains('na-hidden');
+    }
+    syncNaState();
+    new MutationObserver(syncNaState).observe(select, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+  }
+
+  function enhanceSelects(root) {
+    root.querySelectorAll('select').forEach(enhanceSelect);
+  }
+
+  enhanceSelects(document);
+  new MutationObserver(function () {
+    enhanceSelects(document);
+  }).observe(document.body, { childList: true, subtree: true });
+
+  function insideSelectMenu(target) {
+    return !!(openSelect && target && openSelect.menu.contains(target));
+  }
+
+  document.addEventListener('click', function (event) {
+    if (insideSelectMenu(event.target)) return;
+    closeSelect();
+  });
+  window.addEventListener('scroll', function (event) {
+    if (insideSelectMenu(event.target)) return;
+    closeSelect();
+  }, true);
+  window.addEventListener('resize', closeSelect);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeSelect();
+  });
 </script>
 </body>
 </html>

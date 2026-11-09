@@ -66,6 +66,13 @@
   <a href="/">All cases</a>
 </div>
 
+<p class="muted small">
+  Recorded observation times:
+  {% if recorded_clocks %}{{ recorded_clocks|join:" · " }}{% else %}none{% endif %}
+  {% if birth_clock %}· birth {{ birth_clock }}{% endif %}.
+  A dot (·) below means no observation was recorded for that item at that time.
+</p>
+
 <div class="chart-wrap">
 <table class="chart">
   <thead>
@@ -103,7 +110,7 @@
                   {{ cell.value }}{% if cell.late %}<sup>late</sup>{% elif cell.late_uncertain %}<sup>late?</sup>{% endif %}
                 </a>
               {% else %}
-                <span class="empty">·</span>
+                <span class="empty" title="no observation recorded for this item at this time">·</span>
               {% endif %}
             </td>
           {% endfor %}
@@ -113,7 +120,7 @@
   </tbody>
 </table>
 </div>
-<p class="muted small">Hover a value for its author and timestamps. Click a value to correct it. “late” means documented after the time of death; “late?” means the death time is not precise enough to decide.</p>
+<p class="muted small">A dot (·) means no observation was recorded for that item at that time. Hover a value for its author and timestamps. Click a value to correct it. “late” means documented after the time of death; “late?” means the death time is not precise enough to decide.</p>
 
 {{ variable_specs|json_script:"obs-specs" }}
 <script>

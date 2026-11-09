@@ -1,0 +1,13 @@
+{% extends "review/base.html" %}
+{% block title %}Provenance · {{ field.label_printed }}{% endblock %}
+{% block content %}
+<div class="bar">
+  <a href="{% url 'workspace' review.pk %}">Back to review</a>
+  {% if version %}
+    <a href="{% url 'output' review.pk %}?version={{ version.version_no }}#provenance">Printed appendix</a>
+  {% elif review.current_version %}
+    <a href="{% url 'output' review.pk %}#provenance">Printed appendix</a>
+  {% endif %}
+</div>
+{% include "review/_field_provenance.html" %}
+{% endblock %}

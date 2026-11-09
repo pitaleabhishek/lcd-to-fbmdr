@@ -226,29 +226,6 @@ def test_multiple_birth_mixed_outcomes_is_a_warning_not_an_error(case_a, residen
     assert found is not None and found.severity == checks.WARNING
 
 
-def test_not_known_is_attributed_and_allows_submission_with_a_warning(case_a, resident):
-    with pytest.raises(ValidationError):
-        services.set_not_known(
-            case_a, "f4.primary_diagnosis.dx", resident, ""
-        )
-
-    services.set_not_known(
-        case_a, "f4.primary_diagnosis.dx", resident, "diagnosis unavailable at this facility"
-    )
-    answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
-
-    item = case_a.items.get(field_key="f4.primary_diagnosis.dx")
-    assert item.answer_state == ReviewItem.AnswerState.NOT_KNOWN
-    assert item.decided_by_id == resident.pk
-    assert item.reason == "diagnosis unavailable at this facility"
-    found = issue(checks.run_checks(case_a), "not_known:f4.primary_diagnosis.dx")
-    assert found is not None and found.severity == checks.WARNING
-
-    services.submit(case_a, resident)
-    case_a.refresh_from_db()
-    assert case_a.status == Review.Status.SUBMITTED
-
-
 def test_required_question_cannot_be_marked_not_applicable(case_a, resident):
     services.set_applicability(
         case_a, "f4.primary_diagnosis.dx", ReviewItem.Applicability.NOT_APPLICABLE,
@@ -270,19 +247,6 @@ def test_specification_marked_not_applicable_is_a_conflict(case_a, resident):
         checks.run_checks(case_a), "conflict:f4.antenatal_care.risks_medical"
     )
     assert found is not None and found.severity == checks.ERROR
-
-
-def test_not_known_is_visible_in_output(client, case_a, resident):
-    services.set_not_known(
-        case_a, "f4.primary_diagnosis.dx", resident, "not recorded"
-    )
-    answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
-    services.submit(case_a, resident)
-
-    client.force_login(resident)
-    page = client.get(f"/review/{case_a.pk}/output/").content.decode()
-    assert "Not known" in page
-    assert "not recorded" in page
 
 
 def test_summary_missing_is_a_warning(case_a):
@@ -325,27 +289,6 @@ def test_editable_review_relinks_to_the_current_source_head(db, resident):
     review.refresh_from_db()
     assert review.source_document_id == new.pk
     assert AuditEvent.objects.filter(review=review, action="source_relinked").exists()
-
-
-def test_unknown_ui_endpoint_records_a_reason(client, case_a, resident):
-    client.force_login(resident)
-    resp = client.post(
-        f"/review/{case_a.pk}/na/",
-        {
-            "key": "f4.primary_diagnosis.dx",
-            "state": "unknown",
-            "reason": "not available",
-        },
-    )
-    assert resp.status_code == 200
-    assert resp.json()["state"] == "not_known"
-    item = case_a.items.get(field_key="f4.primary_diagnosis.dx")
-    assert item.answer_state == ReviewItem.AnswerState.NOT_KNOWN
-    assert item.reason == "not available"
-
-    page = client.get(f"/review/{case_a.pk}/").content.decode()
-    assert "Not known" in page
-    assert "not available" in page
 
 
 def test_date_only_death_makes_late_entries_uncertain(db, resident):

@@ -1,0 +1,87 @@
+<form method="post" action="{% url 'save_form1' review.pk %}"
+      class="form1-form"
+      data-autosave="{% url 'save_form1' review.pk %}?ajax=1">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next_value|default:'' }}">
+  <div class="form1-grid">
+    <label>State <input type="text" name="state" value="{{ form1.inputs.state }}"></label>
+    <label>District <input type="text" name="district" value="{{ form1.inputs.district }}"></label>
+    <label>Block <input type="text" name="block" value="{{ form1.inputs.block }}"></label>
+    <label>Village / location <input type="text" name="village" value="{{ form1.inputs.village }}"></label>
+    <label>Current residence <input type="text" name="current_residence" value="{{ form1.inputs.current_residence }}"></label>
+    <label>Native place <input type="text" name="native_place" value="{{ form1.inputs.native_place }}"></label>
+    <label>Husband's name <input type="text" name="husband_name" value="{{ form1.inputs.husband_name }}"></label>
+    <label>Father's name <input type="text" name="father_name" value="{{ form1.inputs.father_name }}"></label>
+    <label>Reporting person <input type="text" name="reported_by_name" value="{{ form1.inputs.reported_by_name }}"></label>
+    <label>Designation <input type="text" name="reported_by_designation" value="{{ form1.inputs.reported_by_designation }}"></label>
+    <label>Date of report <input type="datetime-local" name="notified_at" value="{{ form1.inputs.notified_at }}"></label>
+    <label>Place of death
+      <select name="place_type">
+        <option value="">—</option>
+        {% for value, label in form1_place_types %}
+          <option value="{{ value }}"{% if form1.inputs.place_type == value %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if form1.derived.place_type and form1.suggested_display.place_type %}
+        <span class="key">suggested: {{ form1.suggested_display.place_type }}</span>
+      {% endif %}
+    </label>
+    <label>Place detail <input type="text" name="place_detail" value="{{ form1.inputs.place_detail }}"></label>
+    <label>ANM name <input type="text" name="anm_name" value="{{ form1.inputs.anm_name }}"></label>
+    <label>Sub-centre <input type="text" name="sub_centre" value="{{ form1.inputs.sub_centre }}"></label>
+    <label>ANM verification date <input type="datetime-local" name="anm_verified_at" value="{{ form1.inputs.anm_verified_at }}"></label>
+  </div>
+
+  <h3>When did death occur?</h3>
+  <p class="muted small">
+    Suggested values come from the recorded pregnancy, delivery and death
+    times. “During delivery” stays blank unless you confirm it.
+  </p>
+  <div class="form1-grid">
+    <label>During pregnancy
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="death_during_pregnancy" value=""{% if not form1.inputs.death_during_pregnancy %} checked{% endif %}> —</label>
+        <label class="radio-pill"><input type="radio" name="death_during_pregnancy" value="yes"{% if form1.inputs.death_during_pregnancy == "yes" %} checked{% endif %}> Yes</label>
+        <label class="radio-pill"><input type="radio" name="death_during_pregnancy" value="no"{% if form1.inputs.death_during_pregnancy == "no" %} checked{% endif %}> No</label>
+      </div>
+      {% if form1.derived.death_during_pregnancy and form1.suggested_display.death_during_pregnancy %}
+        <span class="key">suggested: {{ form1.suggested_display.death_during_pregnancy }}</span>
+      {% endif %}
+    </label>
+    <label>During delivery
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="death_during_delivery" value=""{% if not form1.inputs.death_during_delivery %} checked{% endif %}> —</label>
+        <label class="radio-pill"><input type="radio" name="death_during_delivery" value="yes"{% if form1.inputs.death_during_delivery == "yes" %} checked{% endif %}> Yes</label>
+        <label class="radio-pill"><input type="radio" name="death_during_delivery" value="no"{% if form1.inputs.death_during_delivery == "no" %} checked{% endif %}> No</label>
+      </div>
+      <span class="key">confirm from the clinical record</span>
+    </label>
+    <label>Within 42 days after delivery
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="death_within_42_days" value=""{% if not form1.inputs.death_within_42_days %} checked{% endif %}> —</label>
+        <label class="radio-pill"><input type="radio" name="death_within_42_days" value="yes"{% if form1.inputs.death_within_42_days == "yes" %} checked{% endif %}> Yes</label>
+        <label class="radio-pill"><input type="radio" name="death_within_42_days" value="no"{% if form1.inputs.death_within_42_days == "no" %} checked{% endif %}> No</label>
+      </div>
+      {% if form1.derived.death_within_42_days and form1.suggested_display.death_within_42_days %}
+        <span class="key">suggested: {{ form1.suggested_display.death_within_42_days }}</span>
+      {% endif %}
+    </label>
+    <label>Abortion or within 6 weeks after abortion
+      <div class="radio-group">
+        <label class="radio-pill"><input type="radio" name="death_after_abortion_6_weeks" value=""{% if not form1.inputs.death_after_abortion_6_weeks %} checked{% endif %}> —</label>
+        <label class="radio-pill"><input type="radio" name="death_after_abortion_6_weeks" value="yes"{% if form1.inputs.death_after_abortion_6_weeks == "yes" %} checked{% endif %}> Yes</label>
+        <label class="radio-pill"><input type="radio" name="death_after_abortion_6_weeks" value="no"{% if form1.inputs.death_after_abortion_6_weeks == "no" %} checked{% endif %}> No</label>
+      </div>
+      {% if form1.derived.death_after_abortion_6_weeks and form1.suggested_display.death_after_abortion_6_weeks %}
+        <span class="key">suggested: {{ form1.suggested_display.death_after_abortion_6_weeks }}</span>
+      {% endif %}
+    </label>
+  </div>
+  <div class="bar">
+    <span class="save-state"></span>
+    <span class="muted small">Form 1 saves automatically.</span>
+    {% if show_open %}
+      <a class="button" href="{% url 'form1_output' review.pk %}">Open Form 1</a>
+    {% endif %}
+  </div>
+</form>

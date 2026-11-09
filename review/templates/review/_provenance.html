@@ -1,0 +1,94 @@
+{% if provenance_meta %}
+<div class="prov-meta">
+  {% if provenance_meta.preview %}
+    <b>Preview.</b> This snapshot will be frozen when you submit. Nothing is
+    recalculated afterwards.
+  {% elif provenance_meta.frozen %}
+    <b>Frozen snapshot {{ provenance_meta.version }}</b>
+    {% if provenance_meta.hash %}· hash <span class="key">{{ provenance_meta.hash|slice:":16" }}</span>{% endif %}
+    {% if provenance_meta.verified %}· verified{% elif provenance_meta.frozen %}<span class="warn">· hash mismatch</span>{% endif %}
+  {% else %}
+    <b>Provenance was not frozen in this version.</b>
+    Values marked <i>reconstructed</i> come from the accepted proposal record and
+    are shown for context only.
+  {% endif %}
+</div>
+{% endif %}
+
+{% for section in provenance_sections %}
+<h3>{{ section.heading }}</h3>
+<table class="provenance">
+  <thead>
+    <tr>
+      <th style="width:24%">Printed item</th>
+      <th style="width:16%">Value</th>
+      <th style="width:38%">Where it came from</th>
+      <th style="width:12%">Decided</th>
+      <th>Rule / version</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for row in section.rows %}
+    <tr>
+      <td>
+        {{ row.field.label_printed }}
+        <div class="key">{{ row.field.key }}</div>
+        {% if row.provenance.changed %}<span class="chip C">amended</span>
+        {% elif row.provenance.carried %}<span class="muted small">carried from base</span>{% endif %}
+      </td>
+      <td>
+        {{ row.display }}
+        <span class="chip {{ row.mark }}">{{ row.mark }}</span>
+      </td>
+      <td>
+        {% if row.provenance.inputs %}
+          {% for inp in row.provenance.inputs %}
+            <div class="prov-input">
+              <b>{{ inp.label }}</b> = {{ inp.value }}
+              {% if inp.observed_at %} · observed {{ inp.observed_at }}{% endif %}
+              {% if inp.documented_at %} · documented {{ inp.documented_at }}{% endif %}
+              {% if inp.author %} · {{ inp.author }}{% endif %}
+              {% if inp.entered_by and inp.entered_by != inp.author %} · entered by {{ inp.entered_by }}{% endif %}
+              {% if inp.late %}<span class="warn">late</span>
+              {% elif inp.late_uncertain %}<span class="warn">late uncertain</span>{% endif %}
+              {% if inp.ref %}<span class="key">{{ inp.ref }}</span>{% endif %}
+            </div>
+          {% endfor %}
+        {% elif row.provenance.entry %}
+          Entered by {{ row.provenance.entry.by|default:"—" }}
+          {% if row.provenance.entry.at %} at {{ row.provenance.entry.at }}{% endif %}
+          {% if row.provenance.entry.reason %} · {{ row.provenance.entry.reason }}{% endif %}
+        {% elif row.provenance.state == "not_applicable" %}
+          Not applicable
+          {% if row.provenance.decision.reason %} · {{ row.provenance.decision.reason }}{% endif %}
+        {% elif row.provenance.note %}
+          {{ row.provenance.note }}
+        {% else %}
+          <span class="muted">—</span>
+        {% endif %}
+        {% if row.provenance.reconstructed %}
+          <div class="key">reconstructed — not frozen in this version</div>
+        {% endif %}
+      </td>
+      <td>
+        {% if row.provenance.decision.by %}{{ row.provenance.decision.by }}{% endif %}
+        {% if row.provenance.decision.at %}<div class="key">{{ row.provenance.decision.at }}</div>{% endif %}
+        {% if row.provenance.decision.reason and row.provenance.state == "answered" %}
+          <div class="key">{{ row.provenance.decision.reason }}</div>
+        {% endif %}
+      </td>
+      <td>
+        {% if row.provenance.rule %}
+          {{ row.provenance.rule }}@{{ row.provenance.rule_version }}
+        {% endif %}
+        {% if row.provenance.calculation %}
+          <div class="key">calculated as {{ row.provenance.calculation }}</div>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% empty %}
+<p class="muted small">No printed values yet.</p>
+{% endfor %}

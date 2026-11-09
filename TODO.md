@@ -1,68 +1,121 @@
-# To-do
+# Task list
 
-Living list for the seven-day build. Check things off here; do not keep a second
-list. `[x]` done, `[ ]` open, `[~]` partial.
+This is the only task list. Do not keep a second list.
 
-_Last updated: 6 November 2026. 170 tests passing. 99 Form 4 fields, 34 LCG variables._
+`[x]` done. `[ ]` open. `[~]` partial.
+
+Last update: 7 November 2026. 261 tests pass. The app has 99 Form 4 fields and 34
+LCG variables.
 
 ## Built
 
-- [x] LCG model: 7 sections, 34 variables, values reconciled to the chart, validation trigger
-- [x] Form 4 model: 14 sections, 99 fields, three block schemas, validation trigger
-- [x] Case 0 (complete labour) and Case A (death after charted labour, clinically coherent)
-- [x] Labour record screen: form header, stage bands, birth marker, late-entry marking
-- [x] Review workspace: section nav with counts, progress, Show remaining, autosave (250ms + flush), error-only field feedback
-- [x] Blocks: referral (four places, keyed by place), diagnosis rows, interventions matrix — all autosaving
-- [x] Inputs: enums as selects, multi as checkboxes, native date/time pickers, month/year selects, durations in d/h/m
-- [x] Accept / reject / correct, revert last change, no-op saves that never flip origin
-- [x] Proposals with a source drawer; every input line shows its time and original author and has **see source** opening the chart column or record, value highlighted; derived values name their calculation, and an accepted proposal keeps its inputs and calculation in the row
-- [x] Alert crossings computed from immutable observations (`review/thresholds.py`, `lcg_2021@1`), shown as evidence on 5 Form 4 fields; map in `docs/evidence-map.md`
-- [x] N/A toggles in place — reads "Not applicable", note and clear stay in position, no reload
-- [x] Internal field keys hidden from the form; kept as tooltips and in JSON output
-- [x] Submit → return with per-field comments → fix → resubmit → approve
-- [x] FNO can update an open return; Approve blocked while comments exist; typed comments survive the refusal
-- [x] Sticky return bar with previous/next navigation between commented fields
-- [x] Commented fields highlighted for the resident; previously-returned fields stay highlighted for the FNO
-- [x] Role separation: author-only editing, no self-approval, FNO comments/returns/approves
-- [x] Versions and output (HTML + JSON) rendered from a version; resident handover note per version, never printed
-- [x] Review history: versions, returns with per-field comments, paginated activity (100/page), per-field filter, 2-minute grouping
-- [x] Dependency register (`docs/dependencies.md`)
-- [x] Overlap inventory generated and reconciled to the PDF (99/99 labels)
-- [x] Conditional Form 4 corrections: post-birth maternal timing replaces the retired neonatal-death-time field; ANC risks follow counselling; risk/cause specification fields; referral table available to self-presenters; anaesthesia available for abortion; retired answers preserved as legacy data (rule set `c2`) (`review/conditions.py`, `docs/conditions.md`); hidden fields keep earlier answers, FNO comments override, submitted versions freeze `applies`
-- [x] Review creation: one form for an existing woman or a new death; one-click from a labour record; `Review.source_document` is explicit; reporting facilities can be typed in and are created if absent; a no-LCG review says so plainly
-- [x] Checks before submission: deterministic missing/impossible/inconsistent rules (`review/checks.py`, `docs/checks.md`), plain-language panel shown only after Submit, inline messages, errors block, warnings need one confirmation; Not known, precision, current-source, reconsideration and consistency checks
+- [x] LCG model: 7 sections, 34 variables, chart reconciliation and a validation
+  trigger.
+- [x] Form 4 model: 14 sections, 99 fields, three block schemas and a validation
+  trigger.
+- [x] Case 0 (complete labour) and Case A (death after charted labour).
+- [x] Labour record screen: header, stage bands, birth marker and late-entry mark.
+- [x] Review workspace: section nav, counts, progress, Show remaining, autosave
+  and field errors.
+- [x] Blocks: referral (four places), diagnosis rows and intervention matrix. All
+  blocks autosave.
+- [x] Inputs: selects, checkboxes, date and time pickers, month and year selects,
+  and durations.
+- [x] Accept, reject and correct. A no-op save does not change origin. No undo
+  button.
+- [x] Proposals with a source drawer. Each input shows its time and author. **See
+  source** opens the chart column or record. Derived values show the calculation.
+- [x] Alert crossings from immutable observations (`lcg_2021@1`). They show as
+  evidence on five Form 4 fields. See `docs/evidence-map.md`.
+- [x] N/A toggle in place. It shows “Not applicable”. The note and clear controls
+  stay in place. No reload.
+- [x] Internal keys are hidden from the form. They stay as tooltips and in JSON.
+- [x] Submit, return with comments, fix, resubmit and approve.
+- [x] FNO can update an open return. Approve is blocked while comments exist.
+  Typed comments survive the refusal.
+- [x] Sticky return bar with previous and next navigation.
+- [x] Commented fields stay marked for the resident and the FNO.
+- [x] Role separation: author edits, FNO returns and approves, no self-approval.
+- [x] Versions and output (HTML and JSON) from a version. Handover note per
+  version. The note never prints.
+- [x] Review history: versions, returns, comments, paged activity, field filter
+  and two-minute grouping.
+- [x] Dependency register (`docs/dependencies.md`).
+- [x] Overlap inventory from the PDF. All 99 labels match.
+- [x] Conditional Form 4 (version 2). It includes post-birth maternal timing, ANC
+  risks, specification fields, referral table, abortion anaesthesia and legacy
+  answers. Hidden fields keep old answers. FNO comments force a field into view.
+  Frozen versions keep `applies`.
+- [x] Review creation: one form for an existing woman or a new death. One click
+  from a labour record. `Review.source_document` is explicit. The app creates a
+  new facility when needed. A review without an LCG says so.
+- [x] Checks before submission (version 3). The panel is grouped and plain. It shows
+  after Check or Submit. Errors block. Warnings need one confirmation.
+- [x] One-command setup: `start.sh`, `start.ps1`, `demo_setup` and `docs/setup.md`.
+- [x] Optional shared HTTP Basic auth for a hosted demo.
+- [x] Database audit: removed 4 unused review tables; 32 tables remain (`docs/db-audit.md`).
+- [x] Integrity, confidentiality and DPDP answer. See `docs/dpdp.md` and
+  `docs/security.md`.
 
 ## Essential, open
 
-- [x] **LCG entry form** — one compact panel on the labour record: variable, time,
-  value, author, documented-at; stage stamped from the chart. Append-only.
-- [x] **Corrections** — a new row superseding the old one, with a reason; the chart
-  and alert rules read only the head of the chain, the original stays in history.
-- [x] **History screen for the labour record** — who wrote what, when, late entries,
-  supersessions; filterable by item and author, paginated.
-- [ ] **Cases B, C, D** — caesarean after labour, no labour record, referred in after delivery
-- [ ] **Amendments** — approved reviews frozen; needs an attributed amendment path
-- [ ] **Overlap analysis write-up** — per Dr Atter's four categories: counts, sources, false friends, 1/99 finding
-- [ ] **Security note** — and close the gaps it exposes: non-owner DB role, author/facility scoping, login throttling
-- [ ] **Output provenance appendix** — "from where" per printed value
+- [x] **LCG entry form**: one panel on the labour record. It records variable,
+  time, value, author and documented-at. The chart stamps the stage. Append-only.
+- [x] **Corrections**: a new row replaces the old row. A reason is required. The
+  chart and alerts use the current row. The original stays in history.
+- [x] **Labour history screen**: shows who wrote what and when. It includes late
+  entries and corrections. It filters by item and author. It is paged.
+- [x] **Happy-case seed**: clean LCG, one alert crossing, no gaps or late entries.
+  It has a complete draft, zero checks, 100% resolved, and a full
+  submit/return/resubmit/approve/amendment cycle.
+- [x] **Cases B, C and D**: caesarean after labour, no labour record, and referral
+  in after delivery. Case D is a complete draft.
+- [x] **Amendments**: an approved review is closed. A resident opens an attributed
+  amendment. An FNO can request one. Submit runs the checks. Approval creates a
+  new `ReviewVersion(kind=amendment)`. The old version stays official until
+  approval. One open amendment per review.
+- [x] **Overlap analysis**: all 99 fields in Dr Atter's four categories, with
+  sources, false friends, terminology, precision and the 1/99 finding. See
+  `docs/overlap.md`.
+- [~] **Security basics**: headers, cookies, password validators, review scoping,
+  least-privilege Postgres role, Caddy TLS, Postgres TLS with SCRAM and encrypted
+  backups. See `docs/security.md`. Remaining: FNO facility scoping, MFA and login
+  throttling, live-volume encryption, `verify-full`, full access logs, scheduled
+  off-host backups, breach tooling and retention.
+- [x] **Output provenance**: per-value snapshot (version 1) at submit and amendment
+  submit. The app checks it at approval. The drawer shows it per field. It prints
+  at `/review/<pk>/output/#provenance`.
 
 ## Desirable
 
-- [ ] Printable Form 4 — print stylesheet for the wet-signature item
-- [ ] Timeline combining labour observations and later events, contemporaneous vs retrospective
-- [ ] Explicit "no observation recorded" marker in gaps (Case A's two-hour hole has no signal)
-- [ ] Form 1 back-fill from the review
-- [ ] Two hospitals / facility scoping
-- [ ] Collapse consecutive edits in history beyond the current 2-minute grouping
+- [x] Printable Form 4 for wet signature. Only the current approved version can
+  print. The print copy has tick boxes, block tables, blank lines and the
+  signature block. It has no origin chips or provenance. See
+  `docs/form4-print.md`.
+- [ ] Timeline that combines labour observations and later events.
+- [x] Missing observations show as blank cells or dots. The chart lists recorded
+  times and the birth marker. It does not use a cadence gap rule.
+- [x] Form 1 from the review. Shared facts are reused. Form 1 fields are
+  entered once. Form 1 stays live and editable. See `docs/form1.md`.
+- [ ] Two hospitals and facility scoping.
+- [ ] Collapse consecutive history edits beyond two minutes.
 
 ## Deliverables
 
-- [ ] Overlap document exported alongside the app (`docs/overlap.md`)
-- [ ] Demo script
-- [ ] Final security/limitations note
+- [x] Overlap document (`docs/overlap.md`).
+- [x] Hosted demo at `https://lcdtofbmdr.nirovia.in` through a separate named Cloudflare tunnel.
+- [ ] Demo script.
+- [ ] Final security and limitations note.
 
-## Out of scope (do not build)
+## Out of scope
 
-LCG charting and plotting · MPCDSR/HMIS/ABDM integrations · death certificates ·
-committee module · offline sync · AI narratives or suggested causes · production
-deployment or compliance certification · partograph adapter (seam only).
+Do not build:
+
+- LCG charting or plotting.
+- MPCDSR, HMIS or ABDM integration.
+- Death certificates.
+- Committee module.
+- Offline sync.
+- AI narratives or suggested causes.
+- Production deployment or compliance certification.
+- Partograph adapter. Keep the seam only.

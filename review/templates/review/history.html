@@ -33,6 +33,40 @@
   </tbody>
 </table>
 
+<h2>Amendments</h2>
+<table>
+  <thead><tr><th>Opened</th><th>By</th><th>Status</th><th>Reason</th><th>Base</th><th>Submitted</th><th>Decided</th><th>Result</th></tr></thead>
+  <tbody>
+  {% for a in amendments %}
+    <tr>
+      <td>{{ a.at|date:"d M Y H:i" }}</td>
+      <td>{{ a.by.username|default:"—" }}</td>
+      <td>{{ a.get_status_display }}</td>
+      <td>{{ a.reason }}</td>
+      <td>v{{ a.base_version.version_no }}</td>
+      <td>{% if a.submitted_by %}{{ a.submitted_by.username }} · {{ a.submitted_at|date:"d M H:i" }}{% else %}—{% endif %}</td>
+      <td>{% if a.decided_by %}{{ a.decided_by.username }} · {{ a.decided_at|date:"d M H:i" }}{% else %}—{% endif %}</td>
+      <td>
+        {% if a.result_version %}
+          <a href="{% url 'output' review.pk %}?version={{ a.result_version.version_no }}">v{{ a.result_version.version_no }}</a>
+        {% elif a.is_open %}
+          <a href="{% url 'amendment_workspace' review.pk a.pk %}">open amendment</a>
+          · <a href="{% url 'amendment_output' review.pk a.pk %}">draft output</a>
+        {% else %}—{% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="8" class="muted">No amendments.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if amendments %}
+<p class="muted small">
+  An amendment never changes an approved version. The previous version stays in the
+  table above; the result version becomes the new official Form 4.
+</p>
+{% endif %}
+
 <h2>Returns</h2>
 <table>
   <thead><tr><th>When</th><th>By</th><th>Overall comment</th><th>Field comments</th><th>Basis</th><th>State</th></tr></thead>

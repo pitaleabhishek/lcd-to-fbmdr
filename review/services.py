@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import ValidationError
@@ -12,6 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import (
+    Amendment,
     AuditEvent,
     SourceDocument,
     Observation,
@@ -23,7 +24,7 @@ from .models import (
     ReviewVersion,
     TimePrecision,
 )
-from . import checks, conditions
+from . import checks, conditions, form1, provenance, scope
 from .registry import LEGACY_FIELDS, registry
 from .rules import RULES, Context, NotComputable, Value
 from .source_time import current_death, current_source
@@ -34,6 +35,41 @@ def assert_can_author(review: Review, user) -> None:
     allowed = {review.created_by_id, review.assigned_to_id} - {None}
     if allowed and user.pk not in allowed:
         raise ValidationError("only the author or assignee can edit this review")
+
+
+def assert_can_edit(review: Review, user, amendment=None) -> None:
+    """A live review is editable in draft/returned; an amendment only while open."""
+    if amendment is None:
+        if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
+            raise ValidationError("review is locked")
+        assert_can_author(review, user)
+        return
+    if amendment.review_id != review.pk:
+        raise ValidationError("amendment does not belong to this review")
+    if review.status != Review.Status.APPROVED:
+        raise ValidationError("only an approved review can be amended")
+    if amendment.status not in (Amendment.Status.DRAFT, Amendment.Status.RETURNED):
+        raise ValidationError("this amendment is not editable")
+    assert_can_author(review, user)
+
+
+def open_amendment(review: Review):
+    """The one amendment that is still in flight, if any."""
+    return review.amendments.filter(
+        status__in=(
+            Amendment.Status.DRAFT,
+            Amendment.Status.PROPOSED,
+            Amendment.Status.RETURNED,
+        )
+    ).first()
+
+
+def _is_fno(user) -> bool:
+    return bool(
+        user
+        and user.is_authenticated
+        and (user.is_superuser or user.groups.filter(name="FNO").exists())
+    )
 
 
 def audit(review, actor, action: str, entity_type: str, entity_id="", payload=None):
@@ -314,7 +350,7 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
         )
         created.append(proposal)
 
-        item = review.items.filter(field_key=field.key).first()
+        item = scope.get_item(review, field.key)
         if item and item.answer_state == ReviewItem.AnswerState.ANSWERED:
             if item.value_json != result.value:
                 item.needs_reconsideration = True
@@ -339,7 +375,7 @@ def accept_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
     rule = RULES.get(proposal.field_key)
     origin = rule.origin if rule else ReviewItem.Origin.REUSED
 
-    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=proposal.field_key)
+    item, _ = scope.get_or_create_item(review, proposal.field_key)
     item.value_json = proposal.value_json
     item.answer_state = ReviewItem.AnswerState.ANSWERED
     item.applicability_state = ReviewItem.Applicability.APPLICABLE
@@ -376,7 +412,7 @@ def reject_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
     proposal.save(update_fields=["status", "status_reason"])
     ProposalDecision.objects.create(proposal=proposal, decision="rejected", by=user, reason=reason)
 
-    item = review.items.filter(field_key=proposal.field_key).first()
+    item = scope.get_item(review, proposal.field_key)
     if item and item.accepted_proposal_id == proposal.pk:
         item.accepted_proposal = None
         item.save(update_fields=["accepted_proposal"])
@@ -402,13 +438,12 @@ def reject_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
 
 
 @transaction.atomic
-def set_answer(review: Review, key: str, value, user, reason: str = "", corrected=False) -> ReviewItem:
+def set_answer(review: Review, key: str, value, user, reason: str = "", corrected=False,
+               amendment=None) -> ReviewItem:
     review = Review.objects.select_for_update().get(pk=review.pk)
-    assert_can_author(review, user)
-    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
-        raise ValidationError("review is locked")
+    assert_can_edit(review, user, amendment)
 
-    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
+    item, _ = scope.get_or_create_item(review, key, amendment)
     previous = {
         "from": item.value_json,
         "from_origin": item.origin,
@@ -428,61 +463,23 @@ def set_answer(review: Review, key: str, value, user, reason: str = "", correcte
     review.edit_revision += 1
     review.last_saved_at = timezone.now()
     review.save(update_fields=["edit_revision", "last_saved_at"])
-    audit(review, user, "answer_set", "ReviewItem", key,
-          {**previous, "to": value, "corrected": corrected, "reason": reason})
+    payload = {**previous, "to": value, "corrected": corrected, "reason": reason}
+    if amendment is not None:
+        payload["amendment_id"] = amendment.pk
+    audit(
+        review, user, "answer_set",
+        "AmendmentItem" if amendment is not None else "ReviewItem", key, payload,
+    )
     return item
 
 
 @transaction.atomic
-def set_not_known(review: Review, key: str, user, reason: str) -> ReviewItem:
-    """Record an applicable question whose answer is genuinely unavailable.
-
-    This is different from N/A: the question applies, but the clinician cannot
-    supply the value. The reason and decision are attributed.
-    """
+def set_applicability(review: Review, key: str, state: str, user, reason: str = "",
+                      amendment=None) -> ReviewItem:
     review = Review.objects.select_for_update().get(pk=review.pk)
-    assert_can_author(review, user)
-    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
-        raise ValidationError("review is locked")
+    assert_can_edit(review, user, amendment)
     reason = (reason or "").strip()
-    if not reason:
-        raise ValidationError("say why the answer is not known")
-    if key not in registry:
-        raise ValidationError("unknown Form 4 field")
-
-    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
-    previous = {
-        "from": item.value_json,
-        "from_origin": item.origin,
-        "from_state": item.answer_state,
-        "from_accepted": item.accepted_proposal_id,
-    }
-    item.answer_state = ReviewItem.AnswerState.NOT_KNOWN
-    item.applicability_state = ReviewItem.Applicability.APPLICABLE
-    item.value_json = None
-    item.origin = ReviewItem.Origin.NONE
-    item.accepted_proposal = None
-    item.reason = reason
-    item.decided_by = user
-    item.decided_at = timezone.now()
-    item.needs_reconsideration = False
-    item.save()
-
-    review.edit_revision += 1
-    review.last_saved_at = timezone.now()
-    review.save(update_fields=["edit_revision", "last_saved_at"])
-    audit(review, user, "answer_not_known", "ReviewItem", key,
-          {**previous, "reason": reason})
-    return item
-
-
-@transaction.atomic
-def set_applicability(review: Review, key: str, state: str, user, reason: str = "") -> ReviewItem:
-    review = Review.objects.select_for_update().get(pk=review.pk)
-    assert_can_author(review, user)
-    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
-        raise ValidationError("review is locked")
-    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
+    item, _ = scope.get_or_create_item(review, key, amendment)
     item.applicability_state = state
     item.reason = reason
     item.decided_by = user
@@ -490,23 +487,26 @@ def set_applicability(review: Review, key: str, state: str, user, reason: str = 
     if state == ReviewItem.Applicability.NOT_APPLICABLE:
         item.answer_state = ReviewItem.AnswerState.UNANSWERED
         item.value_json = None
-    elif item.answer_state == ReviewItem.AnswerState.NOT_KNOWN:
-        item.answer_state = ReviewItem.AnswerState.UNANSWERED
-        item.value_json = None
     item.save()
-    audit(review, user, "applicability_set", "ReviewItem", key,
-          {"state": state, "reason": reason})
+    payload = {"state": state, "reason": reason}
+    if amendment is not None:
+        payload["amendment_id"] = amendment.pk
+    audit(
+        review, user, "applicability_set",
+        "AmendmentItem" if amendment is not None else "ReviewItem", key, payload,
+    )
     return item
 
 
 @transaction.atomic
 def set_block_row(review: Review, key: str, index: int | None, values: dict, user,
-                  reason: str = ""):
+                  reason: str = "", amendment=None):
     """Append or replace one row of a declared block. Validation is in set_answer."""
     from .registry import registry
 
+    assert_can_edit(review, user, amendment)
     field = registry[key]
-    item = review.items.filter(field_key=key).first()
+    item = scope.get_item(review, key, amendment)
     rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
 
     if index is None:
@@ -523,15 +523,16 @@ def set_block_row(review: Review, key: str, index: int | None, values: dict, use
     if item and item.value_json == rows and item.answer_state == ReviewItem.AnswerState.ANSWERED:
         return item  # identical content: no revision, no audit row
 
-    return set_answer(review, key, rows, user, reason)
+    return set_answer(review, key, rows, user, reason, amendment=amendment)
 
 
 @transaction.atomic
-def add_block_row(review: Review, key: str, user):
+def add_block_row(review: Review, key: str, user, amendment=None):
     from .registry import registry
 
+    assert_can_edit(review, user, amendment)
     field = registry[key]
-    item = review.items.filter(field_key=key).first()
+    item = scope.get_item(review, key, amendment)
     rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
     spec = (field.block_schema or {}).get("fields", {})
 
@@ -543,25 +544,26 @@ def add_block_row(review: Review, key: str, user):
             if choice is None:
                 raise ValidationError(f"{key}: no {name} left to add")
             row[name] = choice
-    return set_block_row(review, key, None, row, user)
+    return set_block_row(review, key, None, row, user, amendment=amendment)
 
 
 @transaction.atomic
-def remove_block_row(review: Review, key: str, index: int, user):
-    item = review.items.filter(field_key=key).first()
+def remove_block_row(review: Review, key: str, index: int, user, amendment=None):
+    assert_can_edit(review, user, amendment)
+    item = scope.get_item(review, key, amendment)
     rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
     if index < 0 or index >= len(rows):
         raise ValidationError("that row no longer exists")
     rows.pop(index)
     if not rows:
-        return set_answer(review, key, None, user) if False else _clear_item(review, key, user)
-    return set_answer(review, key, rows, user)
+        return _clear_item(review, key, user, amendment=amendment)
+    return set_answer(review, key, rows, user, amendment=amendment)
 
 
-def _clear_item(review: Review, key: str, user):
+def _clear_item(review: Review, key: str, user, amendment=None):
     from django.utils import timezone
 
-    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
+    item, _ = scope.get_or_create_item(review, key, amendment)
     item.value_json = None
     item.answer_state = ReviewItem.AnswerState.UNANSWERED
     item.origin = ReviewItem.Origin.NONE
@@ -571,46 +573,49 @@ def _clear_item(review: Review, key: str, user):
     review.edit_revision += 1
     review.last_saved_at = timezone.now()
     review.save(update_fields=["edit_revision", "last_saved_at"])
-    audit(review, user, "block_cleared", "ReviewItem", key)
+    payload = {"amendment_id": amendment.pk} if amendment is not None else {}
+    audit(
+        review, user, "block_cleared",
+        "AmendmentItem" if amendment is not None else "ReviewItem", key, payload,
+    )
     return item
 
 
 @transaction.atomic
-def revert_last(review: Review, key: str, user) -> ReviewItem:
-    """Undo the most recent answer change for one field, from the audit trail."""
+def clear_answer(review: Review, key: str, user, amendment=None) -> ReviewItem:
+    """Discard a kept answer, for example one hidden by a later answer.
+
+    This also clears N/A, so the question returns to a blank, applicable state.
+    """
     review = Review.objects.select_for_update().get(pk=review.pk)
-    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
-        raise ValidationError("review is locked")
-
-    event = (
-        AuditEvent.objects.filter(review=review, action="answer_set", entity_id=key)
-        .order_by("-at", "-id")
-        .first()
-    )
-    if event is None:
-        raise ValidationError("this field has not been changed yet")
-
-    item, _ = ReviewItem.objects.get_or_create(review=review, field_key=key)
-    item.value_json = event.payload.get("from")
-    item.origin = event.payload.get("from_origin") or ReviewItem.Origin.NONE
-    item.answer_state = event.payload.get("from_state") or ReviewItem.AnswerState.UNANSWERED
-    item.accepted_proposal_id = event.payload.get("from_accepted")
+    assert_can_edit(review, user, amendment)
+    item, _ = scope.get_or_create_item(review, key, amendment)
+    item.value_json = None
+    item.answer_state = ReviewItem.AnswerState.UNANSWERED
+    item.applicability_state = ReviewItem.Applicability.APPLICABLE
+    item.reason = ""
+    item.origin = ReviewItem.Origin.NONE
+    item.accepted_proposal = None
+    item.needs_reconsideration = False
     item.decided_by = user
     item.decided_at = timezone.now()
-    item.needs_reconsideration = False
     item.save()
-
     review.edit_revision += 1
     review.last_saved_at = timezone.now()
     review.save(update_fields=["edit_revision", "last_saved_at"])
-    audit(review, user, "answer_reverted", "ReviewItem", key, {"to": item.value_json})
+    payload = {"amendment_id": amendment.pk} if amendment is not None else {}
+    audit(
+        review, user, "answer_cleared",
+        "AmendmentItem" if amendment is not None else "ReviewItem", key, payload,
+    )
     return item
 
 
 @transaction.atomic
-def save_place_row(review: Review, key: str, place: str, values: dict, user):
+def save_place_row(review: Review, key: str, place: str, values: dict, user, amendment=None):
     """Save one place of the referral table, keyed by place rather than position."""
-    item = review.items.filter(field_key=key).first()
+    assert_can_edit(review, user, amendment)
+    item = scope.get_item(review, key, amendment)
     rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
     values = {**values, "place": place}
     index = next((i for i, r in enumerate(rows) if r.get("place") == place), None)
@@ -620,27 +625,28 @@ def save_place_row(review: Review, key: str, place: str, values: dict, user):
         rows[index] = values
     if item and item.value_json == rows and item.answer_state == ReviewItem.AnswerState.ANSWERED:
         return item
-    return set_answer(review, key, rows, user)
+    return set_answer(review, key, rows, user, amendment=amendment)
 
 
 @transaction.atomic
-def clear_place_row(review: Review, key: str, place: str, user):
-    item = review.items.filter(field_key=key).first()
+def clear_place_row(review: Review, key: str, place: str, user, amendment=None):
+    assert_can_edit(review, user, amendment)
+    item = scope.get_item(review, key, amendment)
     rows = list(item.value_json) if item and isinstance(item.value_json, list) else []
     rows = [r for r in rows if r.get("place") != place]
     if not rows:
-        return _clear_item(review, key, user)
-    return set_answer(review, key, rows, user)
+        return _clear_item(review, key, user, amendment=amendment)
+    return set_answer(review, key, rows, user, amendment=amendment)
 
 
-def missing_required(review: Review) -> list[str]:
-    return checks.required_keys(review)
+def missing_required(review: Review, amendment=None) -> list[str]:
+    return checks.required_keys(review, amendment=amendment)
 
 
-def canonical_payload(review: Review) -> dict:
+def canonical_payload(review: Review, amendment=None) -> dict:
     """Every registered field, answered or not: a version must show the gaps."""
-    items = {i.field_key: i for i in review.items.all()}
-    visibility = conditions.visibility(review)
+    items = scope.item_map(review, amendment)
+    visibility = conditions.visibility(review, amendment=amendment)
     fields = {}
     for field in registry.all():
         item = items.get(field.key)
@@ -672,22 +678,49 @@ def canonical_payload(review: Review) -> dict:
             "condition_reason": seen.reason,
         }
     legacy = {}
-    for key, item in items.items():
-        if key in registry:
-            continue
-        legacy[key] = {
-            "label": LEGACY_FIELDS[key].label_printed if key in LEGACY_FIELDS else key,
-            "value": item.value_json,
-            "answer_state": item.answer_state,
-            "applicability_state": item.applicability_state,
-            "origin": item.origin,
-            "reason": item.reason,
-            "decided_by": item.decided_by.username if item.decided_by else None,
-            "decided_at": item.decided_at.isoformat() if item.decided_at else None,
-        }
+    if amendment is not None:
+        # Retired fields are not staged; they carry forward from the base version.
+        legacy = dict((amendment.base_version.payload_json or {}).get("legacy_fields", {}))
+    else:
+        for key, item in items.items():
+            if key in registry:
+                continue
+            legacy[key] = {
+                "label": LEGACY_FIELDS[key].label_printed if key in LEGACY_FIELDS else key,
+                "value": item.value_json,
+                "answer_state": item.answer_state,
+                "applicability_state": item.applicability_state,
+                "origin": item.origin,
+                "reason": item.reason,
+                "decided_by": item.decided_by.username if item.decided_by else None,
+                "decided_at": item.decided_at.isoformat() if item.decided_at else None,
+            }
+
+    base_payload = amendment.base_version.payload_json if amendment is not None else None
+    base_fields = (base_payload or {}).get("fields", {})
+    changed_keys: set[str] = set()
+    if amendment is not None:
+        for key, entry in fields.items():
+            before = base_fields.get(key)
+            if before is None:
+                empty = (
+                    entry.get("value") in (None, "", [], {})
+                    and entry.get("answer_state") == ReviewItem.AnswerState.UNANSWERED
+                    and entry.get("applicability_state")
+                    == ReviewItem.Applicability.APPLICABLE
+                )
+                if empty or not entry.get("applies", True):
+                    continue
+                changed_keys.add(key)
+                continue
+            compare_applies = "applies" in before
+            if _payload_state(before, compare_applies) != _payload_state(
+                entry, compare_applies
+            ):
+                changed_keys.add(key)
 
     source = review.source_document
-    return {
+    payload = {
         "form": "FBMDR-2017",
         "review": review.pk,
         "registry_version": "r1",
@@ -704,6 +737,25 @@ def canonical_payload(review: Review) -> dict:
         "fields": fields,
         "legacy_fields": legacy,
     }
+    if amendment is not None:
+        payload["amendment"] = {
+            "id": amendment.pk,
+            "base_version": amendment.base_version.version_no,
+            "reason": amendment.reason,
+            "opened_by": amendment.by.username if amendment.by else None,
+        }
+
+    provenance_map = provenance.build(
+        review,
+        amendment,
+        base_payload=base_payload,
+        changed_keys=changed_keys if amendment is not None else None,
+    )
+    payload["provenance_version"] = provenance.VERSION
+    payload["provenance"] = provenance_map
+    payload["provenance_hash"] = provenance.digest(provenance_map)
+    payload["form1"] = form1.build(review)
+    return payload
 
 
 @transaction.atomic
@@ -766,6 +818,13 @@ def approve(review: Review, user) -> ReviewVersion:
         raise ValidationError("no self-approval")
 
     submission = review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION).order_by("-version_no").first()
+    if submission is None:
+        raise ValidationError("there is no submission to approve")
+    body = json.dumps(submission.payload_json, sort_keys=True, default=str)
+    if submission.payload_hash and hashlib.sha256(body.encode()).hexdigest() != submission.payload_hash:
+        raise ValidationError("the frozen submission payload has changed; do not approve")
+    if provenance.verify(submission.payload_json) is False:
+        raise ValidationError("the frozen provenance does not match; do not approve")
     version_no = review.current_version + 1
     version = ReviewVersion.objects.create(
         review=review,
@@ -864,3 +923,383 @@ def update_return(review: Review, user, comment: str, comments: dict | None = No
 
 def latest_version(review: Review) -> ReviewVersion | None:
     return review.versions.order_by("-version_no").first()
+
+
+# --- amendments -------------------------------------------------------------
+
+
+def _parse_iso(value):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if timezone.is_naive(parsed):
+        parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+
+def _payload_state(entry: dict, compare_applies: bool = True) -> tuple:
+    """The parts of a frozen field that count as a change."""
+    return (
+        json.dumps(entry.get("value"), sort_keys=True, default=str),
+        entry.get("answer_state"),
+        entry.get("applicability_state"),
+        bool(entry.get("applies", True)) if compare_applies else None,
+    )
+
+
+def amendment_changes(review: Review, amendment: Amendment) -> list[dict]:
+    """Fields whose answer, state or visibility differs from the base version."""
+    base = (amendment.base_version.payload_json or {}).get("fields", {})
+    current = canonical_payload(review, amendment=amendment)["fields"]
+    changes = []
+    for field in registry.all():
+        before = base.get(field.key, {})
+        after = current.get(field.key, {})
+        if field.key not in base:
+            # A field added after the base was frozen is not a change until the
+            # author actually answers or marks it.
+            empty = (
+                after.get("value") in (None, "", [], {})
+                and (after.get("answer_state") or ReviewItem.AnswerState.UNANSWERED)
+                == ReviewItem.AnswerState.UNANSWERED
+                and (
+                    after.get("applicability_state")
+                    or ReviewItem.Applicability.APPLICABLE
+                )
+                == ReviewItem.Applicability.APPLICABLE
+            )
+            if empty or not after.get("applies", True):
+                continue
+        # Very old payloads have no `applies`; do not invent a visibility change.
+        compare_applies = "applies" in before
+        if _payload_state(before, compare_applies) != _payload_state(
+            after, compare_applies
+        ):
+            changes.append({"field": field, "before": before, "after": after})
+    return changes
+
+
+def _seed_amendment_items(review: Review, amendment: Amendment) -> None:
+    """Copy the approved answers into the amendment's private staging rows."""
+    from django.contrib.auth import get_user_model
+
+    fields = (amendment.base_version.payload_json or {}).get("fields", {})
+    usernames = {
+        entry.get("decided_by")
+        for entry in fields.values()
+        if entry.get("decided_by")
+    }
+    users = {
+        user.username: user
+        for user in get_user_model().objects.filter(username__in=usernames)
+    }
+    rows = []
+    for key, entry in fields.items():
+        if key not in registry:
+            # Retired fields are carried forward in the payload, not staged.
+            continue
+        decided_by = users.get(entry.get("decided_by"))
+        rows.append(
+            ReviewItem(
+                review=review,
+                amendment=amendment,
+                field_key=key,
+                answer_state=entry.get("answer_state") or ReviewItem.AnswerState.UNANSWERED,
+                value_json=entry.get("value"),
+                origin=entry.get("origin") or ReviewItem.Origin.NONE,
+                reason=entry.get("reason") or "",
+                applicability_state=(
+                    entry.get("applicability_state")
+                    or ReviewItem.Applicability.APPLICABLE
+                ),
+                decided_by=decided_by,
+                decided_at=_parse_iso(entry.get("decided_at")),
+                accepted_proposal_id=entry.get("accepted_proposal_id"),
+                needs_reconsideration=False,
+            )
+        )
+    ReviewItem.objects.bulk_create(rows)
+
+
+def _apply_payload_to_items(review: Review, payload: dict, amendment=None) -> None:
+    """Make a scoped answer set match a frozen payload (used after approval)."""
+    from django.contrib.auth import get_user_model
+
+    fields = payload.get("fields", {})
+    usernames = {
+        entry.get("decided_by")
+        for entry in fields.values()
+        if entry.get("decided_by")
+    }
+    users = {
+        user.username: user
+        for user in get_user_model().objects.filter(username__in=usernames)
+    }
+    existing = scope.item_map(review, amendment)
+    for key, entry in fields.items():
+        if key not in registry:
+            continue
+        item = existing.get(key)
+        if item is None:
+            if (
+                entry.get("value") is None
+                and (entry.get("answer_state") or ReviewItem.AnswerState.UNANSWERED)
+                == ReviewItem.AnswerState.UNANSWERED
+                and (entry.get("applicability_state") or ReviewItem.Applicability.APPLICABLE)
+                == ReviewItem.Applicability.APPLICABLE
+            ):
+                continue
+            item = ReviewItem(review=review, amendment=amendment, field_key=key)
+        item.answer_state = entry.get("answer_state") or ReviewItem.AnswerState.UNANSWERED
+        item.value_json = entry.get("value")
+        item.origin = entry.get("origin") or ReviewItem.Origin.NONE
+        item.reason = entry.get("reason") or ""
+        item.applicability_state = (
+            entry.get("applicability_state") or ReviewItem.Applicability.APPLICABLE
+        )
+        item.decided_by = users.get(entry.get("decided_by"))
+        item.decided_at = _parse_iso(entry.get("decided_at"))
+        item.accepted_proposal_id = entry.get("accepted_proposal_id")
+        item.needs_reconsideration = False
+        item.save()
+
+
+@transaction.atomic
+def start_amendment(review: Review, user, reason: str, request: bool = False) -> Amendment:
+    """Open one draft amendment on an approved review.
+
+    ``request=True`` is the FNO's "request an amendment" action: the FNO opens it
+    and supplies the reason, but only the review's author can edit and submit it.
+    """
+    review = Review.objects.select_for_update().get(pk=review.pk)
+    if review.status != Review.Status.APPROVED:
+        raise ValidationError("only an approved review can be amended")
+    if request:
+        if not _is_fno(user):
+            raise ValidationError("only an FNO can request an amendment")
+        if review.created_by_id is None and review.assigned_to_id is None:
+            raise ValidationError("this review has no author to carry out the amendment")
+    else:
+        assert_can_author(review, user)
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValidationError("say why this amendment is needed")
+    if open_amendment(review) is not None:
+        raise ValidationError("this review already has an open amendment")
+
+    base = review.versions.order_by("-version_no").first()
+    if base is None or base.kind not in (
+        ReviewVersion.Kind.APPROVAL,
+        ReviewVersion.Kind.AMENDMENT,
+    ):
+        raise ValidationError("there is no approved version to amend")
+
+    amendment = Amendment.objects.create(
+        review=review,
+        base_version=base,
+        payload_json=base.payload_json,
+        reason=reason,
+        by=user,
+        status=Amendment.Status.DRAFT,
+    )
+    _seed_amendment_items(review, amendment)
+    audit(
+        review,
+        user,
+        "amendment_opened",
+        "Amendment",
+        amendment.pk,
+        {
+            "amendment_id": amendment.pk,
+            "base_version": base.version_no,
+            "reason": reason,
+            "requested": bool(request),
+        },
+    )
+    return amendment
+
+
+@transaction.atomic
+def submit_amendment(amendment: Amendment, user, note: str = "") -> Amendment:
+    """Freeze the staged answers and send the amendment for FNO approval."""
+    amendment = Amendment.objects.select_for_update().get(pk=amendment.pk)
+    review = Review.objects.select_for_update().get(pk=amendment.review_id)
+    assert_can_author(review, user)
+    if review.status != Review.Status.APPROVED:
+        raise ValidationError("only an approved review can be amended")
+    if amendment.status not in (Amendment.Status.DRAFT, Amendment.Status.RETURNED):
+        raise ValidationError("this amendment is not open for submission")
+
+    changes = amendment_changes(review, amendment)
+    if not changes:
+        raise ValidationError("this amendment makes no changes to the approved form")
+
+    visibility = conditions.visibility(review, amendment=amendment)
+    issues = checks.run_checks(review, visibility=visibility, amendment=amendment)
+    errors = [issue for issue in issues if issue.severity == checks.ERROR]
+    if errors:
+        detail = "; ".join(issue.message for issue in errors[:4])
+        if len(errors) > 4:
+            detail += f" (+{len(errors) - 4} more)"
+        raise ValidationError(detail)
+
+    payload = canonical_payload(review, amendment=amendment)
+    body = json.dumps(payload, sort_keys=True, default=str)
+    payload_hash = hashlib.sha256(body.encode()).hexdigest()
+    amendment.payload_json = payload
+    amendment.payload_hash = payload_hash
+    amendment.status = Amendment.Status.PROPOSED
+    amendment.submitted_by = user
+    amendment.submitted_at = timezone.now()
+    amendment.save(
+        update_fields=[
+            "payload_json",
+            "payload_hash",
+            "status",
+            "submitted_by",
+            "submitted_at",
+        ]
+    )
+    review.last_saved_at = amendment.submitted_at
+    review.save(update_fields=["last_saved_at"])
+    audit(
+        review,
+        user,
+        "amendment_submitted",
+        "Amendment",
+        amendment.pk,
+        {
+            "amendment_id": amendment.pk,
+            "base_version": amendment.base_version.version_no,
+            "changes": len(changes),
+            "payload_hash": payload_hash,
+            "note": (note or "").strip(),
+        },
+    )
+    return amendment
+
+
+@transaction.atomic
+def return_amendment(amendment: Amendment, user, comment: str) -> Amendment:
+    amendment = Amendment.objects.select_for_update().get(pk=amendment.pk)
+    review = Review.objects.select_for_update().get(pk=amendment.review_id)
+    if not _is_fno(user):
+        raise ValidationError("only an FNO can return an amendment")
+    if amendment.status != Amendment.Status.PROPOSED:
+        raise ValidationError("only a proposed amendment can be returned")
+    comment = (comment or "").strip()
+    if not comment:
+        raise ValidationError("comment on what needs to change")
+
+    amendment.status = Amendment.Status.RETURNED
+    amendment.decided_by = user
+    amendment.decided_at = timezone.now()
+    amendment.return_comment = comment
+    amendment.save(
+        update_fields=["status", "decided_by", "decided_at", "return_comment"]
+    )
+    audit(
+        review,
+        user,
+        "amendment_returned",
+        "Amendment",
+        amendment.pk,
+        {"amendment_id": amendment.pk, "comment": comment},
+    )
+    return amendment
+
+
+@transaction.atomic
+def approve_amendment(amendment: Amendment, user) -> ReviewVersion:
+    """Create the official amended version and make it the live answer set."""
+    amendment = Amendment.objects.select_for_update().get(pk=amendment.pk)
+    review = Review.objects.select_for_update().get(pk=amendment.review_id)
+    if review.status != Review.Status.APPROVED:
+        raise ValidationError("only an approved review can be amended")
+    if not _is_fno(user):
+        raise ValidationError("only an FNO can approve an amendment")
+    if amendment.status != Amendment.Status.PROPOSED:
+        raise ValidationError("only a proposed amendment can be approved")
+    if amendment.submitted_by_id == user.pk:
+        raise ValidationError("no self-approval: this is your amendment")
+
+    visibility = conditions.visibility(review, amendment=amendment)
+    issues = checks.run_checks(review, visibility=visibility, amendment=amendment)
+    errors = [issue for issue in issues if issue.severity == checks.ERROR]
+    if errors:
+        detail = "; ".join(issue.message for issue in errors[:4])
+        if len(errors) > 4:
+            detail += f" (+{len(errors) - 4} more)"
+        raise ValidationError(detail)
+
+    payload = amendment.payload_json or canonical_payload(review, amendment=amendment)
+    body = json.dumps(payload, sort_keys=True, default=str)
+    payload_hash = hashlib.sha256(body.encode()).hexdigest()
+    if amendment.payload_hash and payload_hash != amendment.payload_hash:
+        raise ValidationError("the frozen amendment payload has changed; do not approve")
+    if provenance.verify(payload) is False:
+        raise ValidationError("the frozen provenance does not match; do not approve")
+    version_no = review.current_version + 1
+    version = ReviewVersion.objects.create(
+        review=review,
+        version_no=version_no,
+        kind=ReviewVersion.Kind.AMENDMENT,
+        payload_json=payload,
+        payload_hash=payload_hash,
+        created_by=user,
+        amends_version=amendment.base_version,
+    )
+    review.current_version = version_no
+    review.last_saved_at = timezone.now()
+    review.save(update_fields=["current_version", "last_saved_at"])
+    _apply_payload_to_items(review, payload, amendment=None)
+
+    amendment.status = Amendment.Status.APPROVED
+    amendment.decided_by = user
+    amendment.decided_at = timezone.now()
+    amendment.result_version = version
+    amendment.save(
+        update_fields=["status", "decided_by", "decided_at", "result_version"]
+    )
+    audit(
+        review,
+        user,
+        "amendment_approved",
+        "Amendment",
+        amendment.pk,
+        {
+            "amendment_id": amendment.pk,
+            "version_no": version_no,
+            "base_version": amendment.base_version.version_no,
+        },
+    )
+    return version
+
+
+@transaction.atomic
+def discard_amendment(amendment: Amendment, user) -> Amendment:
+    amendment = Amendment.objects.select_for_update().get(pk=amendment.pk)
+    review = Review.objects.select_for_update().get(pk=amendment.review_id)
+    if amendment.status not in (Amendment.Status.DRAFT, Amendment.Status.RETURNED):
+        raise ValidationError("only a draft or returned amendment can be discarded")
+    allowed = {amendment.by_id, review.created_by_id, review.assigned_to_id} - {None}
+    if allowed and user.pk not in allowed:
+        raise ValidationError("only the author or the person who opened it can discard")
+
+    amendment.status = Amendment.Status.DISCARDED
+    amendment.decided_by = user
+    amendment.decided_at = timezone.now()
+    amendment.save(update_fields=["status", "decided_by", "decided_at"])
+    amendment.items.all().delete()
+    audit(
+        review,
+        user,
+        "amendment_discarded",
+        "Amendment",
+        amendment.pk,
+        {"amendment_id": amendment.pk, "reason": amendment.reason},
+    )
+    return amendment

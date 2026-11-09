@@ -16,7 +16,7 @@ from decimal import Decimal
 from django.utils import timezone
 
 from . import conditions
-from .models import Review, ReviewItem, TimePrecision
+from .models import Review, ReviewItem, SourceDocument, TimePrecision
 from .registry import registry
 from .source_time import (
     AFTER,
@@ -49,6 +49,36 @@ class Issue:
     slug: str
     message: str
     fix: str = ""
+    category: str = "context"
+    target: str = ""
+
+
+#: Printed order of the check panel. The first three are the assignment's
+#: missing / impossible / inconsistent buckets.
+GROUPS = (
+    ("missing", "Missing"),
+    ("impossible", "Impossible"),
+    ("inconsistent", "Inconsistent"),
+    ("precision", "Uncertain"),
+    ("context", "Possible or needs review"),
+    ("source", "Source record"),
+)
+
+
+def category_for(key: str) -> str:
+    if key.startswith(("missing:", "na_required:")):
+        return "missing"
+    if key.startswith(("invalid:", "impossible:")):
+        return "impossible"
+    if key.startswith(
+        ("inconsistent:", "retained:", "reconsideration:", "conflict:")
+    ):
+        return "inconsistent"
+    if key.startswith("uncertain:"):
+        return "precision"
+    if key.startswith("source:"):
+        return "source"
+    return "context"
 
 
 @dataclass
@@ -76,10 +106,6 @@ class CheckContext:
         item = self.item(key)
         return bool(item and item.answer_state == ReviewItem.AnswerState.ANSWERED)
 
-    def not_known(self, key: str) -> bool:
-        item = self.item(key)
-        return bool(item and item.answer_state == ReviewItem.AnswerState.NOT_KNOWN)
-
     def not_applicable(self, key: str) -> bool:
         item = self.item(key)
         return bool(
@@ -92,11 +118,7 @@ class CheckContext:
         return bool(
             item
             and (
-                item.answer_state
-                in (
-                    ReviewItem.AnswerState.ANSWERED,
-                    ReviewItem.AnswerState.NOT_KNOWN,
-                )
+                item.answer_state == ReviewItem.AnswerState.ANSWERED
                 or item.applicability_state
                 == ReviewItem.Applicability.NOT_APPLICABLE
             )
@@ -150,14 +172,30 @@ def _issue(
     link: bool = True,
 ) -> Issue:
     field = registry._fields.get(field_key)
+    visible = bool(field and ctx.visible(field_key))
+    slug = field.slug if field and link and visible else ""
+    label = field.label_printed if field else ""
+    if slug:
+        target = f"b-{slug}" if field.type == "block" else f"f-{slug}"
+    elif field and field.slug:
+        # The question is hidden by a recorded answer, but it still appears in
+        # the "questions not shown" panel, where its kept answer can be cleared.
+        target = f"h-{field.slug}"
+        label = f"{label} (not shown)"
+    elif field:
+        target = f"sec-{field.section}"
+    else:
+        target = ""
     return Issue(
         key=key,
         severity=severity,
         field=field_key,
-        label=field.label_printed if field else "",
-        slug=field.slug if field and link and ctx.visible(field_key) else "",
+        label=label,
+        slug=slug,
         message=message,
         fix=fix,
+        category=category_for(key),
+        target=target,
     )
 
 
@@ -175,10 +213,12 @@ def _dt(value):
     return parsed
 
 
-def required_keys(review: Review, visibility=None) -> list[str]:
+def required_keys(review: Review, visibility=None, amendment=None) -> list[str]:
     """Visible registry-required fields with no answer and no N/A."""
-    seen = visibility or conditions.visibility(review)
-    items = {i.field_key: i for i in review.items.all()}
+    from . import scope
+
+    seen = visibility or conditions.visibility(review, amendment=amendment)
+    items = scope.item_map(review, amendment)
     out = []
     for field in registry.all():
         if not field.required or not seen[field.key].applies:
@@ -187,11 +227,7 @@ def required_keys(review: Review, visibility=None) -> list[str]:
         resolved = bool(
             item
             and (
-                item.answer_state
-                in (
-                    ReviewItem.AnswerState.ANSWERED,
-                    ReviewItem.AnswerState.NOT_KNOWN,
-                )
+                item.answer_state == ReviewItem.AnswerState.ANSWERED
                 or item.applicability_state
                 == ReviewItem.Applicability.NOT_APPLICABLE
             )
@@ -375,7 +411,7 @@ def _required_fields(ctx: CheckContext) -> list[Issue]:
                     ERROR,
                     field.key,
                     f"{field.label_printed} is marked not applicable, but it applies to every death.",
-                    "Answer it, or choose Not known with a reason.",
+                    "Answer it.",
                 )
             )
         elif item is None or item.answer_state == ReviewItem.AnswerState.UNANSWERED:
@@ -386,31 +422,9 @@ def _required_fields(ctx: CheckContext) -> list[Issue]:
                     ERROR,
                     field.key,
                     f"{field.label_printed} is missing.",
-                    "Enter it, or choose Not known with a reason.",
+                    "Enter it.",
                 )
             )
-    return out
-
-
-def _not_known(ctx: CheckContext) -> list[Issue]:
-    out = []
-    for key, item in ctx.items.items():
-        if key not in registry or not ctx.visible(key):
-            continue
-        if item.answer_state != ReviewItem.AnswerState.NOT_KNOWN:
-            continue
-        field = registry[key]
-        reason = f" · {item.reason}" if item.reason else ""
-        out.append(
-            _issue(
-                ctx,
-                f"not_known:{key}",
-                WARNING,
-                key,
-                f"{field.label_printed} is recorded as not known{reason}.",
-                "Provide an answer if it becomes available; otherwise continue.",
-            )
-        )
     return out
 
 
@@ -433,7 +447,7 @@ def _followups(ctx: CheckContext) -> list[Issue]:
                     ERROR,
                     key,
                     f"{message} It is marked not applicable, but the selected option requires it.",
-                    "Provide the specification, change the selection, or choose Not known with a reason.",
+                    "Provide the specification, or change the selection.",
                 )
             )
         elif not ctx.resolved(key):
@@ -792,7 +806,10 @@ def _late_entries(ctx: CheckContext) -> list[Issue]:
 
 
 def _no_labour_record(ctx: CheckContext) -> list[Issue]:
-    if ctx.observations or ctx.review.source_document_id:
+    source = ctx.review.source_document
+    if ctx.observations or (
+        source is not None and source.kind == SourceDocument.Kind.LCG
+    ):
         return []
     return [
         _issue(
@@ -1150,7 +1167,6 @@ def _source_updated(ctx: CheckContext) -> list[Issue]:
 
 CHECKS = (
     _required_fields,
-    _not_known,
     _followups,
     _reconsideration,
     _impossible_dates,
@@ -1166,8 +1182,10 @@ CHECKS = (
 )
 
 
-def run_checks(review: Review, visibility=None) -> list[Issue]:
-    seen = visibility or conditions.visibility(review)
+def run_checks(review: Review, visibility=None, amendment=None) -> list[Issue]:
+    from . import scope
+
+    seen = visibility or conditions.visibility(review, amendment=amendment)
     pregnancy = review.pregnancy
     admission = current_admission(review)
     delivery = current_delivery(pregnancy)
@@ -1179,8 +1197,8 @@ def run_checks(review: Review, visibility=None) -> list[Issue]:
     ctx = CheckContext(
         review=review,
         visibility=seen,
-        items={i.field_key: i for i in review.items.all()},
-        answers=conditions.answers_for(review),
+        items=scope.item_map(review, amendment),
+        answers=conditions.answers_for(review, amendment=amendment),
         pregnancy=pregnancy,
         admission=admission,
         delivery=delivery,

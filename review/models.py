@@ -1,7 +1,7 @@
 """Domain models for LCG reuse in a Facility-Based Maternal Death Review (Form 4).
 
 Two sides, never mixed:
-  * recorded facts  -> Observation, SourceDocument, Delivery, Death, CareContact (append-only)
+  * recorded facts  -> Observation, SourceDocument, Delivery, Death (append-only)
   * review answers  -> ReviewItem, rendered only from a ReviewVersion
 Proposals are the bridge.
 """
@@ -276,34 +276,6 @@ class Observation(models.Model):
         ]
 
 
-class CareContact(models.Model):
-    pregnancy = models.ForeignKey(Pregnancy, on_delete=models.PROTECT, related_name="contacts")
-    sequence = models.PositiveSmallIntegerField(default=0)
-    place_type = models.CharField(max_length=50, blank=True)
-    facility_name = models.CharField(max_length=200, blank=True)
-    date = models.DateField(null=True, blank=True)
-    onset_at = models.DateTimeField(null=True, blank=True)
-    transport = models.CharField(max_length=100, blank=True)
-    time_to_reach = models.PositiveIntegerField(null=True, blank=True)
-    money_transport = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    attended_by = models.CharField(max_length=100, blank=True)
-    reason_for_referral = models.TextField(blank=True)
-    referral_slip = models.CharField(max_length=20, blank=True)
-    treatment_given = models.TextField(blank=True)
-    money_treatment = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    time_in_facility = models.PositiveIntegerField(null=True, blank=True)
-    supersedes = models.ForeignKey(
-        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="superseded_by"
-    )
-
-
-class AdmissionDiagnosis(models.Model):
-    admission = models.ForeignKey(Admission, on_delete=models.CASCADE, related_name="diagnoses")
-    code = models.CharField(max_length=100)
-    underlying_cause = models.CharField(max_length=200, blank=True)
-    note = models.TextField(blank=True)
-
-
 class Delivery(models.Model):
     pregnancy = models.ForeignKey(Pregnancy, on_delete=models.PROTECT, related_name="deliveries")
     delivered_at = models.DateTimeField(null=True, blank=True)
@@ -342,23 +314,6 @@ class IcuStay(models.Model):
     to_precision = models.CharField(
         max_length=20, choices=TimePrecision.choices, default=TimePrecision.EXACT
     )
-    note = models.TextField(blank=True)
-
-
-class Transfusion(models.Model):
-    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="transfusions")
-    at = models.DateTimeField(null=True, blank=True)
-    component = models.CharField(max_length=50)
-    units = models.PositiveSmallIntegerField(null=True, blank=True)
-    reaction = models.CharField(max_length=200, blank=True)
-    note = models.TextField(blank=True)
-
-
-class Intervention(models.Model):
-    admission = models.ForeignKey(Admission, on_delete=models.PROTECT, related_name="interventions")
-    phase = models.CharField(max_length=50)
-    kind = models.CharField(max_length=100)
-    at = models.DateTimeField(null=True, blank=True)
     note = models.TextField(blank=True)
 
 
@@ -440,6 +395,53 @@ class Review(models.Model):
         return f"Review {self.pk} ({self.pregnancy.patient.name})"
 
 
+class Form1(models.Model):
+    """Form 1 details that are not part of Form 4.
+
+    One per review. Values already held by Patient, Facility, Death or Review
+    are read from those records. This model holds only the extra identity and
+    verification fields that Form 1 needs, entered once.
+    """
+
+    class PlaceType(models.TextChoices):
+        HOME = "home", "Home"
+        HEALTH_FACILITY = "health_facility", "Health facility"
+        TRANSIT = "transit", "Transit"
+        OTHER = "other", "Other"
+
+    review = models.OneToOneField(
+        Review, on_delete=models.CASCADE, related_name="form1"
+    )
+    state = models.CharField(max_length=100, blank=True)
+    district = models.CharField(max_length=100, blank=True)
+    block = models.CharField(max_length=100, blank=True)
+    village = models.CharField(max_length=200, blank=True)
+    current_residence = models.CharField(max_length=300, blank=True)
+    native_place = models.CharField(max_length=300, blank=True)
+    husband_name = models.CharField(max_length=200, blank=True)
+    father_name = models.CharField(max_length=200, blank=True)
+    place_type = models.CharField(
+        max_length=20, choices=PlaceType.choices, blank=True
+    )
+    place_detail = models.CharField(max_length=200, blank=True)
+    reported_by_name = models.CharField(max_length=200, blank=True)
+    reported_by_designation = models.CharField(max_length=200, blank=True)
+    notified_at = models.DateTimeField(null=True, blank=True)
+    anm_name = models.CharField(max_length=200, blank=True)
+    sub_centre = models.CharField(max_length=200, blank=True)
+    anm_verified_at = models.DateTimeField(null=True, blank=True)
+    # Null means "not confirmed"; the form suggests a value from the recorded
+    # pregnancy/delivery/death times.
+    death_during_pregnancy = models.BooleanField(null=True, blank=True)
+    death_during_delivery = models.BooleanField(null=True, blank=True)
+    death_within_42_days = models.BooleanField(null=True, blank=True)
+    death_after_abortion_6_weeks = models.BooleanField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"Form 1 for review {self.review_id}"
+
+
 class ReviewReturn(models.Model):
     """A submitted review sent back to its author, with per-field comments."""
 
@@ -496,7 +498,6 @@ class ReviewItem(models.Model):
     class AnswerState(models.TextChoices):
         UNANSWERED = "unanswered", "Unanswered"
         ANSWERED = "answered", "Answered"
-        NOT_KNOWN = "not_known", "Not known"
 
     class Applicability(models.TextChoices):
         APPLICABLE = "applicable", "Applicable"
@@ -511,6 +512,14 @@ class ReviewItem(models.Model):
         NONE = "none", "None"
 
     review = models.ForeignKey(Review, on_delete=models.CASCADE, related_name="items")
+    amendment = models.ForeignKey(
+        "Amendment",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="items",
+        help_text="NULL is the live review; otherwise a draft amendment of an approved review.",
+    )
     field_key = models.CharField(max_length=120)
     answer_state = models.CharField(
         max_length=20, choices=AnswerState.choices, default=AnswerState.UNANSWERED
@@ -605,7 +614,16 @@ class ReviewItem(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["review", "field_key"], name="uniq_review_field_key")
+            models.UniqueConstraint(
+                fields=["review", "field_key"],
+                condition=models.Q(amendment__isnull=True),
+                name="uniq_review_field_key",
+            ),
+            models.UniqueConstraint(
+                fields=["amendment", "field_key"],
+                condition=models.Q(amendment__isnull=False),
+                name="uniq_amendment_field_key",
+            ),
         ]
 
 
@@ -647,20 +665,43 @@ class Amendment(models.Model):
         PROPOSED = "proposed", "Proposed"
         RETURNED = "returned", "Returned"
         APPROVED = "approved", "Approved"
+        DISCARDED = "discarded", "Discarded"
 
     review = models.ForeignKey(Review, on_delete=models.PROTECT, related_name="amendments")
     base_version = models.ForeignKey(ReviewVersion, on_delete=models.PROTECT)
     payload_json = models.JSONField()
+    payload_hash = models.CharField(max_length=64, blank=True)
     reason = models.TextField()
-    by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        help_text="Who opened or requested this amendment.",
+    )
     at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="amendments_submitted",
+        help_text="The author of record; may not approve this amendment.",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
         related_name="amendments_decided",
     )
     decided_at = models.DateTimeField(null=True, blank=True)
+    result_version = models.ForeignKey(
+        ReviewVersion, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="amendment_results",
+    )
     return_comment = models.TextField(blank=True)
+
+    @property
+    def is_open(self) -> bool:
+        return self.status in (self.Status.DRAFT, self.Status.PROPOSED, self.Status.RETURNED)
+
+    @property
+    def is_editable(self) -> bool:
+        return self.status in (self.Status.DRAFT, self.Status.RETURNED)
 
 
 class AuditEvent(models.Model):

@@ -1,12 +1,97 @@
 {% extends "review/base.html" %}
 {% block title %}Form 4 output{% endblock %}
 {% block content %}
+<style>
+  .form4-print, .not-printable { display:none; }
+  .f4-option { display:inline-block; margin:0 12px 3px 0; white-space:nowrap; }
+  .f4-table { width:100%; border-collapse:collapse; margin:0 0 12px; }
+  .f4-table > tbody > tr > th, .f4-table > tbody > tr > td { border-bottom:1px solid #999;
+    padding:4px 6px; vertical-align:top; text-align:left; font-size:10.5pt; }
+  .f4-table > tbody > tr > th { width:36%; background:#f4f4f4; font-weight:600; }
+  .f4-block-cell { padding:4px 6px; border-bottom:1px solid #999; }
+  .f4-block-label { font-weight:600; margin-bottom:3px; }
+  .f4-block { width:100%; border-collapse:collapse; font-size:7.5pt;
+    table-layout:fixed; }
+  .f4-block th, .f4-block td { border:1px solid #999; padding:3px 4px;
+    text-align:left; vertical-align:top; word-break:break-word; }
+  .f4-block th { background:#eee; }
+  .f4-blank { height:16px; }
+  .blank-line { display:inline-block; min-width:65%; height:1em;
+    border-bottom:1px solid #000; }
+  .blank-line.short { min-width:100px; }
+  .f4-head { display:flex; justify-content:space-between; gap:16px;
+    border-bottom:2px solid #000; padding-bottom:8px; }
+  .f4-facility { font-weight:700; font-size:13pt; }
+  .f4-status { border:2px solid #000; padding:4px 10px; font-weight:700;
+    letter-spacing:.08em; height:fit-content; }
+  .f4-meta { width:100%; border-collapse:collapse; margin:10px 0 14px; font-size:10pt; }
+  .f4-meta th, .f4-meta td { border:1px solid #999; padding:4px 6px; text-align:left; }
+  .f4-signoff { page-break-inside:avoid; margin-top:18px; }
+  .f4-signoff-table { width:100%; border-collapse:collapse; font-size:10pt; }
+  .f4-signoff-table th, .f4-signoff-table td { border:1px solid #000;
+    padding:8px 6px; text-align:left; vertical-align:bottom; }
+  .signature-line { display:inline-block; min-width:150px; height:1em;
+    border-bottom:1px solid #000; }
+  .signature-line.short { min-width:80px; }
+  .stamp-box { height:64px; }
+  .f4-footer { margin-top:14px; font-size:8.5pt; color:#333;
+    border-top:1px solid #999; padding-top:4px; }
+  @media print {
+    header, .bar, .toasts, .no-print, .output-screen { display:none !important; }
+    .form4-print { display:block !important; }
+    .not-printable { display:block !important; }
+    body { background:#fff; color:#000; font-size:10.5pt; }
+    main { margin:0; padding:0; max-width:none; }
+    h1 { font-size:16pt; margin:8px 0; }
+    h2 { font-size:12pt; border-bottom:1px solid #000; padding-bottom:2px;
+         margin:14px 0 6px; page-break-after:avoid; }
+    .f4-table, .f4-block { page-break-inside:auto; }
+    .f4-table > tbody > tr, .f4-block tr { page-break-inside:avoid; }
+    .f4-block thead { display:table-header-group; }
+    @page {
+      size:A4 portrait;
+      margin:13mm 11mm 15mm;
+      @bottom-left {
+        content:"Form 4 · review #{{ review.pk }} · version {{ version.version_no }}";
+        font-size:8pt;
+      }
+      @bottom-right {
+        content:"Page " counter(page) " of " counter(pages);
+        font-size:8pt;
+      }
+    }
+  }
+</style>
+
+<div class="output-screen">
 <h1>Form 4 — {{ review.pregnancy.patient.name }}</h1>
+{% if draft %}
+<p class="draft-stamp">DRAFT — NOT APPROVED</p>
+<p class="muted">
+  Proposed amendment of version {{ amendment.base_version.version_no }}.
+  The approved version remains the official Form 4 until this amendment is approved.
+</p>
+<p class="muted"><b>Reason:</b> {{ amendment.reason }}
+  {% if amendment.submitted_by %}· submitted by {{ amendment.submitted_by.username }}{% endif %}
+</p>
+{% else %}
 <p class="muted">
   Rendered from version {{ version.version_no }} ({{ version.get_kind_display }}),
   registry {{ version.registry_version }}, template {{ version.output_template_version }},
   hash <span class="key">{{ version.payload_hash|slice:":12" }}</span>.
 </p>
+{% if version_verified %}
+  <p class="muted small">Frozen payload hash verified.</p>
+{% else %}
+  <p class="warn small">Frozen payload hash mismatch — do not rely on this output.</p>
+{% endif %}
+{% if version.payload_json.amendment %}
+<p class="muted">
+  <b>Amendment of version {{ version.payload_json.amendment.base_version }}</b> ·
+  {{ version.payload_json.amendment.reason }}
+</p>
+{% endif %}
+{% endif %}
 <p class="muted">
   Source:
   {% if output_source_id %}
@@ -16,12 +101,19 @@
   {% endif %}
 </p>
 <div class="bar">
+  {% if signable %}
+    <button type="button" id="form4-print">Print Form 4</button>
+  {% endif %}
   <a href="{% url 'workspace' review.pk %}">Back to review</a>
+  <a href="{% url 'form1_output' review.pk %}">Form 1</a>
   <a href="?format=json">JSON</a>
+  {% if draft %}
+    <a href="{% url 'amendment_workspace' review.pk amendment.pk %}">Back to amendment</a>
+  {% endif %}
 </div>
 
-{% if version.payload_json.conditions_version %}
-<p class="muted small">Conditional rules {{ version.payload_json.conditions_version }}, frozen with this version.</p>
+{% if conditions_version %}
+<p class="muted small">Conditional rules {{ conditions_version }}, frozen with this version.</p>
 {% endif %}
 
 {% for section in sections %}
@@ -82,5 +174,140 @@
   {% endfor %}
   </tbody>
 </table>
+{% endif %}
+
+<h2 id="provenance">Provenance appendix</h2>
+<p class="muted small">
+  Where each printed value came from: source entry, times, author, the accepting
+  decision, and the rule/version where a value was derived. This appendix is
+  frozen with the version above; it is not recalculated on later corrections.
+</p>
+{% include "review/_provenance.html" %}
+</div>
+
+{% if not signable %}
+<div class="not-printable">
+  <h1>Form 4 — not printable</h1>
+  <p>
+    Only the current approved Form 4 can be printed for wet signature.
+    This page is a working view; the signed form is printed after approval.
+  </p>
+</div>
+{% endif %}
+
+{% if signable %}
+<div class="form4-print">
+  <div class="f4-head">
+    <div>
+      <div class="f4-facility">{{ review.reporting_facility.name }}</div>
+      <div>{{ review.reporting_facility.address|linebreaksbr }}</div>
+      <div>{{ review.reporting_facility.district }}</div>
+    </div>
+    <div class="f4-status">APPROVED</div>
+  </div>
+
+  <h1>Form 4 — Facility-based Maternal Death Review</h1>
+  <table class="f4-meta">
+    <tr>
+      <th>FBMDR No.</th><td>{{ review.fbmdr_no|default:"—" }}</td>
+      <th>Review</th><td>#{{ review.pk }}</td>
+    </tr>
+    <tr>
+      <th>Name of deceased</th><td>{{ review.pregnancy.patient.name }}</td>
+      <th>Age</th><td>{{ review.pregnancy.patient.age|default:"—" }}</td>
+    </tr>
+    <tr>
+      <th>MCTS ID</th><td>{{ review.pregnancy.patient.mcts_no|default:"—" }}</td>
+      <th>Version</th><td>{{ version.version_no }} · {{ version.get_kind_display }}</td>
+    </tr>
+    <tr>
+      <th>Approved</th>
+      <td colspan="3">{{ review.approved_at|date:"d M Y H:i" }}{% if review.approved_by %} by {{ review.approved_by.get_full_name|default:review.approved_by.username }}{% endif %}</td>
+    </tr>
+  </table>
+
+  {% for section in print_doc.sections %}
+  <h2>{{ section.heading }}</h2>
+  <table class="f4-table">
+    <tbody>
+    {% for row in section.rows %}
+      {% if row.kind == "block" %}
+        <tr>
+          <td colspan="2" class="f4-block-cell">
+            <div class="f4-block-label">{{ row.label }}</div>
+            <table class="f4-block">
+              <thead><tr>{% for column in row.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+              <tbody>
+              {% for block_row in row.rows %}
+                <tr>{% for cell in block_row.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
+              {% empty %}
+                <tr>{% for column in row.columns %}<td class="f4-blank"></td>{% endfor %}</tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <th>{{ row.label }}</th>
+          <td>
+            {% if row.kind == "tick" %}
+              {% for option in row.options %}
+                <span class="f4-option">{% if option.selected %}☑{% else %}☐{% endif %} {{ option.label }}</span>
+              {% endfor %}
+            {% elif row.blank %}
+              <span class="blank-line"></span>
+            {% else %}
+              {{ row.display|linebreaksbr }}
+            {% endif %}
+          </td>
+        </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+
+  <div class="f4-signoff">
+    <h2>Sign-off</h2>
+    <table class="f4-signoff-table">
+      <tr>
+        <th>Form filled by the MO on duty</th>
+        <td>Name: {% if print_doc.signature.mo_name %}{{ print_doc.signature.mo_name }}{% else %}<span class="blank-line"></span>{% endif %}</td>
+        <td>Signature: <span class="signature-line"></span></td>
+        <td>Date: {% if print_doc.signature.signed_on %}{{ print_doc.signature.signed_on }}{% else %}<span class="blank-line short"></span>{% endif %}</td>
+      </tr>
+      <tr>
+        <th>Nodal Officer</th>
+        <td>Name: {% if print_doc.signature.fno_name %}{{ print_doc.signature.fno_name }}{% else %}<span class="blank-line"></span>{% endif %}</td>
+        <td>Signature: <span class="signature-line"></span></td>
+        <td>Date: <span class="signature-line short"></span></td>
+      </tr>
+      <tr>
+        <th>Designation</th>
+        <td>{% if print_doc.signature.designation %}{{ print_doc.signature.designation }}{% else %}<span class="blank-line"></span>{% endif %}</td>
+        <th>Institution address</th>
+        <td>{% if print_doc.signature.institution_address %}{{ print_doc.signature.institution_address|linebreaksbr }}{% else %}<span class="blank-line"></span>{% endif %}</td>
+      </tr>
+      <tr>
+        <th>Stamp</th><td colspan="3" class="stamp-box"></td>
+      </tr>
+    </table>
+  </div>
+
+  <p class="f4-footer">
+    Review #{{ review.pk }} · version {{ version.version_no }} ·
+    {{ version.get_kind_display }} · hash {{ version.payload_hash|slice:":12" }} ·
+    approved {{ review.approved_at|date:"d M Y H:i" }} ·
+    printed {% now "d M Y H:i" %}
+  </p>
+</div>
+
+<script>
+(function () {
+  var button = document.getElementById('form4-print');
+  if (button) button.addEventListener('click', function () { window.print(); });
+})();
+</script>
 {% endif %}
 {% endblock %}

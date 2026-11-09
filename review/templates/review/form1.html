@@ -1,0 +1,130 @@
+{% extends "review/base.html" %}
+{% block title %}Form 1 — {{ review.pregnancy.patient.name }}{% endblock %}
+{% block content %}
+<style>
+  .form1-print { display:none; }
+  .print-options { display:inline-flex; flex-wrap:wrap; gap:10px 16px; }
+  .print-option { white-space:nowrap; }
+  .tick { display:inline-block; width:9px; height:9px; border:1px solid #000;
+          margin-right:4px; vertical-align:-1px; }
+  [hidden] { display:none !important; }
+  @media print {
+    header, .review-head, .no-print { display:none !important; }
+    .form1-print { display:block !important; }
+  }
+</style>
+
+<div class="review-head">
+  <div>
+    <h1>Form 1 — {{ review.pregnancy.patient.name }}</h1>
+    <p class="muted">
+      {{ review.reporting_facility.name }} · review #{{ review.pk }}
+      {% if version %}· Form 4 version {{ version.version_no }}{% endif %}
+      · {{ form1.generated_at|slice:":19" }}
+    </p>
+    <div class="statusline">
+      <span class="statusbig {{ review.status }}">{{ review.get_status_display }}</span>
+      <span class="muted">edits {{ review.edit_revision }} ·
+        <span class="saved-stamp"{% if review.last_saved_at %} data-at="{{ review.last_saved_at|date:'c' }}"{% endif %}>{% if review.last_saved_at %}saved {{ review.last_saved_at|timesince }} ago{% else %}not saved yet{% endif %}</span>
+        <span class="save-state" id="form1-save-state"></span>
+      </span>
+    </div>
+  </div>
+  <div class="head-actions">
+    <button type="button" id="form1-print">Print</button>
+    <a class="button" href="{% url 'workspace' review.pk %}">Back to review</a>
+    <a class="button" href="?format=json">JSON</a>
+  </div>
+</div>
+
+<p class="muted small no-print">
+  {{ form1.not_recorded }} field{{ form1.not_recorded|pluralize }} are not recorded.
+  Form 1 is a live record: edit the fields below directly, including after
+  Form 4 approval. Changes save automatically as you edit — the stamp in the
+  header shows the last save. Missing text prints as blank lines; unselected
+  yes/no and place-of-death fields print as tick boxes so they can be filled in
+  on paper. The signed and countersigned paper Form 1 remains the legal
+  form.
+</p>
+
+<form method="post" action="{% url 'save_form1' review.pk %}" id="form1-form"
+      class="form1-form" data-autosave="{% url 'save_form1' review.pk %}?ajax=1">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="form1">
+  {% include "review/_form1_fields.html" %}
+</form>
+
+<div class="form1-print">
+  <h1>Form 1 — Death of a woman aged 15–49</h1>
+  <p class="muted">
+    Generated from review <b>#{{ review.pk }}</b>
+    {% if version %}· Form 4 version {{ version.version_no }}{% endif %}
+    · {{ form1.generated_at|slice:":19" }}
+  </p>
+  {% include "review/_form1_fields.html" with print_mode=True %}
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('form1-form');
+  var button = document.getElementById('form1-print');
+  if (!form || !button) return;
+
+  function blank(cell) {
+    cell.innerHTML = '<span class="blank-line"></span>';
+  }
+
+  function showOptions(cell) {
+    var value = cell.querySelector('.print-value');
+    var options = cell.querySelector('.print-options');
+    if (!options) { blank(cell); return; }
+    if (value) value.hidden = true;
+    options.hidden = false;
+  }
+
+  function showValue(cell, text) {
+    var value = cell.querySelector('.print-value');
+    var options = cell.querySelector('.print-options');
+    if (!value) { cell.textContent = text; return; }
+    value.textContent = text;
+    value.hidden = false;
+    if (options) options.hidden = true;
+  }
+
+  function syncPrintCopy() {
+    document.querySelectorAll('[data-print-key]').forEach(function (cell) {
+      var key = cell.getAttribute('data-print-key');
+      var type = cell.getAttribute('data-print-type');
+      var input = form.querySelector('[name="' + key + '"]');
+      if (!input) return;   // read-only shared field: keep the server value
+      var value = (input.value || '').trim();
+      if (!value) {
+        if (type === 'bool' || type === 'choice') showOptions(cell);
+        else blank(cell);
+        return;
+      }
+      if (input.tagName === 'SELECT') {
+        var option = input.options[input.selectedIndex];
+        var label = option ? (option.text || '').trim() : '';
+        if (!label || label === '—') {
+          if (type === 'bool' || type === 'choice') showOptions(cell);
+          else blank(cell);
+          return;
+        }
+        showValue(cell, label);
+      } else if (input.type === 'datetime-local') {
+        showValue(cell, value.replace('T', ' '));
+      } else {
+        showValue(cell, value);
+      }
+    });
+  }
+
+  button.addEventListener('click', function () {
+    syncPrintCopy();
+    window.print();
+  });
+  window.addEventListener('beforeprint', syncPrintCopy);
+})();
+</script>
+{% endblock %}

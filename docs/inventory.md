@@ -1,8 +1,8 @@
 # Form 4 overlap inventory
 
-99 fields generated from the registry. Categories per Dr Atter (4 November 2026). Relationship is derived from rules.
+This file lists all 99 fields from the registry. The categories follow Dr Atter (4 November 2026). The app derives each relationship from the rules.
 
-**Direct reuse from the LCG: 1 of 99 fields (1.0%).** Everything else is entered by the clinician or copied from another recorded fact.
+**Direct LCG reuse: 1 of 99 fields (1.0%).** The clinician enters each other value, or the app copies it from another recorded fact.
 
 ## By category
 

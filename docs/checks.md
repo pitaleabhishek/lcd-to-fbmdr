@@ -1,142 +1,180 @@
-# Checks before submission — the rule set
+# Checks before submission
 
-**Status: implemented in `review/checks.py` (rule set `k3`).**
+A check is a deterministic test that runs before submit. It does not diagnose. It answers three questions:
 
-Checks run when the resident presses **Submit**, not while merely opening or
-filling the form. Nothing is shown on first open: a question the resident has not
-reached is not an error. When Submit is pressed the checks run once, and the panel
-appears only if there is something to say. They only answer three questions:
-**is something missing, is a recorded fact impossible, or do two answers
-contradict each other?** They never suggest a clinical cause.
+1. Is something missing?
+2. Is a recorded fact impossible?
+3. Do two answers contradict each other?
 
-- **Error** — blocks submission. The panel opens and no version is created.
-- **Warning** — shown in amber. Submission continues only after a single
-  **Submit anyway** confirmation; the reviewer decides.
-- A check for a missing follow-up only runs when its parent answer is actually
-  recorded and says the follow-up applies. A visible-but-unanswered parent does
-  not produce a false “missing” error.
-- Specification fields are the exception: if the reviewer selects Medical
-  conditions or Others, the specification is required even when an upstream
-  answer is still unknown.
-- **Not known** is a first-class answer state, separate from N/A. It requires a
-  reason and is attributed. It permits submission with a warning for required
-  answers such as diagnosis, cause, abortion legality and unavailable autopsy
-  results.
-- **N/A** is for a question that does not apply. It cannot bypass an
-  always-applicable required question or an explicit specification requirement.
+The code is in `review/checks.py`. This file explains what the checks do. It is not
+the UI guide and not the clinical rulebook.
+
+## Run and severity
+
+Checks run only on **Check before submitting** or **Submit**. They do not run when
+the form opens.
+
+| Result | Effect |
+|---|---|
+| Error | Blocks submit. The app creates no version. |
+| Warning | Shows in amber. The user must select **Submit anyway** once. |
+
+`Check` creates no version. `Submit` creates one only if the app finds no errors.
+
+## Groups
+
+| Group | What it catches |
+|---|---|
+| Missing | Required answers, follow-ups and specification fields |
+| Impossible | Future dates, negative values, zero units, exclusive answers |
+| Inconsistent | Two answers disagree, or an answer and the source disagree |
+| Uncertain | Time precision cannot establish order |
+| Possible or needs review | Unusual but clinically possible |
+| Source record | A newer source correction needs review |
+
+## Panel
+
+The panel appears after Check or a failed Submit. It is grouped and plain.
+
+- The bar stays below the legend and stays visible when the form scrolls.
+- The full list is closed by default.
+- Up and down arrows move between issues.
+- **Where** opens the question, the empty block table or the hidden-question row.
+- A hidden retained answer can be cleared there.
+- A check about the whole record returns to the checks bar.
 
 ## Missing
 
-- [x] **Required registry fields** — primary diagnosis and cause of death 1.a; unanswered blocks, Not known warns, N/A blocks
-- [x] **Abortion** — spontaneous → complete/incomplete; induced → legal/illegal; more than one centre → centres visited
-- [x] **ANC** — received → type of facility, provider and counselling (warnings); counselling → risk factor (warning); facility “other”, provider “other specialist”, Medical conditions and Others must be specified (errors)
-- [x] **ANC specification even when the upstream answer is unknown** — if Medical conditions or Others is selected in the risk list, its specification is required
-- [x] **Referral** — referred from outside → number of places (warning); the transport/referral/care table is not hidden for self-presenters, but is expected when referred
-- [x] **Delivery** — mode missing (warning); caesarean/instrumental → indication (warning); complications include “others” → specify (error)
-- [x] **Neonatal** — neonatal outcome missing (warning); baby died (fresh stillbirth, macerated stillbirth or neonatal death) → probable cause (error); cause includes “others” → specify (error)
-- [x] **Postnatal** — eventful → probable cause (error); cause includes Medical conditions → specify (error); cause includes “others” → specify (error)
-- [x] **Post-birth complication** — phase = post_birth → interval (error)
-- [x] **Transfusion** — given → units (error) and components (warning)
-- [x] **Autopsy** — performed → final diagnosis (error)
-- [x] **Timing** — admission time, death time and outcome of pregnancy missing (warnings; they limit what can be calculated or hidden)
-- [x] **Transfusion units = 0** while transfusion is recorded (error)
-- [x] **Anaesthesia = “No anaesthesia” plus a specific type** (error)
+| Rule | Effect |
+|---|---|
+| Required registry fields | Error for primary diagnosis, cause of death 1.a and answered blocks. N/A on a required field is an error. |
+| Abortion | Spontaneous needs complete or incomplete. Induced needs legal or illegal. More than one centre needs the centres. |
+| ANC | Received needs facility, provider and counselling (warnings). Counselling needs a risk factor (warning). Facility “other”, provider “other specialist”, Medical conditions and Others need a specification (errors). |
+| ANC with an unknown parent | Medical conditions and Others still need a specification when selected. |
+| Referral | Referred from outside needs the number of places (warning). The transport, referral and care table is expected when referred. It stays available to self-presenters. |
+| Delivery | Missing mode is a warning. Caesarean or instrumental needs an indication (warning). Complications with Others need a specification (error). |
+| Neonatal | Missing outcome is a warning. A baby who died needs a probable cause (error). Cause with Others needs a specification (error). |
+| Postnatal | Eventful needs a probable cause (error). Medical conditions and Others need a specification (error). |
+| Post-birth complication | Phase `post_birth` needs the interval (error). |
+| Transfusion | Given needs units (error) and components (warning). |
+| Autopsy | Performed needs the final diagnosis (error). |
+| Timing | Missing admission time, death time or pregnancy outcome gives warnings. |
+| Transfusion units | Zero while transfusion is recorded is an error. |
+| Anaesthesia | “No anaesthesia” plus a specific type is an error. |
+
+A follow-up is checked only when the parent answer is recorded and shows that the
+follow-up applies. A visible but unanswered parent does not cause a false
+“missing” error. Specification fields are the exception. N/A cannot bypass an
+always-required field or a selected specification.
 
 ## Reconsideration
 
-- [x] **Changed evidence after acceptance** — an active answered field with `needs_reconsideration` blocks until the clinician accepts, rejects or corrects the new proposal
-- [x] **Rejecting the last new candidate** — records the decision and clears reconsideration for that field; other open candidates keep it unresolved
-- [x] **Hidden historical answer** — remains a retained warning, not an active blocker
-- [x] **Never overwrite** the accepted answer merely because the source changed
+| Rule | Effect |
+|---|---|
+| Changed evidence after acceptance | An active answered field with `needs_reconsideration` blocks submit until the clinician decides. |
+| Reject the last new candidate | The app clears reconsideration for that field. Other candidates keep it open. |
+| Hidden historical answer | Stays as a retained warning. It does not block. |
+| Source change | The app never overwrites an accepted answer. |
 
 ## Source records
 
-- [x] **Supersession first** — death/delivery/observation checks use the current head (`superseded_by IS NULL`), not the latest clock time
-- [x] **Reporting admission** — use the review's reporting admission, then its linked source admission; no fallback to an unrelated admission
-- [x] **Corrected source** — an editable review is flagged until Refresh proposals; that action relinks the source head and marks changed accepted answers for reconsideration
-- [x] **Frozen review** — submitted/approved reviews keep their linked source and frozen payload; they are never silently relinked
-- [x] **No source fallback** — a review with no linked source does not borrow another document
-- [x] **Multiple current heads** — more than one current death or delivery produces a warning; checks use the latest clinical time only as a deterministic fallback
+| Rule | Effect |
+|---|---|
+| Current correction | Death, delivery and observation checks use the current row (`superseded_by IS NULL`), not the latest clock time. |
+| Reporting admission | Use the review admission, then its linked source admission. Do not use an unrelated admission. |
+| Corrected source | An editable review stays flagged until Refresh proposals. That action links the current source and marks changed accepted answers. |
+| Frozen review | Submitted and approved reviews keep their source and payload. The app never relinks them. |
+| No source fallback | A review without a source does not borrow another document. |
+| Multiple current records | More than one current death or delivery gives a warning. Checks use the latest clinical time as a fallback. |
 
-## Precision
+## Dates and precision
 
-- [x] **Exact + exact** — definite ordering
-- [x] **Date-only vs date-only** — different dates are definite; the same date is uncertain
-- [x] **Estimated or unknown** — cannot establish ordering; a warning explains the uncertainty
-- [x] **Future dates** — an exact or date-only future date is invalid; a date-only future date is caught without inventing a time
-- [x] **Late entries** — definite late only when the death time and entry time support it; same-day/date-only/estimated is reported as uncertain
-- [x] **Discharge** — `discharged_at` is treated as administrative closure unless defined otherwise; discharge after death is a warning, not an impossible clinical event
-- [x] **Hospital-stay calculation** — if the administrative discharge is after death, the derived stay ends at death; a discharge before death is used normally
+| Rule | Effect |
+|---|---|
+| Exact plus exact | The app can establish order. |
+| Date-only plus date-only | Different dates establish order. The same date is uncertain. |
+| Estimated or unknown | The app cannot establish order. A warning explains this. |
+| Future dates | An exact or date-only future date is invalid. |
+| Late entries | Definite late only when the death time and entry time show it. Same-day, date-only or estimated entries are uncertain. |
+| Discharge | `discharged_at` is administrative closure. Discharge after death is a warning. |
+| Hospital stay | If discharge is after death, the stay ends at death. A discharge before death is used normally. |
 
-## Impossible
+## Impossible values
 
-- [x] **Discharge before admission** — warning; `discharged_at` is treated as administrative closure until defined otherwise
-- [x] **Discharge after death** — warning; not an impossible clinical event without an explicit definition
-- [x] **Admission, death or delivery in the future** — error
-- [x] **Negative duration** in the hospital-stay, ICU, admission→delivery or admission→death interval — error
-- [x] **Impossible review values** — zero/negative age is an error; age over 120 is a plausibility warning; negative gravida/para/abortions/living children and negative durations (including ICU) are errors
-- [x] **Source/review disagreement** — review age differing from the patient record is a warning, distinct from an internally impossible value
+| Rule | Effect |
+|---|---|
+| Discharge before admission | Warning. |
+| Discharge after death | Warning, not an impossible clinical event. |
+| Future admission, death or delivery | Error. |
+| Negative duration | Error for hospital stay, ICU, admission to delivery and admission to death. |
+| Review values | Zero or negative age is an error. Age over 120 is a plausibility warning. Negative gravida, para, abortions, living children and durations are errors. |
+| Source and review age | A difference is a warning. It is separate from an impossible value. |
 
-## Possible but unusual — warning, never blocking
+## Possible but unusual
 
-- [x] **Death before admission** — a woman can be brought dead
-- [x] **Delivery before admission** — a woman can be referred in after delivery; the interval then does not apply
-- [x] **Delivery after death** — perimortem delivery is possible
-- [x] **Form 4 death time before Form 4 admission time** — brought dead again
+These are warnings. They never block.
+
+- Death before admission, including brought dead.
+- Delivery before admission. The interval then does not apply.
+- Delivery after death. Perimortem delivery is possible.
+- Form 4 death time before Form 4 admission time.
 
 ## Inconsistent
 
-- [x] **Form 4 outcome vs recorded pregnancy outcome** — warning, because the clinician may be correcting the record
-- [x] **Outcome abortion or undelivered, but a delivery is recorded** — error
-- [x] **Outcome ectopic, but the delivery mode is not ectopic/laparotomy** — warning
-- [x] **Outcome is a birth, but no delivery record exists** — warning
-- [x] **Outcome is a birth, but the mode says undelivered** — error
-- [x] **Outcome abortion/ectopic/undelivered, but the mode is a birth mode** — warning
-- [x] **Retained answer in a question that no longer applies** — warning naming the value and the reason; the answer is kept and not printed
-- [x] **Legacy answers from a retired field** — shown in the legacy panel/appendix, never reinterpreted as a current answer
-- [x] **Four or more errors at submission** — the toast says how many more there are
+| Rule | Effect |
+|---|---|
+| Form 4 outcome and pregnancy outcome differ | Warning. The clinician may be correcting the record. |
+| Abortion or undelivered, but a delivery exists | Error. |
+| Ectopic, but mode is not ectopic or laparotomy | Warning. |
+| Birth, but no delivery record | Warning. |
+| Birth, but mode says undelivered | Error. |
+| Abortion, ectopic or undelivered, but mode is a birth mode | Warning. |
+| Retained answer in a hidden question | Warning with the value and reason. The app keeps it and does not print it. |
+| Legacy answer from a retired field | Shown in the legacy panel or appendix. Never treated as current. |
+| Four or more errors | The toast says how many more errors exist. |
 
 ## Consistency
 
-- [x] **Entered admission–death interval** — compared with entered 1.a/1.b, or exact source times when Form 4 times are absent; one-minute rounding tolerance; warning
-- [x] **Entered admission–delivery interval** — compared with exact source times only when delivery is not before admission and the reporting facility matches; warning
-- [x] **Entered ICU duration** — compared with exact ICU stay bounds; warning
-- [x] **Interval tolerance** — one minute, to absorb rounding; delivery-before-admission and different-facility delivery intervals are skipped
-- [x] **Transfusion = no but intervention matrix records transfusion** — warning
-- [x] **Pregnancy outcome vs neonatal outcome** — warning for clarification, never automatic correction
-- [x] **Multiple births** — mixed outcomes are a warning, not an impossible state
-- [x] **No diagnosis-versus-observation rules** — missing evidence is not treated as a wrong diagnosis
+| Rule | Effect |
+|---|---|
+| Entered admission-death interval | Compare with 1.a and 1.b, or exact source times. One-minute tolerance. Warning. |
+| Entered admission-delivery interval | Compare with exact source times only if delivery is not before admission and the facility matches. Warning. |
+| Entered ICU duration | Compare with exact ICU bounds. Warning. |
+| Interval tolerance | One minute. Skip delivery before admission and delivery at another facility. |
+| Transfusion is no but the matrix records it | Warning. |
+| Pregnancy outcome and neonatal outcome differ | Warning. The app does not correct either. |
+| Multiple births with mixed outcomes | Warning, not an impossible state. |
+| Diagnosis and observation | Missing evidence is not a wrong diagnosis. |
 
 ## Context warnings
 
-- [x] **Late entries** — labour-record observations definitely documented after death; same-day/date-only/estimated entries are an uncertainty warning
-- [x] **No labour record** — only the death/admission records can supply values
-- [x] **No labour record linked but observations exist** — no false warning
-- [x] **Case summary empty** — nonblocking warning
-- [x] **Newer source correction** — warning, or error when an accepted document-sourced answer needs reconsideration
+| Rule | Effect |
+|---|---|
+| Late entries | Definite late when staff documented a labour entry after death. Same-day, date-only or estimated entries are uncertain. |
+| No labour record | Only the death and admission records can supply values. |
+| Observations but no labour record | No false warning. |
+| Empty case summary | Nonblocking warning. |
+| Newer source correction | Warning. Error if an accepted source answer needs reconsideration. |
 
 ## Plain language
 
-- [x] Every message names the printed item, not the internal key
-- [x] Impossible dates include both actual times
-- [x] Every message says what to do next
-- [x] Each issue links to the field, unless the field is hidden; hidden answers are named in the message instead
-- [x] The panel appears only after Submit is pressed
-- [x] Errors open the panel; warnings require one confirmation
-- [x] The resident note survives a blocked submit
-- [x] Inline messages appear at the field as well as in the panel, only after Submit
+- Each message names the printed item, not the internal key.
+- Impossible-date messages include both times.
+- Each message says what to do next.
+- Each issue links to the field. If hidden, the message names the answer.
+- The panel appears only after Check or Submit.
+- The bar stays visible. The full list is closed.
+- The submit area shows a short summary and **View all checks**.
+- Errors open the panel. Warnings need one confirmation.
+- The resident note survives a blocked submit.
+- Inline messages appear after Submit only.
 
-## What is deliberately not checked
+## Enforcement
 
-- [x] No suggested cause of death, diagnosis or contributing factor
-- [x] No clinical probability or “likely” language
-- [x] No forcing of optional fields
-- [x] No check of internal keys the user cannot see
-
-## Where it is enforced
-
-- [x] Workspace panel and inline messages, shown after Submit — `review/views.py`, `workspace.html`
-- [x] Submission — `services.submit` refuses while any error remains
-- [x] Required-field helper — `services.missing_required` delegates to `checks.required_keys`
-- [x] Checks version `k3` is in the frozen payload and submission audit event
-- [x] Tests — `tests/test_checks.py`, `tests/test_checks_advanced.py`, `tests/test_legacy.py`
+- Panel and inline messages: `review/views.py` and `workspace.html`.
+- Submit refusal: `services.submit`.
+- Required fields: `services.missing_required` and `checks.required_keys`.
+- Frozen version: the checks version is in the payload and the submission audit event.
+- Amendments run the same checks on submit and approval.
+- Tests: `test_checks.py`, `test_checks_advanced.py`, `test_legacy.py`,
+  `test_amendments.py`.

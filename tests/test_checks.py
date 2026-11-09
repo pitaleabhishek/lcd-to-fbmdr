@@ -51,6 +51,74 @@ def complete_required(review, user):
     answer(review, "f4.cause_of_death.a_antecedent", "Postpartum haemorrhage", user)
 
 
+def test_issue_categories_cover_the_three_buckets(case_a):
+    issues = checks.run_checks(case_a)
+    categories = {i.category for i in issues}
+    assert "missing" in categories
+    assert checks.category_for("impossible:future_x") == "impossible"
+    assert checks.category_for("inconsistent:outcome_record") == "inconsistent"
+    assert checks.category_for("source:newer_correction") == "source"
+
+
+def test_check_before_submitting_shows_the_panel_without_creating_a_version(
+    client, case_a, resident
+):
+    client.force_login(resident)
+    response = client.post(
+        f"/review/{case_a.pk}/",
+        {"check_only": "yes", "note": "Not submitting yet"},
+    )
+
+    assert response.status_code == 200
+    page = response.content.decode()
+    assert 'id="checks"' in page
+    assert 'class="check-group"' in page
+    assert "Missing" in page
+    assert "Check before submitting" in page
+    assert 'id="check-next"' in page
+    assert 'id="check-prev"' in page
+    assert "data-check-target=" in page
+    assert '<details class="checks sticky-checks" id="checks">' in page
+    assert case_a.versions.count() == 0
+    assert case_a.status == Review.Status.DRAFT
+
+
+def test_submit_with_errors_shows_checks_without_creating_a_version(
+    client, case_a, resident
+):
+    client.force_login(resident)
+    response = client.post(
+        f"/review/{case_a.pk}/",
+        {"action": "submit", "note": "Trying to submit"},
+    )
+
+    assert response.status_code == 200
+    page = response.content.decode()
+    assert 'id="checks"' in page
+    assert "to fix before submission" in page
+    assert "Check before submitting" in page
+    assert 'id="check-next"' in page
+    assert 'id="check-prev"' in page
+    assert "data-check-target=" in page
+    assert '<details class="checks sticky-checks" id="checks">' in page
+    assert case_a.versions.count() == 0
+
+
+def test_autosave_returns_updated_workspace_stats(client, case_a, resident):
+    client.force_login(resident)
+    response = client.post(
+        f"/review/{case_a.pk}/field/",
+        {"key": "f4.primary_diagnosis.dx", "value": "PPH"},
+    )
+
+    assert response.status_code == 200
+    stats = response.json()["stats"]
+    assert stats["resolved"] == 1
+    assert stats["to_enter"] == stats["fields"] - 1
+    assert stats["gaps"] >= 0
+    assert {"fields", "to_enter", "proposed", "needs", "gaps"} <= set(stats)
+
+
 def test_required_fields_are_errors_in_plain_language(case_a):
     issues = checks.run_checks(case_a)
     found = issue(issues, "missing:f4.primary_diagnosis.dx")
@@ -163,6 +231,61 @@ def test_a_retained_answer_is_kept_but_warned(case_a, resident):
     assert found.slug == ""
 
 
+def test_issue_targets_point_at_the_question_section_or_empty_table(
+    case_a, resident
+):
+    issues = checks.run_checks(case_a)
+    missing = issue(issues, "missing:f4.primary_diagnosis.dx")
+    assert missing.target == "f-dx"
+
+    answer(case_a, "f4.condition.referred", "yes", resident)
+    issues = checks.run_checks(case_a)
+    block = issue(issues, "missing:f4.condition.referral")
+    assert block.target == "b-referral"
+
+    answer(case_a, "f4.abortion.type", "induced", resident)
+    answer(case_a, "f4.timing.g", "live_birth", resident)
+    issues = checks.run_checks(case_a)
+    hidden = issue(issues, "retained:f4.abortion.type")
+    assert hidden.slug == ""
+    assert hidden.target == "h-type"
+    assert hidden.label.endswith("(not shown)")
+
+
+def test_a_hidden_kept_answer_is_clearable_from_the_not_shown_panel(
+    client, case_a, resident
+):
+    client.force_login(resident)
+    answer(case_a, "f4.abortion.type", "induced", resident)
+    answer(case_a, "f4.timing.g", "live_birth", resident)
+
+    response = client.post(
+        f"/review/{case_a.pk}/", {"check_only": "yes", "note": "check"}
+    )
+    page = response.content.decode()
+    assert 'id="h-type"' in page
+    assert 'href="#h-type"' in page
+    assert "clear kept answer" in page
+
+    response = client.post(
+        f"/review/{case_a.pk}/",
+        {"action": "clear", "key": "f4.abortion.type"},
+    )
+    assert response.status_code == 302
+    item = case_a.items.get(field_key="f4.abortion.type")
+    assert item.value_json is None
+    assert item.answer_state == "unanswered"
+    assert item.applicability_state == "applicable"
+    assert issue(checks.run_checks(case_a), "retained:f4.abortion.type") is None
+
+
+def test_a_check_without_a_field_falls_back_to_the_panel(case_a):
+    issues = checks.run_checks(case_a)
+    panel = issue(issues, "warning:late_entries")
+    assert panel.field == ""
+    assert panel.target == ""
+
+
 def test_late_entries_warn_but_do_not_block(case_a, resident):
     issues = checks.run_checks(case_a)
     found = issue(issues, "warning:late_entries")
@@ -195,7 +318,8 @@ def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
     assert "what the checks found" not in page
     assert "to fix before submission" not in page
     assert 'class="check-msg error"' not in page
-    assert "Checks run when you submit" in page
+    assert "Checks run before a version is created" in page
+    assert "Check before submitting" in page
 
     resp = client.post(f"/review/{case_a.pk}/", {"action": "submit", "note": "keep me"})
     assert resp.status_code == 200
@@ -204,7 +328,8 @@ def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
     assert "to fix before submission" in page
     assert "Primary diagnosis" in page
     assert 'class="check-msg error"' in page
-    assert "the server will refuse until they are cleared" in page
+    assert "to fix before submitting" in page
+    assert "View all checks" in page
     assert "keep me" in page  # the note survived the blocked submit
     case_a.refresh_from_db()
     assert case_a.status == Review.Status.DRAFT

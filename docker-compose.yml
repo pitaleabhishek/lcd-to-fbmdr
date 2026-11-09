@@ -2,11 +2,13 @@ name: mdr-reuse
 
 services:
   db:
-    image: postgres:17-alpine
+    build: ./db
     environment:
       POSTGRES_DB: mdr
       POSTGRES_USER: mdr
       POSTGRES_PASSWORD: mdr
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     command:
       - postgres
       - -c
@@ -19,15 +21,31 @@ services:
       - maintenance_work_mem=16MB
       - -c
       - effective_cache_size=64MB
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/var/lib/postgresql/server-certs/server.crt
+      - -c
+      - ssl_key_file=/var/lib/postgresql/server-certs/server.key
+      - -c
+      - ssl_min_protocol_version=TLSv1.2
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - log_connections=on
+      - -c
+      - log_disconnections=on
+      - -c
+      - idle_in_transaction_session_timeout=60000
     mem_limit: 160m
     cpus: 1.0
     ports:
       - "127.0.0.1:55433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mdr -d mdr"]
-      interval: 3s
+      interval: 10s
       timeout: 3s
-      retries: 20
+      retries: 10
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -38,8 +56,16 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       DB_NAME: mdr
-      DB_USER: mdr
-      DB_PASSWORD: mdr
+      DB_USER: ${DB_USER:-mdr}
+      DB_PASSWORD: ${DB_PASSWORD:-mdr}
+      DB_SSLMODE: require
+      SECRET_KEY: ${SECRET_KEY:-dev-only-not-secret}
+      SECURE: ${SECURE:-0}
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-*}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER:-}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
     mem_limit: 224m
     cpus: 1.0
     ports:
@@ -53,5 +79,21 @@ services:
       - ./docs:/app/docs
       - ./manage.py:/app/manage.py
 
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["tls"]
+    ports:
+      - "9443:9443"
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 96m
+    cpus: 0.5
+    depends_on:
+      - web
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

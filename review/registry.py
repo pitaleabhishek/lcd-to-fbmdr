@@ -390,7 +390,16 @@ for _key, _label in [
     ("obstetricians", "Lack of Obstetricians"),
     ("expertise", "Lack of expertise, training or education"),
 ]:
-    F(_key, "factors", f"8. {_label}", "enum", 4, options=("yes", "no", "not_known"))
+    F(
+        _key,
+        "factors",
+        f"8. {_label}",
+        "enum",
+        4,
+        options=("yes", "no", "not_known"),
+        option_labels={"yes": "Yes", "no": "No", "not_known": "Not known"},
+        widget="radio",
+    )
 
 F("performed", "autopsy", "9. Autopsy performed", "enum", 4, options=YESNO)
 F("diagnosis", "autopsy", "9. Autopsy final diagnosis", "text", 4)

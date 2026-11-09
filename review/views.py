@@ -1,21 +1,26 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from datetime import datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from . import checks, conditions, services
+from . import checks, conditions, form1, form4_print, provenance, scope, services
 from .models import (
+    Amendment,
     AuditEvent,
     Death,
+    Form1,
     Facility,
     Patient,
     Pregnancy,
@@ -90,8 +95,6 @@ def entry_display(field, entry) -> str:
         return "—"
     if entry.get("applicability_state") == "not_applicable":
         return "Not applicable"
-    if entry.get("answer_state") == "not_known":
-        return "Not known"
     return field_display(field, entry.get("value"))
 
 
@@ -105,13 +108,81 @@ def is_fno(user) -> bool:
     )
 
 
+def can_access_review(user, review: Review) -> bool:
+    """Residents reach their own/assigned reviews; FNOs reach all for now."""
+    if not user.is_authenticated:
+        return False
+    if is_fno(user):
+        return True
+    allowed = {review.created_by_id, review.assigned_to_id} - {None}
+    return user.pk in allowed
+
+
+def can_access_pregnancy(user, pregnancy) -> bool:
+    """A source record is reachable if its pregnancy is in the user's reviews."""
+    if not user.is_authenticated:
+        return False
+    if is_fno(user):
+        return True
+    reviews = pregnancy.reviews.all()
+    if not reviews.exists():
+        return True  # a labour record with no review can be started by an author
+    return reviews.filter(Q(created_by=user) | Q(assigned_to=user)).exists()
+
+
+def can_access_document(user, document) -> bool:
+    return can_access_pregnancy(user, document.pregnancy)
+
+
+def review_for_user(request, pk: int) -> Review:
+    review = get_object_or_404(
+        Review.objects.select_related("pregnancy__patient", "reporting_facility"),
+        pk=pk,
+    )
+    if not can_access_review(request.user, review):
+        raise Http404("review not found")
+    return review
+
+
+CASE_LABELS = {
+    "Sunita Devi": "Case A",
+    "Anita K. Bhosale": "Case B",
+    "Lata S. Pawar": "Case C",
+    "Rekha S. Gawande": "Case D",
+    "Meena R. Deshmukh": "Happy case",
+}
+
+
 @login_required
 def index(request):
     reviews = (
         Review.objects.select_related("pregnancy__patient", "reporting_facility")
+        .exclude(status=Review.Status.VOIDED)
         .order_by("-created_at")
     )
-    return render(request, "review/index.html", {"reviews": reviews, "is_fno": is_fno(request.user)})
+    if not is_fno(request.user):
+        reviews = reviews.filter(
+            Q(created_by=request.user) | Q(assigned_to=request.user)
+        )
+    reviews = list(reviews)
+    open_by_review = {
+        amendment.review_id: amendment
+        for amendment in Amendment.objects.filter(
+            status__in=(
+                Amendment.Status.DRAFT,
+                Amendment.Status.PROPOSED,
+                Amendment.Status.RETURNED,
+            )
+        ).select_related("by")
+    }
+    for review in reviews:
+        review.open_amendment = open_by_review.get(review.pk)
+        review.case_label = CASE_LABELS.get(review.pregnancy.patient.name, "")
+    return render(
+        request,
+        "review/index.html",
+        {"reviews": reviews, "is_fno": is_fno(request.user)},
+    )
 
 
 def _default_facility(pregnancy):
@@ -157,10 +228,14 @@ def _create_review(request, pregnancy, facility, source, admission, fbmdr_no="")
 def start_review(request, pk: int):
     """Start the review from this labour record, in one click."""
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    if not can_access_document(request.user, doc):
+        raise Http404("labour record not found")
     existing = (
         Review.objects.filter(pregnancy=doc.pregnancy).order_by("-created_at").first()
     )
     if existing is not None:
+        if not can_access_review(request.user, existing):
+            raise Http404("review not found")
         messages.info(request, "A review already exists for this woman")
         return redirect("workspace", pk=existing.pk)
 
@@ -246,6 +321,8 @@ def new_review(request):
                     pregnancy = Pregnancy.objects.get(pk=selected)
                 except (Pregnancy.DoesNotExist, ValueError, TypeError):
                     raise ValidationError("choose the woman, or record a death")
+                if not can_access_pregnancy(request.user, pregnancy):
+                    raise ValidationError("choose the woman, or record a death")
 
                 existing = (
                     Review.objects.filter(pregnancy=pregnancy)
@@ -253,6 +330,8 @@ def new_review(request):
                     .first()
                 )
                 if existing is not None:
+                    if not can_access_review(request.user, existing):
+                        raise ValidationError("choose the woman, or record a death")
                     messages.info(request, "A review already exists for this woman")
                     return redirect("workspace", pk=existing.pk)
 
@@ -289,6 +368,8 @@ def new_review(request):
         .prefetch_related("documents", "deaths", "reviews")
         .order_by("patient__name", "pk")
     ):
+        if not can_access_pregnancy(request.user, pregnancy):
+            continue
         doc = next(
             (d for d in pregnancy.documents.all() if d.kind == SourceDocument.Kind.LCG),
             None,
@@ -328,6 +409,8 @@ def _num(value) -> str:
 
 
 def _local_input(dt) -> str:
+    if isinstance(dt, str):
+        dt = _parse_dt(dt)
     if dt is None:
         return ""
     if timezone.is_aware(dt):
@@ -335,11 +418,42 @@ def _local_input(dt) -> str:
     return dt.strftime("%Y-%m-%dT%H:%M")
 
 
+def _form1_edit_state(preview: dict) -> dict:
+    """Form 1 values shaped for the edit controls."""
+    preview = dict(preview)
+    inputs = {
+        key: ("" if value is None else value)
+        for key, value in preview["values"].items()
+    }
+    for key in ("notified_at", "anm_verified_at"):
+        inputs[key] = _local_input(preview["values"].get(key))
+    for key in (
+        "death_during_pregnancy",
+        "death_during_delivery",
+        "death_within_42_days",
+        "death_after_abortion_6_weeks",
+    ):
+        value = preview["values"].get(key)
+        inputs[key] = "" if value is None else ("yes" if value else "no")
+    inputs["place_type"] = inputs.get("place_type") or ""
+    preview["inputs"] = inputs
+    preview["suggested_display"] = {}
+    for section in preview.get("sections", []):
+        for field in section.get("fields", []):
+            field["input"] = inputs.get(field["key"], "")
+            preview["suggested_display"][field["key"]] = field.get(
+                "suggested_display", ""
+            )
+    return preview
+
+
 @login_required
 def labour(request, pk: int):
     from .models import LCGVariable, SourceDocument
 
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    if not can_access_document(request.user, doc):
+        raise Http404("labour record not found")
 
     entry = {
         "variable": "",
@@ -402,24 +516,36 @@ def labour(request, pk: int):
         .order_by("observed_at")
     )
     death = current_death(doc.pregnancy)
-    times = sorted({o.observed_at for o in obs})
+    actual_times = sorted({o.observed_at for o in obs if o.observed_at is not None})
+    stage_by_time = {}
+    for o in obs:
+        if o.observed_at is None:
+            continue
+        # A time column is second stage if any observation at that time is.
+        if stage_by_time.get(o.observed_at) != "second":
+            stage_by_time[o.observed_at] = o.stage
 
     columns = [
         {
             "at": t,
             "clock": timezone.localtime(t).strftime("%H:%M"),
-            "stage": next((o.stage for o in obs if o.observed_at == t), "first"),
+            "stage": stage_by_time.get(t, "first"),
         }
-        for t in times
+        for t in actual_times
     ]
+    recorded_clocks = [column["clock"] for column in columns]
+    birth_clock = ""
 
-    # the printed chart marks the birth between the second-stage columns
+    # the printed chart marks the birth after the last recorded column
     delivery = current_delivery(doc.pregnancy)
-    if delivery and delivery.delivered_at and (not times or delivery.delivered_at > times[-1]):
+    if delivery and delivery.delivered_at and (
+        not actual_times or delivery.delivered_at > actual_times[-1]
+    ):
+        birth_clock = timezone.localtime(delivery.delivered_at).strftime("%H:%M")
         columns.append(
             {
                 "at": delivery.delivered_at,
-                "clock": timezone.localtime(delivery.delivered_at).strftime("%H:%M"),
+                "clock": birth_clock,
                 "stage": "second",
                 "birth": True,
             }
@@ -516,6 +642,8 @@ def labour(request, pk: int):
             "columns": columns,
             "groups": groups,
             "sections": sections,
+            "recorded_clocks": recorded_clocks,
+            "birth_clock": birth_clock,
             "death": death,
             "entry": entry,
             "entry_error": entry_error,
@@ -532,6 +660,8 @@ def labour_history(request, pk: int):
     from .models import LCGVariable, SourceDocument
 
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    if not can_access_document(request.user, doc):
+        raise Http404("labour record not found")
     death = current_death(doc.pregnancy)
 
     qs = doc.observations.select_related("variable__section").order_by(
@@ -588,6 +718,8 @@ def correct_observation(request, pk: int, obs_pk: int):
     from .models import Observation, SourceDocument
 
     doc = get_object_or_404(SourceDocument, pk=pk, kind=SourceDocument.Kind.LCG)
+    if not can_access_document(request.user, doc):
+        raise Http404("labour record not found")
     obs = get_object_or_404(
         Observation.objects.select_related("variable"), pk=obs_pk, document=doc
     )
@@ -650,17 +782,174 @@ def correct_observation(request, pk: int, obs_pk: int):
 
 @login_required
 def workspace(request, pk: int):
-    review = get_object_or_404(
-        Review.objects.select_related("pregnancy__patient", "reporting_facility"), pk=pk
-    )
+    review = review_for_user(request, pk)
+    return _workspace_page(request, review, None)
 
+
+@login_required
+def amendment_workspace(request, pk: int, amendment_pk: int):
+    review = review_for_user(request, pk)
+    amendment = get_object_or_404(Amendment, pk=amendment_pk, review=review)
+    return _workspace_page(request, review, amendment)
+
+
+def _workspace_stats(review: Review, amendment=None) -> dict:
+    """Counters for the workspace header and panel.
+
+    Used both on a full page render and in the autosave response, so the
+    numbers move while the resident types.
+    """
+    visibility = conditions.visibility(review, amendment=amendment)
+    items = scope.item_map(review, amendment)
+    visible_fields = [f for f in registry.all() if visibility[f.key].applies]
+    hidden = len(registry.all()) - len(visible_fields)
+
+    answered = sum(
+        1
+        for f in visible_fields
+        if f.key in items
+        and items[f.key].answer_state == ReviewItem.AnswerState.ANSWERED
+    )
+    na = sum(
+        1
+        for f in visible_fields
+        if f.key in items
+        and items[f.key].applicability_state
+        == ReviewItem.Applicability.NOT_APPLICABLE
+    )
+    resolved = answered + na
+
+    proposed = 0
+    if amendment is None:
+        proposed = sum(
+            1
+            for p in review.proposals.filter(status=Proposal.Status.PROPOSED)
+            if visibility[p.field_key].applies
+        )
+
+    return {
+        "fields": len(visible_fields),
+        "hidden": hidden,
+        "answered": answered,
+        "resolved": resolved,
+        "to_enter": len(visible_fields) - resolved,
+        "na": na,
+        "proposed": proposed,
+        "needs": sum(
+            1
+            for f in visible_fields
+            if f.key in items and items[f.key].needs_reconsideration
+        ),
+        "gaps": sum(
+            1
+            for f in visible_fields
+            if f.required
+            and (
+                f.key not in items
+                or items[f.key].answer_state == ReviewItem.AnswerState.UNANSWERED
+            )
+        ),
+        "percent": round(100 * resolved / max(1, len(visible_fields))),
+    }
+
+
+def _workspace_page(request, review: Review, amendment=None):
     draft_comments = None
     draft_overall = None
     draft_note = ""
     show_checks = False
+    check_only = False
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "submit":
+        check_only = request.POST.get("check_only") == "yes"
+        if check_only:
+            # Run the same checks as submission but create nothing.
+            draft_note = request.POST.get("note", "")
+            visibility = (
+                conditions.visibility(review, amendment=amendment)
+                if amendment is not None
+                else None
+            )
+            checks.run_checks(review, visibility=visibility, amendment=amendment)
+            show_checks = True
+        elif amendment is not None:
+            if action == "submit_amendment":
+                draft_note = request.POST.get("note", "")
+                visibility = conditions.visibility(review, amendment=amendment)
+                pending = checks.run_checks(
+                    review, visibility=visibility, amendment=amendment
+                )
+                errors = [i for i in pending if i.severity == checks.ERROR]
+                warnings = [i for i in pending if i.severity == checks.WARNING]
+                confirmed = request.POST.get("confirm") == "yes"
+                if errors or (warnings and not confirmed):
+                    show_checks = True
+                else:
+                    try:
+                        services.submit_amendment(amendment, request.user, draft_note)
+                    except ValidationError as exc:
+                        messages.error(request, "; ".join(exc.messages))
+                        show_checks = True
+                    else:
+                        messages.success(request, "Amendment sent for approval")
+                        return redirect(request.path)
+            elif action == "return_amendment":
+                try:
+                    services.return_amendment(
+                        amendment, request.user, request.POST.get("comment", "")
+                    )
+                except ValidationError as exc:
+                    messages.error(request, "; ".join(exc.messages))
+                    draft_overall = request.POST.get("comment", "")
+                else:
+                    messages.success(request, "Amendment returned to the author")
+                    return redirect(request.path)
+            elif action == "approve_amendment":
+                if (request.POST.get("comment") or "").strip():
+                    messages.error(
+                        request,
+                        "you have a comment: return the amendment instead of approving",
+                    )
+                    draft_overall = request.POST.get("comment", "")
+                else:
+                    try:
+                        services.approve_amendment(amendment, request.user)
+                    except ValidationError as exc:
+                        messages.error(request, "; ".join(exc.messages))
+                    else:
+                        messages.success(request, "Amendment approved")
+                        return redirect("workspace", pk=review.pk)
+            elif action == "discard_amendment":
+                try:
+                    services.discard_amendment(amendment, request.user)
+                except ValidationError as exc:
+                    messages.error(request, "; ".join(exc.messages))
+                else:
+                    messages.success(request, "Amendment discarded")
+                    return redirect("workspace", pk=review.pk)
+            else:
+                try:
+                    _handle_action(request, review, amendment=amendment)
+                except ValidationError as exc:
+                    messages.error(request, "; ".join(exc.messages))
+                    return redirect(request.path)
+                else:
+                    return redirect(request.path)
+        elif action == "start_amendment":
+            try:
+                new = services.start_amendment(
+                    review,
+                    request.user,
+                    request.POST.get("reason", ""),
+                    request=request.POST.get("as_request") == "yes",
+                )
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+            else:
+                return redirect(
+                    "amendment_workspace", pk=review.pk, amendment_pk=new.pk
+                )
+        elif action == "submit":
             draft_note = request.POST.get("note", "")
             pending = checks.run_checks(review)
             errors = [i for i in pending if i.severity == checks.ERROR]
@@ -696,48 +985,95 @@ def workspace(request, pk: int):
                 return redirect("workspace", pk=review.pk)
 
     can_author = request.user.pk in {review.created_by_id, review.assigned_to_id}
-    locked = review.status not in (Review.Status.DRAFT, Review.Status.RETURNED) or not can_author
+    if amendment is None:
+        locked = (
+            review.status not in (Review.Status.DRAFT, Review.Status.RETURNED)
+            or not can_author
+        )
+    else:
+        locked = not (amendment.is_editable and can_author)
+    open_amendment = services.open_amendment(review)
+    official_version = review.versions.order_by("-version_no").first()
+    can_start_amendment = bool(
+        amendment is None
+        and review.status == Review.Status.APPROVED
+        and open_amendment is None
+        and can_author
+    )
+    can_request_amendment = bool(
+        amendment is None
+        and review.status == Review.Status.APPROVED
+        and open_amendment is None
+        and is_fno(request.user)
+    )
+    can_review_amendment = bool(
+        amendment is not None
+        and is_fno(request.user)
+        and amendment.status == Amendment.Status.PROPOSED
+    )
+    can_discard_amendment = bool(
+        amendment is not None
+        and amendment.status in (Amendment.Status.DRAFT, Amendment.Status.RETURNED)
+        and request.user.pk
+        in {amendment.by_id, review.created_by_id, review.assigned_to_id} - {None}
+    )
     death = current_death(review.pregnancy, review.reporting_admission)
     lcg = current_source(review)
     crossing_list = thresholds.crossings(lcg, death) if lcg else []
     crossings_by_var: dict[str, list] = {}
     for c in crossing_list:
         crossings_by_var.setdefault(c["variable"], []).append(c)
-    submission = (
-        review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
-        .order_by("-version_no")
-        .first()
-    )
-    submission_note = submission.note if submission and review.status == "submitted" else ""
-    open_return = services.latest_return(review, open_only=True)
-    last_return = services.latest_return(review)
-    fno_can_comment = is_fno(request.user) and (
-        review.status == Review.Status.SUBMITTED
-        or (review.status == Review.Status.RETURNED and open_return is not None)
-    )
-    first_comment_slug = ""
-    if open_return and open_return.comments:
-        order = {f.key: i for i, f in enumerate(registry.all())}
-        keys = sorted(open_return.comments, key=lambda k: order.get(k, 9999))
-        if keys[0] in registry:
-            first_comment_slug = registry[keys[0]].slug
-    # After a resubmission there is no open return, but the FNO still needs to see
-    # which fields they asked about. Highlight them from the last return.
-    comment_source = open_return
-    if comment_source is None and review.status == Review.Status.SUBMITTED:
-        comment_source = last_return
-    if draft_comments is not None:
-        field_comments = draft_comments
+    comment_source = None
+    if amendment is None:
+        submission = (
+            review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
+            .order_by("-version_no")
+            .first()
+        )
+        submission_note = (
+            submission.note if submission and review.status == "submitted" else ""
+        )
+        open_return = services.latest_return(review, open_only=True)
+        last_return = services.latest_return(review)
+        fno_can_comment = is_fno(request.user) and (
+            review.status == Review.Status.SUBMITTED
+            or (review.status == Review.Status.RETURNED and open_return is not None)
+        )
+        first_comment_slug = ""
+        if open_return and open_return.comments:
+            order = {f.key: i for i, f in enumerate(registry.all())}
+            keys = sorted(open_return.comments, key=lambda k: order.get(k, 9999))
+            if keys[0] in registry:
+                first_comment_slug = registry[keys[0]].slug
+        # After a resubmission there is no open return, but the FNO still needs to
+        # see which fields they asked about. Highlight them from the last return.
+        comment_source = open_return
+        if comment_source is None and review.status == Review.Status.SUBMITTED:
+            comment_source = last_return
+        if draft_comments is not None:
+            field_comments = draft_comments
+        else:
+            field_comments = (comment_source.comments or {}) if comment_source else {}
+        overall_value = (
+            draft_overall
+            if draft_overall is not None
+            else (open_return.overall_comment if open_return else "")
+        )
     else:
-        field_comments = (comment_source.comments or {}) if comment_source else {}
-    overall_value = (
-        draft_overall
-        if draft_overall is not None
-        else (open_return.overall_comment if open_return else "")
-    )
+        submission = None
+        submission_note = ""
+        open_return = None
+        last_return = None
+        fno_can_comment = False
+        first_comment_slug = ""
+        field_comments = {}
+        # The previous return comment is shown to the author in the return bar;
+        # it must not prefill the FNO's decision box, or approving would look
+        # like approving with a comment.
+        overall_value = draft_overall if draft_overall is not None else ""
 
-    items = {i.field_key: i for i in review.items.all()}
-    visibility = conditions.visibility_for(review)
+    items = scope.item_map(review, amendment)
+    visibility = conditions.visibility_for(review, amendment=amendment)
     # An FNO comment always wins: the field must stay addressable even when a
     # later answer would otherwise hide it.
     for key in field_comments:
@@ -745,51 +1081,87 @@ def workspace(request, pk: int):
             visibility[key] = conditions.Visibility(True)
     hidden_fields = []
     legacy_items = []
-    for item in items.values():
-        if item.field_key in registry:
-            continue
-        field = LEGACY_FIELDS.get(item.field_key)
-        if item.answer_state != ReviewItem.AnswerState.ANSWERED and item.applicability_state != ReviewItem.Applicability.NOT_APPLICABLE:
-            continue
-        legacy_items.append(
-            {
-                "key": item.field_key,
-                "label": field.label_printed if field else item.field_key,
-                "display": (
-                    field_display(field, item.value_json)
-                    if field and item.answer_state == ReviewItem.AnswerState.ANSWERED
-                    else "Not applicable"
-                ),
-                "origin": chip(item.origin),
-                "reason": item.reason,
-            }
-        )
-    check_issues = checks.run_checks(review, visibility) if show_checks else []
+    if amendment is not None:
+        for key, entry in (
+            (amendment.base_version.payload_json or {}).get("legacy_fields", {}) or {}
+        ).items():
+            field = LEGACY_FIELDS.get(key)
+            if (
+                entry.get("value") in (None, "", [], {})
+                and entry.get("applicability_state") != "not_applicable"
+            ):
+                continue
+            legacy_items.append(
+                {
+                    "key": key,
+                    "label": field.label_printed if field else entry.get("label", key),
+                    "display": (
+                        entry_display(field, entry) if field else fmt(entry.get("value"))
+                    ),
+                    "origin": chip(entry.get("origin", "none")),
+                    "reason": entry.get("reason", ""),
+                }
+            )
+    else:
+        for item in items.values():
+            if item.field_key in registry:
+                continue
+            field = LEGACY_FIELDS.get(item.field_key)
+            if item.answer_state != ReviewItem.AnswerState.ANSWERED and item.applicability_state != ReviewItem.Applicability.NOT_APPLICABLE:
+                continue
+            legacy_items.append(
+                {
+                    "key": item.field_key,
+                    "label": field.label_printed if field else item.field_key,
+                    "display": (
+                        field_display(field, item.value_json)
+                        if field and item.answer_state == ReviewItem.AnswerState.ANSWERED
+                        else "Not applicable"
+                    ),
+                    "origin": chip(item.origin),
+                    "reason": item.reason,
+                }
+            )
+    check_issues = (
+        checks.run_checks(review, visibility, amendment=amendment)
+        if show_checks
+        else []
+    )
     check_errors = [i for i in check_issues if i.severity == checks.ERROR]
     check_warnings = [i for i in check_issues if i.severity == checks.WARNING]
+    check_groups = []
+    for key, label in checks.GROUPS:
+        issues = [i for i in check_issues if i.category == key]
+        issues.sort(key=lambda i: 0 if i.severity == checks.ERROR else 1)
+        if issues:
+            check_groups.append({"key": key, "label": label, "issues": issues})
     checks_by_field: dict[str, list] = {}
     for issue in check_issues:
         if issue.field:
             checks_by_field.setdefault(issue.field, []).append(issue)
     decisions = {}
-    for d in (
-        ProposalDecision.objects.filter(proposal__review=review)
-        .select_related("proposal")
-        .order_by("at", "id")
-    ):
-        decisions[d.proposal.field_key] = d
-
-    last_change = {}
-    for ev in AuditEvent.objects.filter(review=review, action="answer_set").order_by("at", "id"):
-        last_change[ev.entity_id] = ev
     open_proposals: dict[str, list[Proposal]] = {}
-    for p in review.proposals.filter(status=Proposal.Status.PROPOSED).order_by("-id"):
-        open_proposals.setdefault(p.field_key, []).append(p)
+    if amendment is None:
+        for d in (
+            ProposalDecision.objects.filter(proposal__review=review)
+            .select_related("proposal")
+            .order_by("at", "id")
+        ):
+            decisions[d.proposal.field_key] = d
+        for p in review.proposals.filter(status=Proposal.Status.PROPOSED).order_by("-id"):
+            open_proposals.setdefault(p.field_key, []).append(p)
+
+    amendment_changes = {}
+    if amendment is not None:
+        amendment_changes = {
+            change["field"].key: change
+            for change in services.amendment_changes(review, amendment)
+        }
 
     sections = []
     for section, heading, fields in registry.by_section():
         rows = []
-        answered_n = needs_n = na_n = unknown_n = hidden_n = 0
+        answered_n = needs_n = na_n = hidden_n = 0
         for f in fields:
             item = items.get(f.key)
             seen = visibility[f.key]
@@ -826,12 +1198,10 @@ def workspace(request, pk: int):
                 item
                 and item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
             )
-            is_unknown = bool(
-                item
-                and item.answer_state == ReviewItem.AnswerState.NOT_KNOWN
-            )
             needs = bool(item and item.needs_reconsideration)
-            decision = _decision(item, decisions.get(f.key), mark)
+            decision = None if amendment is not None else _decision(
+                item, decisions.get(f.key), mark
+            )
             if (
                 decision
                 and decision.get("kind") == "accepted"
@@ -842,12 +1212,19 @@ def workspace(request, pk: int):
                 decision["calculation"] = CALCULATIONS.get(f.key, "")
             answered_n += int(is_answered)
             na_n += int(is_na)
-            unknown_n += int(is_unknown)
             needs_n += int(needs)
+            change = amendment_changes.get(f.key)
             rows.append(
                 {
                     "field": f,
                     "item": item,
+                    "changed": bool(change),
+                    "before_display": (
+                        entry_display(f, change["before"]) if change else ""
+                    ),
+                    "after_display": (
+                        entry_display(f, change["after"]) if change else ""
+                    ),
                     "display": field_display(f, item.value_json) if item else "—",
                     "widget": f.widget,
                     "options": [
@@ -870,14 +1247,12 @@ def workspace(request, pk: int):
                     "decision": decision,
                     "is_answered": is_answered,
                     "is_na": is_na,
-                    "is_unknown": is_unknown,
                     "needs": needs,
                     "is_block": f.type == "block",
                     "block_cols": list((f.block_schema or {}).get("fields", {}).items()),
                     "block_rows": _block_rows(f, item),
                     "places": _place_rows(f, item)
                     if f.key == "f4.condition.referral" else None,
-                    "revertible": f.key in last_change and not locked,
                     "fno_comment": field_comments.get(f.key, ""),
                     "fno_comment_prefill": (
                         draft_comments.get(f.key, "")
@@ -921,59 +1296,20 @@ def workspace(request, pk: int):
                     "total": len(rows),
                     "answered": answered_n,
                     "na": na_n,
-                    "unknown": unknown_n,
                     "needs": needs_n,
                     "hidden": hidden_n,
                 }
             )
 
-    visible_fields = [f for f in registry.all() if visibility[f.key].applies]
-    answered_total = sum(
-        1
-        for f in visible_fields
-        if f.key in items
-        and items[f.key].answer_state == ReviewItem.AnswerState.ANSWERED
-    )
-    na_total = sum(
-        1
-        for f in visible_fields
-        if f.key in items
-        and items[f.key].applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
-    )
-    unknown_total = sum(
-        1
-        for f in visible_fields
-        if f.key in items
-        and items[f.key].answer_state == ReviewItem.AnswerState.NOT_KNOWN
-    )
-    resolved = answered_total + na_total + unknown_total
-    stats = {
-        "fields": len(visible_fields),
-        "hidden": len(hidden_fields),
-        "answered": answered_total,
-        "resolved": resolved,
-        "to_enter": len(visible_fields) - resolved,
-        "na": na_total,
-        "not_known": unknown_total,
-        "proposed": sum(
-            len(v) for k, v in open_proposals.items() if visibility[k].applies
-        ),
-        "needs": sum(
-            1
-            for f in visible_fields
-            if f.key in items and items[f.key].needs_reconsideration
-        ),
-        "gaps": sum(
-            1
-            for f in visible_fields
-            if f.required
-            and (
-                f.key not in items
-                or items[f.key].answer_state == ReviewItem.AnswerState.UNANSWERED
-            )
-        ),
-        "percent": round(100 * resolved / max(1, len(visible_fields))),
-    }
+    stats = _workspace_stats(review, amendment)
+    form1_preview = None
+    can_edit_form1 = False
+    if amendment is None and can_author and review.status in (
+        Review.Status.DRAFT,
+        Review.Status.RETURNED,
+    ):
+        form1_preview = _form1_edit_state(form1.build(review))
+        can_edit_form1 = not locked
     return render(
         request,
         "review/workspace.html",
@@ -987,6 +1323,8 @@ def workspace(request, pk: int):
             "check_errors": check_errors,
             "check_warnings": check_warnings,
             "check_issues": check_issues,
+            "check_groups": check_groups,
+            "check_only": check_only,
             "controller_keys": conditions.controller_keys(),
             "stats": stats,
             "years": list(range(timezone.now().year + 1, 1989, -1)),
@@ -1010,22 +1348,39 @@ def workspace(request, pk: int):
             "is_author": review.submitted_by_id == request.user.pk,
             "can_author": can_author,
             "locked": locked,
+            "amendment": amendment,
+            "is_amendment": amendment is not None,
+            "open_amendment": open_amendment,
+            "official_version": official_version,
+            "can_start_amendment": can_start_amendment,
+            "can_request_amendment": can_request_amendment,
+            "can_review_amendment": can_review_amendment,
+            "can_discard_amendment": can_discard_amendment,
+            "amendment_change_count": len(amendment_changes),
+            "form1_preview": form1_preview,
+            "can_edit_form1": can_edit_form1,
+            "form1_place_types": Form1.PlaceType.choices,
         },
     )
 
 
-def _handle_action(request, review: Review):
+def _handle_action(request, review: Review, amendment=None):
     user = request.user
     action = request.POST.get("action")
+
+    if amendment is not None and action in {
+        "reevaluate", "accept", "reject", "submit", "return", "return_update", "approve"
+    }:
+        raise ValidationError("that action is not available in an amendment")
 
     if action == "reevaluate":
         services.reevaluate(review, user)
         messages.success(request, "Proposals refreshed")
         return
 
-    if action == "revert":
-        services.revert_last(review, request.POST["key"], user)
-        messages.success(request, "Reverted the last change")
+    if action == "clear":
+        services.clear_answer(review, request.POST["key"], user, amendment=amendment)
+        messages.success(request, "Cleared the kept answer")
         return
 
     if action == "accept":
@@ -1047,7 +1402,8 @@ def _handle_action(request, review: Review):
         if raw == "":
             raise ValidationError("a value is required")
         services.set_answer(review, key, _coerce(field, raw), user, request.POST.get("reason", ""),
-                            corrected=bool(request.POST.get("corrected")))
+                            corrected=bool(request.POST.get("corrected")),
+                            amendment=amendment)
         messages.success(request, f"Saved {key}")
         return
 
@@ -1057,7 +1413,7 @@ def _handle_action(request, review: Review):
         field = registry[key]
         spec = (field.block_schema or {}).get("fields", {})
         if request.POST.get("op") == "remove":
-            services.clear_place_row(review, key, place, user)
+            services.clear_place_row(review, key, place, user, amendment=amendment)
             messages.success(request, "Row cleared")
             return
         values = {}
@@ -1067,17 +1423,20 @@ def _handle_action(request, review: Review):
             v = _block_value(col, request.POST.get(f"col_{name}", ""))
             if v is not None:
                 values[name] = v
-        services.save_place_row(review, key, place, values, user)
+        services.save_place_row(review, key, place, values, user, amendment=amendment)
         messages.success(request, "Row saved")
         return
 
     if action == "block_add":
-        services.add_block_row(review, request.POST["key"], user)
+        services.add_block_row(review, request.POST["key"], user, amendment=amendment)
         messages.success(request, "Row added")
         return
 
     if action == "block_remove":
-        services.remove_block_row(review, request.POST["key"], int(request.POST["index"]), user)
+        services.remove_block_row(
+            review, request.POST["key"], int(request.POST["index"]), user,
+            amendment=amendment,
+        )
         messages.success(request, "Row removed")
         return
 
@@ -1085,7 +1444,7 @@ def _handle_action(request, review: Review):
         key = request.POST["key"]
         index_raw = request.POST.get("index", "")
         if request.POST.get("op") == "remove":
-            services.remove_block_row(review, key, int(index_raw), user)
+            services.remove_block_row(review, key, int(index_raw), user, amendment=amendment)
             messages.success(request, "Row removed")
             return
         field = registry[key]
@@ -1096,13 +1455,14 @@ def _handle_action(request, review: Review):
             if v is not None:
                 values[name] = v
         index = int(index_raw) if index_raw != "" else None
-        services.set_block_row(review, key, index, values, user)
+        services.set_block_row(review, key, index, values, user, amendment=amendment)
         messages.success(request, "Row saved")
         return
 
     if action == "applicable":
         services.set_applicability(
-            review, request.POST["key"], ReviewItem.Applicability.APPLICABLE, user, ""
+            review, request.POST["key"], ReviewItem.Applicability.APPLICABLE, user, "",
+            amendment=amendment,
         )
         messages.success(request, "Marked applicable again")
         return
@@ -1110,7 +1470,7 @@ def _handle_action(request, review: Review):
     if action == "na":
         services.set_applicability(
             review, request.POST["key"], ReviewItem.Applicability.NOT_APPLICABLE, user,
-            request.POST.get("reason", ""),
+            request.POST.get("reason", ""), amendment=amendment,
         )
         messages.success(request, "Marked not applicable")
         return
@@ -1408,27 +1768,33 @@ def _coerce(field, raw: str):
     return raw
 
 
+def _amendment_from_request(request, review):
+    raw = request.GET.get("amendment") or request.POST.get("amendment") or ""
+    if not raw:
+        return None
+    return get_object_or_404(Amendment, pk=raw, review=review)
+
+
 @login_required
 @require_http_methods(["POST"])
 def na_field(request, pk: int):
     """Toggle not-applicable without leaving the page."""
-    review = get_object_or_404(Review, pk=pk)
+    review = review_for_user(request, pk)
+    amendment = _amendment_from_request(request, review)
     key = request.POST.get("key", "")
     if key not in registry:
         return JsonResponse({"ok": False, "error": "unknown field"}, status=400)
     state = request.POST.get("state", "")
     reason = request.POST.get("reason", "")
     try:
-        if state == "unknown":
-            services.set_not_known(review, key, request.user, reason)
-            returned = "not_known"
-        elif state == "na":
+        if state == "na":
             services.set_applicability(
                 review,
                 key,
                 ReviewItem.Applicability.NOT_APPLICABLE,
                 request.user,
                 reason,
+                amendment=amendment,
             )
             returned = "not_applicable"
         else:
@@ -1438,6 +1804,7 @@ def na_field(request, pk: int):
                 ReviewItem.Applicability.APPLICABLE,
                 request.user,
                 "",
+                amendment=amendment,
             )
             returned = "applicable"
     except ValidationError as exc:
@@ -1445,17 +1812,144 @@ def na_field(request, pk: int):
     return JsonResponse({"ok": True, "state": returned, "reason": reason})
 
 
+def _form1_bool(raw: str):
+    raw = (raw or "").strip().lower()
+    if raw == "yes":
+        return True
+    if raw == "no":
+        return False
+    return None
+
+
+@login_required
+@require_http_methods(["POST"])
+def save_form1(request, pk: int):
+    """Save the Form 1 details, outside the Form 4 answers.
+
+    Plain form posts redirect back to the page. The same URL with ``?ajax=1``
+    answers JSON so the Form 1 page can autosave on every edit, like Form 4.
+    """
+    review = review_for_user(request, pk)
+    form1, created = Form1.objects.get_or_create(review=review)
+    changed = []
+    is_ajax = request.GET.get("ajax") == "1" or (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+    )
+
+    def back_to_form():
+        if request.POST.get("next") == "form1":
+            return redirect(
+                f"{reverse('form1_output', args=[review.pk])}#form1-form"
+            )
+        return redirect(f"{reverse('workspace', args=[review.pk])}#sec-form1")
+
+    def fail(message):
+        if is_ajax:
+            return JsonResponse({"ok": False, "error": message}, status=400)
+        messages.error(request, message)
+        return back_to_form()
+
+    for name in (
+        "state",
+        "district",
+        "block",
+        "village",
+        "current_residence",
+        "native_place",
+        "husband_name",
+        "father_name",
+        "place_detail",
+        "reported_by_name",
+        "reported_by_designation",
+        "anm_name",
+        "sub_centre",
+    ):
+        value = (request.POST.get(name, "") or "").strip()
+        if getattr(form1, name) != value:
+            setattr(form1, name, value)
+            changed.append(name)
+
+    place_type = (request.POST.get("place_type", "") or "").strip()
+    if place_type not in dict(Form1.PlaceType.choices):
+        place_type = ""
+    if form1.place_type != place_type:
+        form1.place_type = place_type
+        changed.append("place_type")
+
+    for name in (
+        "death_during_pregnancy",
+        "death_during_delivery",
+        "death_within_42_days",
+        "death_after_abortion_6_weeks",
+    ):
+        value = _form1_bool(request.POST.get(name, ""))
+        if getattr(form1, name) != value:
+            setattr(form1, name, value)
+            changed.append(name)
+
+    for name in ("notified_at", "anm_verified_at"):
+        raw = (request.POST.get(name, "") or "").strip()
+        value = _parse_dt(raw) if raw else None
+        if raw and value is None:
+            return fail("enter a valid report date and time")
+        if value is not None and timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.get_current_timezone())
+        if getattr(form1, name) != value:
+            setattr(form1, name, value)
+            changed.append(name)
+
+    form1.save()
+    if changed or created:
+        review.edit_revision += 1
+        review.last_saved_at = timezone.now()
+        review.save(update_fields=["edit_revision", "last_saved_at"])
+        services.audit(
+            review,
+            request.user,
+            "form1_updated",
+            "Form1",
+            form1.pk,
+            {"fields": changed},
+        )
+    if is_ajax:
+        return JsonResponse(
+            {
+                "ok": True,
+                "changed": changed,
+                "saved_at": (
+                    review.last_saved_at.isoformat()
+                    if review.last_saved_at is not None
+                    else None
+                ),
+            }
+        )
+    if changed or created:
+        messages.success(request, "Form 1 details saved")
+    return back_to_form()
+
+
 @login_required
 @require_http_methods(["POST"])
 def save_field(request, pk: int):
     """Autosave one field. Returns JSON so the page never reloads."""
-    review = get_object_or_404(Review, pk=pk)
+    review = review_for_user(request, pk)
+    amendment = _amendment_from_request(request, review)
     key = request.POST.get("key", "")
     field = registry._fields.get(key)
     if field is None:
         return JsonResponse({"ok": False, "error": "unknown field"}, status=400)
 
-    item = review.items.filter(field_key=key).first()
+    def saved_response(mark: str, display: str) -> JsonResponse:
+        return JsonResponse(
+            {
+                "ok": True,
+                "mark": mark,
+                "display": display,
+                "stats": _workspace_stats(review, amendment),
+            }
+        )
+
+    item = scope.get_item(review, key, amendment)
     corrected = bool(item and item.origin in ("reused", "derived", "corrected"))
 
     if field.type == "block" and request.POST.get("place"):
@@ -1469,13 +1963,13 @@ def save_field(request, pk: int):
                 v = _block_value(col, request.POST.get(f"col_{name}", ""))
                 if v is not None:
                     values[name] = v
-            services.save_place_row(review, key, place, values, request.user)
+            services.save_place_row(
+                review, key, place, values, request.user, amendment=amendment
+            )
         except ValidationError as exc:
             return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
-        saved = review.items.get(field_key=key)
-        return JsonResponse(
-            {"ok": True, "mark": chip(saved.origin), "display": fmt(saved.value_json)}
-        )
+        saved = scope.get_item(review, key, amendment)
+        return saved_response(chip(saved.origin), fmt(saved.value_json))
 
     if field.type == "block" and request.POST.get("index", "") != "":
         spec = (field.block_schema or {}).get("fields", {})
@@ -1486,13 +1980,13 @@ def save_field(request, pk: int):
                 v = _block_value(col, request.POST.get(f"col_{name}", ""))
                 if v is not None:
                     values[name] = v
-            services.set_block_row(review, key, index, values, request.user)
+            services.set_block_row(
+                review, key, index, values, request.user, amendment=amendment
+            )
         except ValidationError as exc:
             return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
-        saved = review.items.get(field_key=key)
-        return JsonResponse(
-            {"ok": True, "mark": chip(saved.origin), "display": fmt(saved.value_json)}
-        )
+        saved = scope.get_item(review, key, amendment)
+        return saved_response(chip(saved.origin), fmt(saved.value_json))
 
     if field.type == "multi":
         values = [v for v in request.POST.getlist("value") if v]
@@ -1514,9 +2008,7 @@ def save_field(request, pk: int):
         and item.value_json == value
         and not (request.POST.get("reason") or "").strip()
     ):
-        return JsonResponse(
-            {"ok": True, "mark": chip(item.origin), "display": fmt(item.value_json)}
-        )
+        return saved_response(chip(item.origin), fmt(item.value_json))
 
     if key == "f4.background.fbmdr_year" and not 1900 <= value <= 2100:
         return JsonResponse(
@@ -1528,15 +2020,13 @@ def save_field(request, pk: int):
     try:
         services.set_answer(
             review, key, value, request.user, request.POST.get("reason", ""),
-            corrected=corrected,
+            corrected=corrected, amendment=amendment,
         )
     except ValidationError as exc:
         return JsonResponse({"ok": False, "error": "; ".join(exc.messages)}, status=400)
 
-    item = review.items.get(field_key=key)
-    return JsonResponse(
-        {"ok": True, "mark": chip(item.origin), "display": fmt(item.value_json)}
-    )
+    item = scope.get_item(review, key, amendment)
+    return saved_response(chip(item.origin), fmt(item.value_json))
 
 
 def _describe(event):
@@ -1570,20 +2060,34 @@ def _describe(event):
         return "approved", f"version {p.get('version_no')}"
     if action == "returned":
         return "returned", p.get("comment", "")
+    if action == "amendment_opened":
+        detail = f"base v{p.get('base_version')} · {p.get('reason', '')}"
+        if p.get("requested"):
+            detail += " · requested by FNO"
+        return "opened amendment", detail
+    if action == "amendment_submitted":
+        return "submitted amendment", f"base v{p.get('base_version')} · {p.get('changes', 0)} change(s)"
+    if action == "amendment_returned":
+        return "returned amendment", p.get("comment", "")
+    if action == "amendment_approved":
+        return "approved amendment", f"version {p.get('version_no')}"
+    if action == "amendment_discarded":
+        return "discarded amendment", p.get("reason", "")
+    if action in ("form1_updated", "notification_updated"):
+        fields = p.get("fields") or []
+        return "updated Form 1 details", ", ".join(fields) if fields else ""
     return action.replace("_", " "), ""
 
 
 @login_required
 def history(request, pk: int):
-    review = get_object_or_404(
-        Review.objects.select_related("pregnancy__patient"), pk=pk
-    )
+    review = review_for_user(request, pk)
     from django.core.paginator import Paginator
 
     qs = review.audit_events.select_related("actor").order_by("-at", "-id")
     field = request.GET.get("field", "")
     if field:
-        qs = qs.filter(entity_id=field)
+        qs = qs.filter(Q(entity_id=field) | Q(payload__field_key=field))
     paginator = Paginator(qs, 100)
     page_obj = paginator.get_page(request.GET.get("page"))
 
@@ -1613,8 +2117,11 @@ def history(request, pk: int):
             }
         )
     versions = review.versions.select_related("created_by").order_by("-version_no")
+    amendments = review.amendments.select_related(
+        "by", "submitted_by", "decided_by", "base_version", "result_version"
+    ).order_by("-at")
 
-    items_by_key = {i.field_key: i for i in review.items.all()}
+    items_by_key = scope.item_map(review)
     returns = []
     for ret in (
         review.returns.select_related("by", "submission_version").order_by("-at")
@@ -1641,6 +2148,7 @@ def history(request, pk: int):
             "review": review,
             "events": events,
             "versions": versions,
+            "amendments": amendments,
             "returns": returns,
             "page_obj": page_obj,
             "total": paginator.count,
@@ -1656,8 +2164,8 @@ def history(request, pk: int):
 def source(request, kind: str, pk: int):
     """Show where a value came from: the chart column, or the record row."""
     from .models import (
-        Admission, Death, Delivery, Facility, Neonate, Observation, Patient,
-        Pregnancy, SourceDocument,
+        Admission, Death, Delivery, Facility, IcuStay, Neonate, Observation,
+        Patient, Pregnancy, Review, SourceDocument,
     )
 
     models = {
@@ -1669,6 +2177,8 @@ def source(request, kind: str, pk: int):
         "pregnancy": Pregnancy,
         "facility": Facility,
         "neonate": Neonate,
+        "icu": IcuStay,
+        "review": Review,
         "sourcedocument": SourceDocument,
     }
     model = models.get(kind)
@@ -1676,6 +2186,30 @@ def source(request, kind: str, pk: int):
         raise Http404
 
     obj = get_object_or_404(model, pk=pk)
+
+    # Source records are only reachable through a pregnancy the user may see.
+    if kind == "observation":
+        pregnancy = obj.document.pregnancy
+    elif kind in ("sourcedocument", "admission", "death", "delivery", "review"):
+        pregnancy = obj.pregnancy
+    elif kind == "neonate":
+        pregnancy = obj.delivery.pregnancy
+    elif kind == "icu":
+        pregnancy = obj.admission.pregnancy
+    elif kind == "pregnancy":
+        pregnancy = obj
+    elif kind == "patient":
+        pregnancies = list(obj.pregnancies.all())
+        if pregnancies and not any(
+            can_access_pregnancy(request.user, p) for p in pregnancies
+        ):
+            raise Http404("source not found")
+        pregnancy = None
+    else:
+        pregnancy = None
+    if pregnancy is not None and not can_access_pregnancy(request.user, pregnancy):
+        raise Http404("source not found")
+
     if kind == "observation":
         column = list(
             Observation.objects.filter(document=obj.document, observed_at=obj.observed_at)
@@ -1739,21 +2273,228 @@ def source(request, kind: str, pk: int):
     )
 
 
-@login_required
-def output(request, pk: int):
-    review = get_object_or_404(Review, pk=pk)
-    version = services.latest_version(review)
-    if version is None:
-        messages.error(request, "Nothing has been submitted yet")
-        return redirect("workspace", pk=review.pk)
-    if request.GET.get("format") == "json":
-        return JsonResponse(version.payload_json)
+def _prov_time(value, precision: str = "") -> str:
+    """Format a provenance timestamp without inventing precision it lacks."""
+    if not value:
+        return ""
+    if precision == "date_only":
+        parsed = _parse_dt(value)
+        if parsed is None:
+            return value
+        if timezone.is_aware(parsed):
+            parsed = timezone.localtime(parsed)
+        return parsed.strftime("%d %b %Y")
+    text = _fmt_when(value)
+    if precision == "estimated" and text:
+        return f"~{text}"
+    return text
 
-    fields = version.payload_json.get("fields", {})
-    frozen_source = (version.payload_json.get("source") or {}).get("document_id")
-    source_id = (
-        frozen_source if "source" in version.payload_json else review.source_document_id
+
+def _prov_display(detail: dict) -> dict:
+    """Copy a provenance entry with human-readable timestamps."""
+    detail = dict(detail or {})
+    detail["decision"] = dict(detail.get("decision") or {})
+    if detail["decision"].get("at"):
+        detail["decision"]["at"] = _fmt_when(detail["decision"]["at"])
+    if detail.get("entry"):
+        entry = dict(detail["entry"])
+        if entry.get("at"):
+            entry["at"] = _fmt_when(entry["at"])
+        detail["entry"] = entry
+    if detail.get("inputs"):
+        inputs = []
+        for inp in detail["inputs"]:
+            copied = dict(inp)
+            precision = inp.get("precision", "")
+            raw_value = inp.get("value")
+            if isinstance(raw_value, str) and _parse_dt(raw_value) is not None:
+                copied["value"] = _prov_time(raw_value, precision)
+            copied["observed_at"] = _prov_time(inp.get("observed_at"), precision)
+            copied["documented_at"] = _prov_time(inp.get("documented_at"), precision)
+            copied["entered_at"] = _prov_time(inp.get("entered_at"), "exact")
+            inputs.append(copied)
+        detail["inputs"] = inputs
+    return detail
+
+
+@login_required
+def field_provenance(request, pk: int, key: str):
+    """Per-field provenance and decision history, for the drawer."""
+    review = review_for_user(request, pk)
+    field = registry._fields.get(key)
+    if field is None:
+        raise Http404("unknown Form 4 field")
+
+    amendment = None
+    raw_amendment = request.GET.get("amendment")
+    if raw_amendment:
+        amendment = get_object_or_404(Amendment, pk=raw_amendment, review=review)
+
+    version = None
+    wanted = request.GET.get("version", "")
+    if wanted:
+        version = (
+            review.versions.filter(version_no=wanted).first()
+            if wanted.isdigit()
+            else None
+        )
+        if version is None:
+            raise Http404("unknown version")
+
+    if version is not None:
+        payload = version.payload_json
+        source_label = f"version {version.version_no}"
+    elif amendment is not None:
+        if amendment.status in (
+            Amendment.Status.PROPOSED,
+            Amendment.Status.APPROVED,
+        ):
+            payload = amendment.payload_json
+        else:
+            # Draft and returned amendments are still being edited.
+            payload = services.canonical_payload(review, amendment=amendment)
+        source_label = f"amendment {amendment.pk}"
+    elif review.status in (
+        Review.Status.SUBMITTED,
+        Review.Status.APPROVED,
+        Review.Status.VOIDED,
+    ):
+        version = services.latest_version(review)
+        payload = (
+            version.payload_json
+            if version is not None
+            else services.canonical_payload(review)
+        )
+        source_label = f"version {version.version_no}" if version else "current draft"
+    else:
+        payload = services.canonical_payload(review)
+        source_label = "current draft"
+
+    entry = (payload.get("fields") or {}).get(key)
+    if entry is None:
+        raise Http404("field is not part of this version")
+    snapshot = payload.get("provenance") or {}
+    frozen = bool(payload.get("provenance_version"))
+    if key in snapshot:
+        detail = snapshot[key]
+    else:
+        detail = (
+            provenance.reconstruct(review, entry)
+            if not frozen
+            else {
+                "state": entry.get("answer_state"),
+                "origin": entry.get("origin"),
+                "note": "No provenance was frozen for this field.",
+            }
+        )
+
+    events = []
+    for event in (
+        review.audit_events.filter(
+            Q(entity_id=key) | Q(payload__field_key=key)
+        )
+        .select_related("actor")
+        .order_by("-at", "-id")[:30]
+    ):
+        action, text = _describe(event)
+        events.append(
+            {
+                "at": event.at,
+                "actor": event.actor,
+                "action": action,
+                "detail": text,
+                "entity_type": event.entity_type,
+            }
+        )
+
+    detail = _prov_display(detail)
+    for inp in detail.get("inputs", []):
+        url = _ref_url(inp.get("ref", ""))
+        if url and inp.get("key"):
+            url += f"?key={inp['key']}"
+        inp["url"] = url
+
+    context = {
+        "review": review,
+        "field": field,
+        "entry": entry,
+        "display": entry_display(field, entry),
+        "mark": chip(entry.get("origin", "none")),
+        "provenance": detail,
+        "frozen": frozen,
+        "provenance_version": payload.get("provenance_version"),
+        "provenance_hash": payload.get("provenance_hash", ""),
+        "verified": provenance.verify(payload),
+        "source_label": source_label,
+        "events": events,
+        "amendment": amendment,
+        "version": version,
+    }
+    template = (
+        "review/_field_provenance.html"
+        if request.GET.get("frag")
+        else "review/field_provenance.html"
     )
+    return render(request, template, context)
+
+
+def _provenance_sections(payload: dict, review: Review) -> list[dict]:
+    """One appendix row per printed value, using the frozen snapshot."""
+    fields = payload.get("fields", {})
+    snapshot = payload.get("provenance") or {}
+    frozen = bool(payload.get("provenance_version"))
+    sections = []
+    for section, heading, fs in registry.by_section():
+        rows = []
+        for f in fs:
+            entry = fields.get(f.key)
+            if entry is None or not entry.get("applies", True):
+                continue
+            if f.key in snapshot:
+                detail = snapshot[f.key]
+            else:
+                detail = (
+                    provenance.reconstruct(review, entry)
+                    if not frozen
+                    else {
+                        "state": entry.get("answer_state"),
+                        "origin": entry.get("origin"),
+                        "note": "No provenance was frozen for this field.",
+                    }
+                )
+            if (
+                detail.get("state") == "unanswered"
+                and entry.get("value") in (None, "", [], {})
+            ):
+                continue
+            rows.append(
+                {
+                    "field": f,
+                    "entry": entry,
+                    "display": entry_display(f, entry),
+                    "mark": chip(entry.get("origin", "none")),
+                    "provenance": _prov_display(detail),
+                }
+            )
+        if rows:
+            sections.append({"key": section, "heading": heading, "rows": rows})
+    return sections
+
+
+def _provenance_meta(payload: dict) -> dict:
+    return {
+        "version": payload.get("provenance_version"),
+        "hash": payload.get("provenance_hash", ""),
+        "verified": provenance.verify(payload),
+        "frozen": bool(payload.get("provenance_version")),
+        "preview": False,
+    }
+
+
+def _output_data(payload: dict, review: Review) -> dict:
+    fields = payload.get("fields", {})
+    frozen_source = (payload.get("source") or {}).get("document_id")
+    source_id = frozen_source if "source" in payload else review.source_document_id
     sections = []
     hidden_rows = []
     for section, heading, fs in registry.by_section():
@@ -1787,7 +2528,7 @@ def output(request, pk: int):
         if rows:
             sections.append({"key": section, "heading": heading, "rows": rows})
 
-    legacy_payload = version.payload_json.get("legacy_fields", {}) or {}
+    legacy_payload = payload.get("legacy_fields", {}) or {}
     legacy_keys = set(legacy_payload) | {
         key for key in fields if key not in registry._fields
     }
@@ -1807,18 +2548,132 @@ def output(request, pk: int):
                 "mark": chip(entry.get("origin", "none")),
             }
         )
+    return {
+        "sections": sections,
+        "hidden_rows": hidden_rows,
+        "legacy_rows": legacy_rows,
+        "output_source_id": source_id,
+        "fields_payload": fields,
+        "conditions_version": payload.get("conditions_version", ""),
+    }
 
+
+def _payload_digest(payload: dict) -> str:
+    body = json.dumps(payload, sort_keys=True, default=str)
+    return hashlib.sha256(body.encode()).hexdigest()
+
+
+@login_required
+def form1_output(request, pk: int):
+    """Live Form 1 record, generated from the same review.
+
+    Form 1 is an editable record, not a frozen Form 4 answer. The version
+    payload still carries a form1 snapshot for audit, but the page reflects the
+    latest saved Form 1 so missing fields can be filled later.
+    """
+    review = review_for_user(request, pk)
+    version = services.latest_version(review)
+    payload = form1.build(review)
+    if request.GET.get("format") == "json":
+        return JsonResponse(payload)
+    return render(
+        request,
+        "review/form1.html",
+        {
+            "review": review,
+            "form1": _form1_edit_state(payload),
+            "version": version,
+            "form1_place_types": Form1.PlaceType.choices,
+        },
+    )
+
+
+@login_required
+def output(request, pk: int):
+    review = review_for_user(request, pk)
+    wanted = request.GET.get("version", "")
+    if wanted:
+        version = (
+            review.versions.filter(version_no=wanted).first()
+            if wanted.isdigit()
+            else None
+        )
+        if version is None:
+            messages.error(request, f"Version {wanted} does not exist")
+            return redirect("history", pk=review.pk)
+    else:
+        version = services.latest_version(review)
+    if version is None:
+        messages.error(request, "Nothing has been submitted yet")
+        return redirect("workspace", pk=review.pk)
+    if request.GET.get("format") == "json":
+        return JsonResponse(version.payload_json)
+
+    version_verified = (
+        not version.payload_hash
+        or _payload_digest(version.payload_json) == version.payload_hash
+    )
+    signable = (
+        review.status == Review.Status.APPROVED
+        and version.version_no == review.current_version
+        and version.kind
+        in (ReviewVersion.Kind.APPROVAL, ReviewVersion.Kind.AMENDMENT)
+        and version_verified
+    )
     return render(
         request,
         "review/output.html",
         {
             "review": review,
             "version": version,
-            "sections": sections,
-            "hidden_rows": hidden_rows,
-            "legacy_rows": legacy_rows,
-            "output_source_id": source_id,
+            "amendment": None,
+            "draft": False,
+            "version_verified": version_verified,
+            "signable": signable,
+            "print_doc": form4_print.build(version.payload_json) if signable else None,
             "categories": CATEGORIES,
-            "fields_payload": fields,
+            "provenance_sections": _provenance_sections(
+                version.payload_json, review
+            ),
+            "provenance_meta": _provenance_meta(version.payload_json),
+            **_output_data(version.payload_json, review),
+        },
+    )
+
+
+@login_required
+def amendment_output(request, pk: int, amendment_pk: int):
+    review = review_for_user(request, pk)
+    amendment = get_object_or_404(Amendment, pk=amendment_pk, review=review)
+    if amendment.status == Amendment.Status.APPROVED:
+        return redirect("output", pk=review.pk)
+    if amendment.status not in (
+        Amendment.Status.DRAFT,
+        Amendment.Status.PROPOSED,
+        Amendment.Status.RETURNED,
+    ):
+        messages.error(request, "This amendment is not available")
+        return redirect("workspace", pk=review.pk)
+
+    if amendment.status == Amendment.Status.PROPOSED:
+        payload = amendment.payload_json
+    else:
+        payload = services.canonical_payload(review, amendment=amendment)
+    if request.GET.get("format") == "json":
+        return JsonResponse(payload)
+    return render(
+        request,
+        "review/output.html",
+        {
+            "review": review,
+            "version": None,
+            "amendment": amendment,
+            "draft": True,
+            "signable": False,
+            "print_doc": None,
+            "categories": CATEGORIES,
+            "provenance_sections": _provenance_sections(payload, review),
+            "provenance_meta": _provenance_meta(payload),
+            **_output_data(payload, review),
         },
     )

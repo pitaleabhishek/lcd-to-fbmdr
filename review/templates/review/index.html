@@ -9,10 +9,11 @@
 </div>
 
 <table>
-  <thead><tr><th>Patient</th><th>Source</th><th>FBMDR No.</th><th>Status</th><th>Version</th><th></th></tr></thead>
+  <thead><tr><th>Case</th><th>Patient</th><th>Source</th><th>FBMDR No.</th><th>Status</th><th>Version</th><th></th></tr></thead>
   <tbody>
   {% for r in reviews %}
     <tr>
+      <td>{% if r.case_label %}<b>{{ r.case_label }}</b>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td><b>{{ r.pregnancy.patient.name }}</b><div class="muted">{{ r.reporting_facility.name }}</div></td>
       <td>
         {% if r.source_document %}
@@ -22,15 +23,24 @@
         {% endif %}
       </td>
       <td>{{ r.fbmdr_no|default:"—" }}</td>
-      <td>{{ r.get_status_display }}</td>
+      <td>
+        {{ r.get_status_display }}
+        {% if r.open_amendment %}
+          <div class="count">amendment {{ r.open_amendment.get_status_display }}</div>
+        {% endif %}
+      </td>
       <td>{{ r.current_version }}</td>
       <td>
         <a href="{% url 'workspace' r.pk %}">Open review</a>
+        · <a href="{% url 'form1_output' r.pk %}">Form 1</a>
+        {% if r.open_amendment %}
+          · <a href="{% url 'amendment_workspace' r.pk r.open_amendment.pk %}">Open amendment</a>
+        {% endif %}
         {% if r.current_version %} · <a href="{% url 'output' r.pk %}">Output</a>{% endif %}
       </td>
     </tr>
   {% empty %}
-    <tr><td colspan="6" class="muted">No reviews yet. <a href="{% url 'new_review' %}">Start one</a>.</td></tr>
+    <tr><td colspan="7" class="muted">No reviews yet. <a href="{% url 'new_review' %}">Start one</a>.</td></tr>
   {% endfor %}
   </tbody>
 </table>

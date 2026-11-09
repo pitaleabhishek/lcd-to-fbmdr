@@ -1,0 +1,105 @@
+<h2>{{ field.label_printed }}</h2>
+<p class="muted small">
+  <span class="key">{{ field.key }}</span> · {{ source_label }}
+  {% if frozen %}· provenance {{ provenance_version }}{% else %}· not frozen in this version{% endif %}
+</p>
+
+<p class="field-value">
+  <b>{{ display }}</b>
+  <span class="chip {{ mark }}">{{ mark }}</span>
+</p>
+
+<div class="prov-meta">
+  {% if provenance.changed %}
+    <b>Changed in this amendment.</b>
+  {% elif provenance.carried %}
+    <b>Carried from the base version.</b> This value was not changed by the amendment.
+  {% endif %}
+  {% if provenance.state == "not_applicable" %}
+    <b>Not applicable.</b>
+  {% endif %}
+  {% if provenance.decision.by %}
+    Decided by <b>{{ provenance.decision.by }}</b>
+    {% if provenance.decision.at %}at {{ provenance.decision.at }}{% endif %}.
+  {% endif %}
+  {% if provenance.decision.reason %}
+    <div class="why">Reason: {{ provenance.decision.reason }}</div>
+  {% endif %}
+</div>
+
+<h3>Where it came from</h3>
+{% if provenance.inputs %}
+  <table class="provenance">
+    <thead><tr><th>Source</th><th>Value</th><th>Times / author</th></tr></thead>
+    <tbody>
+    {% for inp in provenance.inputs %}
+      <tr>
+        <td>{{ inp.label }}{% if inp.ref %}<div class="key">{{ inp.ref }}</div>{% endif %}</td>
+        <td><b>{{ inp.value }}</b></td>
+        <td>
+          {% if inp.observed_at %}observed {{ inp.observed_at }}{% endif %}
+          {% if inp.documented_at %}<div class="key">documented {{ inp.documented_at }}</div>{% endif %}
+          {% if inp.author %}<div>{{ inp.author }}</div>{% endif %}
+          {% if inp.entered_by and inp.entered_by != inp.author %}
+            <div class="key">entered by {{ inp.entered_by }}</div>
+          {% endif %}
+          {% if inp.late %}<span class="warn">late entry</span>
+          {% elif inp.late_uncertain %}<span class="warn">late entry uncertain</span>{% endif %}
+          {% if inp.url %}
+            <div><a class="see-source" href="{{ inp.url }}" data-url="{{ inp.url }}">see source</a></div>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% elif provenance.entry %}
+  <p>
+    Entered by <b>{{ provenance.entry.by|default:"—" }}</b>
+    {% if provenance.entry.at %}at {{ provenance.entry.at }}{% endif %}.
+    {% if provenance.entry.reason %}<span class="why">{{ provenance.entry.reason }}</span>{% endif %}
+  </p>
+  <p class="muted small">There is no source document for a manually entered answer.</p>
+{% elif provenance.state == "not_applicable" %}
+  <p>
+    Not applicable.
+    {% if provenance.decision.reason %}{{ provenance.decision.reason }}{% endif %}
+  </p>
+{% elif provenance.note %}
+  <p class="muted">{{ provenance.note }}</p>
+{% else %}
+  <p class="muted">No source recorded.</p>
+{% endif %}
+
+{% if provenance.rule %}
+  <p class="muted small">
+    Rule <b>{{ provenance.rule }}@{{ provenance.rule_version }}</b>
+    {% if provenance.calculation %}· calculated as {{ provenance.calculation }}{% endif %}
+  </p>
+{% endif %}
+{% if provenance.reconstructed %}
+  <p class="warn small">This provenance was reconstructed from the proposal record; it was not frozen in this version.</p>
+{% endif %}
+
+<h3>History for this field</h3>
+<table>
+  <thead><tr><th style="width:18%">When</th><th style="width:18%">Who</th><th style="width:20%">What</th><th>Detail</th></tr></thead>
+  <tbody>
+  {% for e in events %}
+    <tr>
+      <td>{{ e.at|date:"d M H:i" }}</td>
+      <td>{{ e.actor.username|default:"—" }}</td>
+      <td>
+        {{ e.action }}
+        {% if e.entity_type == "AmendmentItem" %}<span class="count">amendment</span>{% endif %}
+      </td>
+      <td>{{ e.detail|default:"—" }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4" class="muted">No changes recorded for this field yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="small">
+  <a href="{% url 'history' review.pk %}?field={{ field.key }}">Open the full history for this field</a>
+</p>

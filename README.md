@@ -1,112 +1,274 @@
-# MDR Reuse
+# LCD to FBMDR
 
-Reuse labour documentation (WHO Labour Care Guide) in a Facility-Based Maternal
-Death Review (Form 4), with provenance: nothing re-keyed, nothing claimed that
-was not recorded.
+This app reuses labour data from the WHO Labour Care Guide (LCG) in a
+Facility-Based Maternal Death Review (Form 4). Each value keeps its source. The
+user does not type the same data again.
 
-Agent handoff: [`AGENTS.md`](AGENTS.md). Design: [`docs/design.md`](docs/design.md).
-To-do: [`TODO.md`](TODO.md).
-Dependencies: [`docs/dependencies.md`](docs/dependencies.md). Evidence map:
-[`docs/evidence-map.md`](docs/evidence-map.md). UI principles:
-[`docs/ui.md`](docs/ui.md). LCG storage model:
-[`docs/lcg-storage.md`](docs/lcg-storage.md). Generated overlap inventory:
-[`docs/inventory.md`](docs/inventory.md). Form 4 source text used for
-reconciliation: [`docs/form4-source.txt`](docs/form4-source.txt).
+Hosted demo: `https://lcdtofbmdr.nirovia.in`
 
-## Run
+The hosted demo has two gates:
 
-Everything runs in Docker. Memory is capped at 160 MB for Postgres and 224 MB
-for the app; measured idle footprint is ~140 MB total.
-
-```sh
-docker compose up -d --build
-docker compose exec web python manage.py migrate
-docker compose exec web python manage.py seed_case_0   # complete normal labour
-docker compose exec web python manage.py seed_case_a   # death review
-```
-
-Open http://127.0.0.1:8000
+1. HTTP Basic auth. Use the deployment credentials.
+2. App login:
 
 | User | Password | Role |
 |---|---|---|
 | `resident` | `resident123` | author |
 | `fno` | `fno123` | approver |
 
-Reset the demo (TRUNCATE bypasses the append-only row triggers):
+## Demo walkthrough: approve, amend, approve again
+
+Use the **Happy case**: patient **Meena R. Deshmukh**. Open the review by patient
+name. The review ID can change after a reset.
+
+### 1. Log in as the resident
+
+Open the app and log in:
+
+```text
+resident / resident123
+```
+
+### 2. Open the Happy case
+
+Open the review for **Meena R. Deshmukh**.
+
+This case is a clean LCG and a complete draft:
+
+- 100% resolved
+- no required gaps
+- no check issues
+- source values, derived values and entered values all present
+
+### 3. Run the checks
+
+At the bottom, click **Check before submitting**.
+
+Expected result:
+
+```text
+No problems found — ready to submit.
+```
+
+This case is clean. To see the error and warning rules, use Cases A to D.
+
+### 4. Submit
+
+Add a note for the FNO, for example:
+
+```text
+Times checked against the labour record. Ready for review.
+```
+
+Click **Submit for review**.
+
+The review status changes to **Submitted**. A frozen version is created.
+
+### 5. Return it as the FNO
+
+Sign out and log in:
+
+```text
+fno / fno123
+```
+
+Open the same review.
+
+Add one field comment. For example, open the comment box on **10. Case summary**
+and write:
+
+```text
+Add one sentence about the baby's condition at birth.
+```
+
+Add an overall comment, then click **Return**.
+
+The review status changes to **Returned**.
+
+### 6. Fix it as the resident
+
+Sign out and log in as `resident`.
+
+Open the review. The returned field is marked. Edit the case summary and add the
+missing sentence.
+
+Click **Submit for review** again.
+
+### 7. Approve it as the FNO
+
+Sign out and log in as `fno`.
+
+Open the review and click **Approve**.
+
+The review status changes to **Approved**. Form 4 is now locked.
+
+Open **Approved version** to see the frozen output and provenance appendix.
+
+### 8. Start an amendment
+
+Log in as `resident`.
+
+Open the approved review. Click **Propose amendment**.
+
+Enter a reason, for example:
+
+```text
+Committee correction: clarify the summary.
+```
+
+Click **Create draft amendment**.
+
+Edit the case summary. The changed field is highlighted and shows the approved
+value and the draft value.
+
+Click **Submit amendment for approval**.
+
+### 9. Approve the amendment
+
+Log in as `fno`.
+
+Open the amendment and click **Approve amendment**.
+
+This creates a new approved version. The previous version stays in history. The
+output now shows the amendment and its reason.
+
+## What this walkthrough demonstrates
+
+- conditional Form 4
+- evidence and provenance beside each value
+- pre-submission checks
+- submit, return with comments, fix and resubmit
+- approval and lock
+- amendment with a reason
+- second approval and version history
+
+## Run locally
+
+You need Docker. Then run one command:
 
 ```sh
-docker compose exec web python manage.py flush --no-input
-docker compose exec web python manage.py seed_case_0
-docker compose exec web python manage.py seed_case_a
+./start.sh
 ```
+
+Windows PowerShell:
+
+```powershell
+.\start.ps1
+```
+
+The script starts Postgres, builds the app, runs migrations, seeds the demo cases
+and opens `http://127.0.0.1:8000`.
+
+Local setup has no Basic auth by default. To add it:
+
+```sh
+BASIC_AUTH_USER=demo BASIC_AUTH_PASSWORD='a long password' ./start.sh
+```
+
+See [`docs/setup.md`](docs/setup.md).
+
+## The four required cases
+
+The assignment needs four synthetic cases. All four are seeded.
+
+| Case | Patient | What it is for | Checks and conditions it exercises |
+|---|---|---|---|
+| A | **Sunita Devi** | Death after a charted labour. The LCG has a gap and a late entry. | Source reuse, derived intervals, late-entry warning, missing required answers, live-birth branch, delivery and postnatal fields |
+| B | **Anita K. Bhosale** | Caesarean after a first stage of charted labour. | First-stage caesarean, no second-stage observations, late-entry warning, mode and indication, delivery branch |
+| C | **Lata S. Pawar** | Death with no labour record, before delivery. | No-labour warning, undelivered branch, hidden delivery/neonatal/postnatal fields, N/A on non-applicable fields |
+| D | **Rekha S. Gawande** | Delivered at a PHC, referred in, then died. | Delivery-before-admission warning, `1.e` N/A, no-labour warning, referral table, parent N/A hides children, complete draft |
+
+All four required cases have draft reviews in a fresh demo database. Cases B and
+C start as blank drafts with proposals. Cases A and D also start as drafts.
+
+The review index labels rows as **Case A** to **Case D**, and **Happy case**.
+
+There is one extra fixture:
+
+| Fixture | Patient | Purpose |
+|---|---|---|
+| Happy case | **Meena R. Deshmukh** | Clean LCG and complete draft. Used for the full approve/amend demo |
+
+The `seed_case_0` command still exists for LCG chart tests. It is not part of the
+demo setup.
+
+## Checks and conditions: what is implemented
+
+Checks run only on **Check before submitting** or **Submit**. Errors block.
+Warnings need one **Submit anyway** confirmation.
+
+Checks cover:
+
+- missing required fields, follow-ups and specification fields
+- impossible dates, negative values, zero units and exclusive answers
+- inconsistent outcome, delivery, neonatal and postnatal answers
+- admission, delivery and death order
+- date-only, estimated and late entries
+- interval, ICU and transfusion consistency
+- retained answers in hidden questions
+- source corrections and multiple current records
+- no labour record and empty case summary
+
+Conditions cover:
+
+- abortion section only when the outcome is abortion
+- delivery section only for live birth, still birth, undelivered or ectopic
+- ANC follow-ups for facility, provider, counselling and risk factors
+- referral places and referral table
+- delivery, anaesthesia, partograph, complication and neonatal branches
+- post-birth interval only when phase is `post_birth`
+- neonatal cause only when the baby died
+- parent N/A hides child fields
+- hidden answers are kept but not printed
+- FNO comments force a hidden field back into view
+
+Full rules:
+
+- [`docs/checks.md`](docs/checks.md)
+- [`docs/conditions.md`](docs/conditions.md)
+
+## Project documents
+
+- Setup: [`docs/setup.md`](docs/setup.md)
+- Design: [`docs/design.md`](docs/design.md)
+- Database audit: [`docs/db-audit.md`](docs/db-audit.md)
+- Amendments: [`docs/amendments.md`](docs/amendments.md)
+- Form 1: [`docs/form1.md`](docs/form1.md)
+- LCG storage: [`docs/lcg-storage.md`](docs/lcg-storage.md)
+- Overlap analysis: [`docs/overlap.md`](docs/overlap.md)
+- Security: [`docs/security.md`](docs/security.md)
+- DPDP: [`docs/dpdp.md`](docs/dpdp.md)
+- Dependencies: [`docs/dependencies.md`](docs/dependencies.md)
+- Evidence map: [`docs/evidence-map.md`](docs/evidence-map.md)
+- UI rules: [`docs/ui.md`](docs/ui.md)
+- Agent handoff: [`AGENTS.md`](AGENTS.md)
+- Task list: [`TODO.md`](TODO.md)
 
 ## Tests
 
 ```sh
 uv run pytest
+uv run pytest -n 0     # one process for debugging
 ```
 
-(or `docker compose exec web python -m pytest` once dev dependencies are in the
-image; the compose image is built without them).
-
-## The LCG as data
-
-The guide itself is registered: **7 sections, 34 variables**, in printed order, with
-type, unit and the ALERT rule for each (`review/registry_lcg.py`). Observations
-reference a variable — never a free-text kind — so a typo fails at insert time.
-
-Read a chart like the paper form:
-
-```sh
-docker compose exec db psql -U mdr -d mdr \
-  -c "select section, variable, cells from lcg_chart where patient = 'Meena Kulkarni' order by section_ord, row_ord;"
-```
-
-Three views render the chart:
-
-- `lcg_chart` — one row per variable, cells across time in IST.
-- `lcg_cells` — one row per cell with a computed column number and stage.
-- `lcg_header` — Section 1 expanded from `SourceDocument.header_json`.
-
-Every observation carries `stage` (`first` / `second`) on the row itself, alongside
-`variable`, `observed_at`, `author` and the three timestamps. Case 0 has 54
-second-stage cells (23:00 and 23:15); case A is entirely first stage.
-
-**Value rules are enforced in Postgres.** A trigger rejects an observation whose
-enum value is not on the printed chart, whose number falls outside the row's
-range, whose unit does not match, or whose stage is not first/second.
-`Observation.clean()` mirrors it for friendly form errors. Clinical thresholds
-(what counts as an alert) stay in application code, because they change with the
-guideline; what the form permits does not.
-
-```sh
-docker compose exec db psql -U mdr -d mdr \
-  -c "select col, chart_time, stage, count(*) from lcg_cells where patient='Meena Kulkarni' group by 1,2,3 order by 1;"
-```
-
-## Regenerate the inventory
-
-```sh
-docker compose exec web python manage.py build_inventory
-```
-
-Writes `docs/inventory.csv` and `docs/inventory.md`. The inventory is an output
-of the registry, never hand-maintained.
+The suite has **261 passing tests**.
 
 ## Current state
 
-Read [`AGENTS.md`](AGENTS.md) for the full agent handoff, current behavior and
-remaining work. Read [`TODO.md`](TODO.md) for the authoritative task list.
-
-- Form 4: 14 sections, **99 fields**, three block schemas.
+- Form 4: 14 sections, 99 fields, 3 block schemas.
 - LCG: 7 sections, 34 variables, Postgres-validated observations.
-- Cases 0 and A seeded; review creation works with or without a labour record.
-- Proposals, provenance drawer, derived calculations, accept/reject/correct.
-- Conditional Form 4 (`c2`), corrections with supersession and history.
-- Pre-submission checks (`k3`), including Not known and N/A distinctions.
-- Submit → return with per-field comments → resubmit → approve; frozen versions.
-- HTML/JSON output from a version.
+- All four required synthetic cases are seeded.
+- Proposals, provenance and derived values.
+- Accept, reject and correct.
+- Conditional Form 4.
+- Pre-submission checks.
+- Submit, return, resubmit and approve.
+- Amendments with a second approval.
+- Form 1 from the same review.
+- Printable Form 4 and frozen HTML/JSON output.
+- One-command local setup.
+- Optional HTTP Basic auth for the hosted demo.
 
-Not yet complete: amendments, output provenance appendix, missing-observation
-marker, security hardening/scoping, overlap write-up and demo script. See
-`TODO.md` and `AGENTS.md`; do not treat the limitations as solved.
+Not complete: FNO facility scoping, MFA and login throttling, full access logs,
+live-volume encryption, `verify-full` certificate checks, scheduled off-host
+backups, breach tooling, retention and the demo script.

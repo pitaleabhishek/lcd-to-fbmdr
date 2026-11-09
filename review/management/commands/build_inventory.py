@@ -86,10 +86,12 @@ class Command(BaseCommand):
         lcg_n = by_src.get("lcg", 0)
         pct = (100.0 * lcg_n / len(rows)) if rows else 0.0
         md = ["# Form 4 overlap inventory", "",
-              f"{len(rows)} fields generated from the registry. "
-              f"Categories per Dr Atter (4 November 2026). Relationship is derived from rules.", "",
-              f"**Direct reuse from the LCG: {lcg_n} of {len(rows)} fields ({pct:.1f}%).** "
-              "Everything else is entered by the clinician or copied from another recorded fact.", ""]
+              f"This file lists all {len(rows)} fields from the registry. "
+              "The categories follow Dr Atter (4 November 2026). "
+              "The app derives each relationship from the rules.", "",
+              f"**Direct LCG reuse: {lcg_n} of {len(rows)} fields ({pct:.1f}%).** "
+              "The clinician enters each other value, or the app copies it from "
+              "another recorded fact.", ""]
         md.append("## By category")
         md.append("")
         md.append("| Category | Fields |")

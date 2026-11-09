@@ -83,6 +83,45 @@ def test_block_rows_are_validated(case_a, django_user_model):
     )
 
 
+def test_factor_questions_render_as_one_click_radios(client, case_a):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert 'class="radio-group' in page
+    assert 'type="radio" name="value" value="not_known"' in page
+
+
+def test_small_enums_use_radios_and_large_enums_use_selects(client, case_a):
+    from django.contrib.auth.models import User
+
+    client.force_login(User.objects.get(username="resident"))
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+
+    def row(slug):
+        start = page.index(f'id="f-{slug}"')
+        return page[start:start + 2200]
+
+    assert 'class="radio-group' in row("referred")
+    assert "<select name=\"value\"" not in row("referred")
+    assert "<select name=\"value\"" in row("gestation")
+
+
+def test_remaining_highlight_is_available_on_a_submitted_review(
+    client, case_a, django_user_model
+):
+    resident = django_user_model.objects.get(username="resident")
+    services.set_answer(case_a, "f4.primary_diagnosis.dx", "PPH", resident)
+    services.set_answer(case_a, "f4.cause_of_death.a_antecedent", "PPH", resident)
+    services.submit(case_a, resident)
+
+    client.force_login(resident)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+    assert 'id="toggle-remaining"' in page
+    assert 'id="remaining-nav"' not in page
+    assert "Show remaining" in page
+
+
 def test_required_fields_gate_submission(case_a, django_user_model):
     user = django_user_model.objects.get(username="resident")
     with pytest.raises(ValidationError):
@@ -132,30 +171,6 @@ def test_last_saved_is_stamped(case_a, django_user_model):
     case_a.refresh_from_db()
     assert case_a.last_saved_at is not None
     assert before is None or case_a.last_saved_at >= before
-
-
-def test_revert_restores_the_previous_value(case_a, django_user_model):
-    user = django_user_model.objects.get(username="resident")
-    key = "f4.primary_diagnosis.dx"
-
-    services.set_answer(case_a, key, "First", user)
-    services.set_answer(case_a, key, "Second", user)
-
-    services.revert_last(case_a, key, user)
-    item = case_a.items.get(field_key=key)
-    assert item.value_json == "First"
-    assert item.answer_state == ReviewItem.AnswerState.ANSWERED
-
-    # revert is single-step, not a stack: a second revert restores the same value
-    services.revert_last(case_a, key, user)
-    item.refresh_from_db()
-    assert item.value_json == "First"
-
-
-def test_revert_on_an_untouched_field_fails(case_a, django_user_model):
-    user = django_user_model.objects.get(username="resident")
-    with pytest.raises(ValidationError):
-        services.revert_last(case_a, "f4.primary_diagnosis.dx", user)
 
 
 def test_workspace_renders(client, case_a, django_user_model):

@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Union
 
+from . import scope
 from .models import Review, ReviewItem
 from .registry import registry
 
@@ -304,16 +305,17 @@ def describe(condition: Condition) -> str:
     return ""
 
 
-def answers_for(review: Review) -> dict:
+def answers_for(review: Review, amendment=None) -> dict:
     """Values the conditions may read: answered, applicable items only.
 
     An open proposal is not an answer. The clinician must accept it before it
-    can change the shape of the form.
+    can change the shape of the form. An amendment is read from its staged
+    answer set, never from the live review.
     """
 
     return {
         item.field_key: item.value_json
-        for item in review.items.all()
+        for item in scope.items(review, amendment)
         if item.answer_state == ReviewItem.AnswerState.ANSWERED
         and item.applicability_state == ReviewItem.Applicability.APPLICABLE
         and item.value_json is not None
@@ -351,7 +353,10 @@ def failure(condition: Condition, answers: dict) -> str:
     return describe(condition)
 
 
-def _field_visibility(key: str, answers: dict, cache: dict) -> Visibility:
+def _field_visibility(
+    key: str, answers: dict, cache: dict, na_keys: set[str] | None = None
+) -> Visibility:
+    na_keys = na_keys or set()
     if key in cache:
         return cache[key]
 
@@ -377,7 +382,11 @@ def _field_visibility(key: str, answers: dict, cache: dict) -> Visibility:
 
     parent = PARENT.get(key)
     if parent:
-        parent_vis = _field_visibility(parent, answers, cache)
+        if parent in na_keys:
+            result = Visibility(False, f"{_label(parent)} is not applicable")
+            cache[key] = result
+            return result
+        parent_vis = _field_visibility(parent, answers, cache, na_keys)
         if not parent_vis.applies:
             cache[key] = parent_vis
             return parent_vis
@@ -387,11 +396,20 @@ def _field_visibility(key: str, answers: dict, cache: dict) -> Visibility:
     return result
 
 
-def visibility(review: Review) -> dict[str, Visibility]:
-    """Live visibility for a draft or returned review."""
-    answers = answers_for(review)
+def visibility(review: Review, amendment=None) -> dict[str, Visibility]:
+    """Live visibility for a draft, returned review, or open amendment."""
+    answers = answers_for(review, amendment=amendment)
+    items = scope.item_map(review, amendment)
+    na_keys = {
+        key
+        for key, item in items.items()
+        if item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE
+    }
     cache: dict[str, Visibility] = {}
-    return {field.key: _field_visibility(field.key, answers, cache) for field in registry.all()}
+    return {
+        field.key: _field_visibility(field.key, answers, cache, na_keys)
+        for field in registry.all()
+    }
 
 
 def frozen_visibility(payload: dict) -> dict[str, Visibility]:
@@ -413,8 +431,14 @@ def frozen_visibility(payload: dict) -> dict[str, Visibility]:
     return out
 
 
-def visibility_for(review: Review) -> dict[str, Visibility]:
-    """Frozen for a submitted or approved review, live while it can still change."""
+def visibility_for(review: Review, amendment=None) -> dict[str, Visibility]:
+    """Frozen for an official review, live for an open amendment.
+
+    A draft amendment is deliberately live: changing a controller answer must
+    reshape the form. The approved version stays frozen and is used by output.
+    """
+    if amendment is not None:
+        return visibility(review, amendment=amendment)
     if review.status in (
         Review.Status.SUBMITTED,
         Review.Status.APPROVED,

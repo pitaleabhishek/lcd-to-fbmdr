@@ -1,138 +1,67 @@
 # UI design
 
-The interface exists for one person: a resident at 4 a.m., post-call, on a phone,
-who has just come out of a failed resuscitation and still has other patients. The
-FNO uses the same screens in daylight, at a desk, deciding whether to approve.
-
-Everything below follows from those two users.
 
 ## What the app holds
 
-The LCG is the only ingested document. Admission, delivery, death and neonatal
-events are facts recorded in the app at the point of care, each with its own author
-and time — not documents that arrive later. This is why a review can show values
-that the LCG never contained, and why that is not a second source.
+The LCG is the only document that the app reads in. Admission, delivery, death and
+neonatal events are facts. Staff record them in the app at the point of care. Each
+fact has an author and a time. They are not documents that arrive later. This is
+why a review can show values that the LCG does not contain. Those values are not a
+second source.
 
 ## Principles
 
-1. **Status before detail.** The first thing on screen is what is reused, what is
-   missing, and what does not apply. Detail is one tap away.
-2. **Constrain, don't warn.** If a value is not on the form, it cannot be entered.
-   Validation is a `select`, not a message after the fact.
-3. **One primary action per screen.** Submit on the workspace. Approve or return
-   on the FNO screen. Nothing else competes.
-4. **Never lose work.** Autosave, visible state, resumable after interruption.
-5. **Evidence beside the decision.** A proposal or an alert is shown next to the
-   field it affects, with its source, not in a separate report.
-6. **History on demand.** Who changed what, when, is one expander away — not a tab
-   the resident has to remember to open.
+1. **Show status before detail.** The first view shows what is reused, what is
+   missing and what does not apply. Detail is one tap away.
+2. **Limit input. Do not warn after the fact.** If a value is not on the form, the
+   user cannot enter it. Use a `select`, not a free text box and a later message.
+3. **One main action per screen.** The workspace has Submit. The FNO screen has
+   Approve or Return. No other action competes.
+4. **Do not lose work.** Autosave. Show the state. Let the user resume.
+5. **Show evidence beside the decision.** Show a proposal or alert next to the
+   field. Include the source. Do not put it in a separate report.
+6. **Show history on demand.** The user can open who changed what and when. The
+   resident does not need to remember a separate tab.
 
-## Standards we follow
+## Standards
 
-| Standard | What we take | What we don't |
-|---|---|---|
-| **WCAG 2.2 AA** | contrast, target size, focus, labels, error text, no colour-only meaning | formal audit or certification |
-| **GOV.UK / NHS.UK patterns** | task list, check-your-answers, error summary, one thing per page | their visual style |
-| **IEC 62366-1** | task analysis and error-prone scenarios written down | claiming device compliance |
-| **CDS "five rights"** | evidence at the point of decision, at the right time | any automated clinical advice |
-| **Alert-fatigue guidance** | three tiers, no modal for clinical data | alert tuning or ML |
+| Standard | What the app uses |
+|---|---|
+| WCAG 2.2 AA | Contrast, target size, focus, labels, error text, no colour-only meaning |
+| GOV.UK and NHS.UK patterns | Task list, check your answers, error summary, one thing per page |
+| IEC 62366-1 | Task analysis and error-prone scenarios |
+| CDS five rights | Evidence at the point of decision, at the right time |
+| Alert-fatigue guidance | Three tiers. No modal for clinical data |
 
-We are **not** claiming clinical validation. That needs summative usability testing
-with real clinicians, which is outside a seven-day build. It is stated here and in
-the limitations note.
 
-## Three message tiers
+## Message tiers
 
 | Tier | Use | Example | Behaviour |
 |---|---|---|---|
-| **Blocking** | the form forbids it, or a required field is empty | `mode = "vaginal"` | inline, red, stops submit |
-| **Warning** | valid but needs attention | source changed since this was accepted | amber, does not stop submit |
-| **Info** | context for a judgement | "systolic 150 at 22:30 crossed ≥140" | grey, sits beside the field |
+| Blocking | The form forbids it, or a required field is empty | `mode = "vaginal"` | Inline, red, stops submit |
+| Warning | Valid but needs attention | The source changed after acceptance | Amber, does not stop submit |
+| Info | Context for a judgement | “Systolic 150 at 22:30 crossed 140” | Grey, beside the field |
 
-No modals for any of the three. A modal at 4 a.m. is dismissed reflexively.
+The app uses no modal for these tiers. A modal at 4 a.m. gets dismissed by reflex.
 
-## Error prevention, mapped to the data model
+## Interaction
 
-| Rule | Where it lives | UI effect |
-|---|---|---|
-| enum values come from the printed form | `form4_field.options` + trigger | a `select`, never a text box |
-| block rows have fixed columns | `block_schema` | fixed table, no free-form rows |
-| unknown field keys are rejected | trigger | impossible from the UI |
-| N/A needs a reason | `ReviewItem.reason` | the N/A action asks for one |
-| required fields gate submission | `missing_required()` | submit disabled, list of what is missing |
-| no self-approval | service | approve hidden for the author |
-| locked after approval | services + status | editing controls disappear |
-
-## Screens
-
-**Labour record** — read-only. Section 1 header, then sections 2–7 as rows of
-variables against time columns. First/second stage banded. Missing observations are
-visibly missing. A cell expands to author, observed / documented / entered times,
-and a late-entry flag. This is "what he already filled".
-
-**Review workspace** — the main screen.
-
-- Header: patient, facility, status, **resolved / total**, "to enter", last saved,
-  deadline, one primary action. Resolved counts answers plus not-applicable, so the
-  bar can actually reach 100%.
-- Left: the 14 sections with counts and badges for *needs review* and *gap*.
-- Rows: printed label, current answer with a source chip (`R` reused, `D` derived,
-  `E` entered, `C` corrected), proposals with their inputs, accept / reject / edit,
-  N/A with reason, required marker.
-- Provenance drawer per row: source entry, times, author, rule and version.
-
-**Submission check** — what is missing, what is not applicable, what still needs
-reconsideration. Plain language, one line each, with a jump link.
-
-**Output** — the printed Form 4 in sections, every value marked, provenance
-appendix. Printable.
-
-**Activity** — review history from `AuditEvent`: who accepted, rejected, corrected,
-submitted, returned, approved, when.
-
-## History and provenance
-
-Two separate things:
-
-- **Record history**: the labour timeline — who wrote what, when, and whether it
-  was documented after death.
-- **Review history**: per-field change log and the decision trail.
-
-Every proposal shows its inputs with the time, the author, a late-entry flag, and a
-**see source** link. The link opens the exact place the value came from: for an LCG
-value, the whole time column with that cell highlighted, so a reading is read next
-to its neighbours; for a fact, the record row (admission, delivery, death).
-
-Provenance in the full sense — several documents for one pregnancy, supersession,
-conflicting sources — is out of scope. What we show is the source entry, its time
-and its author, which is what the brief asks for.
-
-## Interaction rules
-
-- Autosave on change; visible *saving / saved / error*; explicit Save fallback.
-- The header shows **last saved** ("saved 4 minutes ago"), because a resident who
-  was interrupted needs to know their work survived.
-- Every edited field offers **revert last change**, read from the audit trail. It is
-  single-step, not an undo stack: one click restores the value that was there
-  before the last edit. Restoring an accepted proposal is the same mechanism.
-- Submit waits for in-flight saves and sends `edit_revision`; stale tabs get a
-  recoverable message, never a silent overwrite.
-- Keyboard-first: tab order follows the form, Enter saves, no traps.
-- Touch targets ≥44 px; body text ≥16 px; one column on a phone.
-- No animation beyond a state change; `prefers-reduced-motion` respected.
+- Autosave on change. Show *saving*, *saved* or *error*. Keep a Save option.
+- The header shows **last saved**, for example “saved 4 minutes ago”. A resident
+  who was interrupted needs to know the work survived.
+- Submit waits for saves in progress and sends `edit_revision`. A stale tab gets a
+  recoverable message. It never overwrites without a warning.
+- Keyboard first. Tab order follows the form. Enter saves. No traps.
+- Touch targets are at least 44 px. Body text is at least 16 px. Use one column on
+  a phone.
+- No animation except a state change. Respect `prefers-reduced-motion`.
 
 ## Technology
 
-- Django templates, server-rendered; POST/redirect for actions.
-- HTMX for four things: autosave, provenance drawer, section counts, inline
+- Django templates and server rendering. Actions use POST and redirect.
+- HTMX for four tasks: autosave, provenance drawer, section counts and inline
   accept/reject. Nothing else.
-- One small hand-written stylesheet. No Tailwind build, no component library, no
-  SPA. Forms are the product.
-- No charting. The LCG chart is deliberately not rendered; the assignment defers
-  LCG charting.
-
-## Deliberately not built
-
-Dark mode, animations, dashboards, sparklines, a mobile app shell, custom fonts,
-illustrations. None of them help a tired resident enter a value correctly, and each
-one costs time that belongs to the blocks and the workflow.
+- One small stylesheet. No Tailwind build, no component library and no SPA. Forms
+  are the product.
+- No charting. The app does not render the LCG chart. The assignment defers LCG
+  charting.

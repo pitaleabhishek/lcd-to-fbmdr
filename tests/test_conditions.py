@@ -151,6 +151,19 @@ def test_partographs_need_labour_and_a_past_facility(case_a, resident):
     assert vis(case_a)["f4.delivery.partograph_past"].applies
 
 
+def test_child_of_a_not_applicable_parent_is_hidden(case_a, resident):
+    services.set_applicability(
+        case_a,
+        "f4.delivery.phase",
+        ReviewItem.Applicability.NOT_APPLICABLE,
+        resident,
+        "no labour",
+    )
+    seen = vis(case_a)
+    assert not seen["f4.delivery.post_birth_complication_time"].applies
+    assert "not applicable" in seen["f4.delivery.post_birth_complication_time"].reason
+
+
 def test_post_birth_timing_is_independent_of_the_baby(case_a, resident):
     answer(case_a, "f4.timing.g", "live_birth", resident)
     answer(case_a, "f4.delivery.phase", "post_birth", resident)
