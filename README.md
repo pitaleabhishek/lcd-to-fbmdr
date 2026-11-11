@@ -181,6 +181,14 @@ The assignment needs four synthetic cases. All four are seeded.
 All four required cases have draft reviews in a fresh demo database. Cases B and
 C start as blank drafts with proposals. Cases A and D also start as drafts.
 
+In the hosted demo:
+
+- **Case B** is fully filled and shows the late-entry warning.
+- **Case D** is fully filled and shows the delivery-before-admission and
+  no-labour-record warnings.
+- **Happy case** is fully filled with no checks.
+- **Cases A and C** remain proposal drafts.
+
 The review index labels rows as **Case A** to **Case D**, and **Happy case**.
 
 There is one extra fixture:
