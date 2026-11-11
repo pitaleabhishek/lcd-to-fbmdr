@@ -31,7 +31,8 @@ resident / resident123
 
 ### 2. Open the Happy case
 
-Open the review for **Meena R. Deshmukh**.
+Open the review for **Meena R. Deshmukh**. The resident lands on **Clinical
+review**, not the full 99-field form.
 
 This case is a clean LCG and a complete draft:
 
@@ -40,17 +41,15 @@ This case is a clean LCG and a complete draft:
 - no check issues
 - source values, derived values and entered values all present
 
-### 3. Run the checks
+### 3. Review the short form
 
-At the bottom, click **Check before submitting**.
+The page shows:
 
-Expected result:
+- a read-only **From the record** summary
+- 11 clinical fields: diagnosis, cause of death, autopsy, summary and sign-off
+- a **Full Form 4** link for the complete 99-field record
 
-```text
-No problems found — ready to submit.
-```
-
-This case is clean. To see the error and warning rules, use Cases A to D.
+There is no history or provenance on this page. Those stay in the full record.
 
 ### 4. Submit
 
@@ -60,9 +59,13 @@ Add a note for the FNO, for example:
 Times checked against the labour record. Ready for review.
 ```
 
-Click **Submit for review**.
+Click **Submit review**.
+
+Checks run at submit. This case is clean, so it submits directly.
 
 The review status changes to **Submitted**. A frozen version is created.
+
+For the full 99-field record, click **Full Form 4**.
 
 ### 5. Return it as the FNO
 
@@ -72,7 +75,7 @@ Sign out and log in:
 fno / fno123
 ```
 
-Open the same review.
+Open the same review. The FNO uses the full form.
 
 Add one field comment. For example, open the comment box on **10. Case summary**
 and write:
@@ -89,10 +92,12 @@ The review status changes to **Returned**.
 
 Sign out and log in as `resident`.
 
-Open the review. The returned field is marked. Edit the case summary and add the
-missing sentence.
+Open the review. The return comment appears on the Clinical review page, and
+the field comment is shown beside the relevant question.
 
-Click **Submit for review** again.
+Edit the case summary and add the missing sentence.
+
+Click **Submit review** again.
 
 ### 7. Approve it as the FNO
 
@@ -270,7 +275,7 @@ uv run pytest
 uv run pytest -n 0     # one process for debugging
 ```
 
-The suite has **261 passing tests**.
+The suite has **264 passing tests**.
 
 ## Current state
 
@@ -281,6 +286,7 @@ The suite has **261 passing tests**.
 - Accept, reject and correct.
 - Conditional Form 4.
 - Pre-submission checks.
+- Quick clinical review: 11 judgement and sign-off fields plus exceptions. No history or provenance on the clinician page.
 - Submit, return, resubmit and approve.
 - Amendments with a second approval.
 - Form 1 from the same review.

@@ -15,6 +15,7 @@ urlpatterns = [
     ),
     path("source/<str:kind>/<int:pk>/", views.source, name="source"),
     path("review/new/", views.new_review, name="new_review"),
+    path("review/<int:pk>/quick/", views.quick_review, name="quick_review"),
     path("review/<int:pk>/", views.workspace, name="workspace"),
     path(
         "review/<int:pk>/amend/<int:amendment_pk>/",

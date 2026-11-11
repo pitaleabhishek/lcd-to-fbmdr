@@ -1,0 +1,183 @@
+{% extends "review/base.html" %}
+{% block title %}Clinical review — {{ review.pregnancy.patient.name }}{% endblock %}
+{% block content %}
+
+<div class="review-head">
+  <div>
+    <h1>Clinical review</h1>
+    <div class="muted small">
+      {{ summary.patient.name }} · {{ summary.patient.age }} ·
+      {{ summary.outcome }}
+    </div>
+  </div>
+  <div>
+    <a class="head-link" href="{% url 'workspace' review.pk %}">Full Form 4</a>
+  </div>
+</div>
+
+<p class="muted small">
+  Most of this review comes from the labour and hospital records. Only the
+  clinical decisions and exceptions are below.
+</p>
+
+{% if open_return %}
+  <div class="returnbar resident-note">
+    <div class="rb-main">
+      <div class="rb-head">
+        <b>Returned by {{ open_return.by.username }}</b>
+        <span class="muted">· {{ open_return.at|date:"d M H:i" }}</span>
+      </div>
+      {% if open_return.overall_comment %}
+        <div class="rb-overall">“{{ open_return.overall_comment }}”</div>
+      {% endif %}
+      <div class="muted small">
+        Field comments are shown beside the relevant question.
+        <a href="{% url 'workspace' review.pk %}">Open Full Form 4</a> for all comments.
+      </div>
+    </div>
+  </div>
+{% endif %}
+
+<section class="form-section">
+  <h2>From the record</h2>
+  <table class="fields">
+    <tbody>
+      <tr>
+        <td>Admission</td>
+        <td>
+          {{ summary.admitted_at|default:"Not recorded" }}
+          {% if summary.admission %}· {{ summary.admission.facility.name }}{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Outcome</td>
+        <td>{{ summary.outcome }}</td>
+      </tr>
+      <tr>
+        <td>Delivery</td>
+        <td>
+          {{ summary.mode }}
+          {% if summary.delivered_at %}· {{ summary.delivered_at }}{% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Baby</td>
+        <td>{{ summary.baby_outcome }}</td>
+      </tr>
+      <tr>
+        <td>Death</td>
+        <td>{{ summary.died_at|default:"Not recorded" }}</td>
+      </tr>
+      <tr>
+        <td>Labour record</td>
+        <td>
+          {% if summary.source %}
+            <a href="{% url 'labour' summary.source.pk %}">View labour record</a>
+          {% else %}
+            No labour record linked
+          {% endif %}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+{% if open_proposals or needs %}
+  <div class="statebox">
+    <b>This review still has items for the full form.</b>
+    {% if open_proposals %}
+      <div class="muted small">
+        {{ open_proposals }} proposed value{{ open_proposals|pluralize }} not yet accepted or rejected.
+      </div>
+    {% endif %}
+    {% if needs %}
+      <div class="muted small">
+        {{ needs|length }} answer{{ needs|length|pluralize }} changed after its evidence was accepted.
+      </div>
+    {% endif %}
+    <p><a class="button" href="{% url 'workspace' review.pk %}">Open Full Form 4</a></p>
+  </div>
+{% endif %}
+
+{% if check_errors %}
+  <div class="statebox">
+    <b class="warn">{{ check_errors|length }} item{{ check_errors|length|pluralize }} need attention.</b>
+    <ul class="comment-list">
+      {% for issue in check_errors %}
+        <li>{{ issue.message }}{% if issue.fix %} <span class="muted">{{ issue.fix }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+{% if check_warnings %}
+  <div class="statebox">
+    <b>{{ check_warnings|length }} warning{{ check_warnings|length|pluralize }}.</b>
+    <ul class="comment-list">
+      {% for issue in check_warnings %}
+        <li>{{ issue.message }}{% if issue.fix %} <span class="muted">{{ issue.fix }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+<section class="form-section">
+  <h2>What needs your decision</h2>
+  <form method="post" action="{% url 'quick_review' review.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="submit_quick">
+    <table class="fields">
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>
+            <div class="label">{{ row.field.label_printed }}</div>
+            {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
+            {% if row.comment %}<div class="check-msg warning">{{ row.comment }}</div>{% endif %}
+          </td>
+          <td>
+            {% if not can_submit %}
+              <div class="value">{{ row.display }}</div>
+            {% elif row.type == "enum" %}
+              <div class="radio-group">
+                {% for option in row.options %}
+                  <label class="radio-pill">
+                    <input type="radio" name="{{ row.key }}" value="{{ option.value }}"
+                           {% if row.current == option.value %}checked{% endif %}>
+                    {{ option.label }}
+                  </label>
+                {% endfor %}
+              </div>
+            {% elif row.type == "date" %}
+              <input type="date" name="{{ row.key }}" value="{{ row.current }}">
+            {% elif row.textarea %}
+              <textarea name="{{ row.key }}" rows="4" class="val auto">{{ row.current }}</textarea>
+            {% else %}
+              <input type="text" name="{{ row.key }}" value="{{ row.current }}" class="val">
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+
+    {% if can_submit %}
+      <div class="form-section">
+        <h2>Note for the FNO <span class="count">not printed</span></h2>
+        <textarea name="note" rows="2" class="auto"
+                  placeholder="Anything the reviewer should know. Not printed on Form 4.">{{ note }}</textarea>
+      </div>
+      <div class="bar">
+        {% if check_warnings %}
+          <input type="hidden" name="confirm" value="yes">
+          <button class="primary">Submit anyway</button>
+        {% else %}
+          <button class="primary">Submit review</button>
+        {% endif %}
+        <span class="muted small">Checks run when you submit.</span>
+      </div>
+    {% endif %}
+  </form>
+</section>
+
+{% endblock %}

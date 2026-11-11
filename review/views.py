@@ -153,6 +153,165 @@ CASE_LABELS = {
 }
 
 
+QUICK_KEYS = (
+    "f4.primary_diagnosis.dx",
+    "f4.cause_of_death.a_antecedent",
+    "f4.cause_of_death.b_antecedent",
+    "f4.cause_of_death.c_antecedent",
+    "f4.autopsy.performed",
+    "f4.summary.text",
+    "f4.summary.mo_name",
+    "f4.summary.fno_name",
+    "f4.summary.designation",
+    "f4.summary.institution_address",
+    "f4.summary.signed_on",
+)
+
+
+def _quick_summary(review: Review) -> dict:
+    pregnancy = review.pregnancy
+    patient = pregnancy.patient
+    admission = (
+        review.reporting_admission
+        or pregnancy.admissions.order_by("-admitted_at").first()
+    )
+    death = current_death(pregnancy, review.reporting_admission)
+    delivery = current_delivery(pregnancy)
+    baby = (
+        delivery.neonates.order_by("-assessed_at").first()
+        if delivery is not None
+        else None
+    )
+    return {
+        "patient": patient,
+        "admission": admission,
+        "death": death,
+        "delivery": delivery,
+        "baby": baby,
+        "admitted_at": _fmt_when(admission.admitted_at) if admission else "",
+        "died_at": _fmt_when(death.died_at) if death else "",
+        "delivered_at": _fmt_when(delivery.delivered_at) if delivery else "",
+        "outcome": pregnancy.get_outcome_display() if pregnancy.outcome else "Not recorded",
+        "mode": (
+            field_display(registry["f4.delivery.mode"], delivery.mode)
+            if delivery is not None and delivery.mode
+            else "Not recorded"
+        ),
+        "baby_outcome": (
+            field_display(
+                registry["f4.delivery.neonatal_outcome"], baby.outcome
+            )
+            if baby is not None
+            else "Not recorded"
+        ),
+        "source": review.source_document,
+    }
+
+
+def _quick_rows(review: Review, comments: dict | None = None) -> list[dict]:
+    comments = comments or {}
+    items = scope.item_map(review)
+    visibility = conditions.visibility(review)
+    rows = []
+    for key in QUICK_KEYS:
+        field = registry[key]
+        if not visibility[key].applies:
+            continue
+        item = items.get(key)
+        rows.append(
+            {
+                "field": field,
+                "key": key,
+                "current": _current(item, field),
+                "display": field_display(field, item.value_json) if item else "—",
+                "options": [
+                    {"value": option, "label": field.label_for(option)}
+                    for option in field.options
+                ],
+                "type": field.type,
+                "textarea": key in ("f4.summary.text",),
+                "comment": comments.get(key, ""),
+            }
+        )
+    return rows
+
+
+@login_required
+def quick_review(request, pk: int):
+    review = review_for_user(request, pk)
+    can_author = request.user.pk in {
+        review.created_by_id,
+        review.assigned_to_id,
+    } - {None}
+    open_proposals = review.proposals.filter(
+        status=Proposal.Status.PROPOSED
+    ).count()
+    needs = [
+        item
+        for item in scope.item_map(review).values()
+        if item.needs_reconsideration
+        and item.answer_state == ReviewItem.AnswerState.ANSWERED
+    ]
+    can_submit = (
+        can_author
+        and review.status in (Review.Status.DRAFT, Review.Status.RETURNED)
+        and open_proposals == 0
+        and not needs
+    )
+
+    open_return = services.latest_return(review, open_only=True)
+    note = request.POST.get("note", "") if request.method == "POST" else ""
+    issues = []
+    if request.method == "POST" and request.POST.get("action") == "submit_quick":
+        if not can_submit:
+            messages.error(request, "This review needs the full form.")
+            return redirect("quick_review", pk=review.pk)
+
+        for key in QUICK_KEYS:
+            if key not in request.POST:
+                continue
+            field = registry[key]
+            raw = (request.POST.get(key) or "").strip()
+            if raw == "":
+                if scope.get_item(review, key) is not None:
+                    services.clear_answer(review, key, request.user)
+                continue
+            value = _coerce(field, raw)
+            services.set_answer(review, key, value, request.user)
+
+        issues = checks.run_checks(review)
+        errors = [issue for issue in issues if issue.severity == checks.ERROR]
+        warnings = [issue for issue in issues if issue.severity == checks.WARNING]
+        if not errors and (not warnings or request.POST.get("confirm") == "yes"):
+            try:
+                services.submit(review, request.user, note)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, "Submitted for review")
+                return redirect("index")
+
+    return render(
+        request,
+        "review/quick.html",
+        {
+            "review": review,
+            "summary": _quick_summary(review),
+            "rows": _quick_rows(
+                review, open_return.comments if open_return else None
+            ),
+            "can_submit": can_submit,
+            "open_proposals": open_proposals,
+            "needs": needs,
+            "issues": issues,
+            "check_errors": [i for i in issues if i.severity == checks.ERROR],
+            "check_warnings": [i for i in issues if i.severity == checks.WARNING],
+            "note": note,
+            "open_return": open_return,
+        },
+    )
+
+
 @login_required
 def index(request):
     reviews = (

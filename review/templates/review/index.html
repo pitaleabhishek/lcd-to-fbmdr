@@ -31,7 +31,12 @@
       </td>
       <td>{{ r.current_version }}</td>
       <td>
-        <a href="{% url 'workspace' r.pk %}">Open review</a>
+        {% if is_fno %}
+          <a href="{% url 'workspace' r.pk %}">Open review</a>
+        {% else %}
+          <a href="{% url 'quick_review' r.pk %}">Open review</a>
+          · <a href="{% url 'workspace' r.pk %}">Full Form 4</a>
+        {% endif %}
         · <a href="{% url 'form1_output' r.pk %}">Form 1</a>
         {% if r.open_amendment %}
           · <a href="{% url 'amendment_workspace' r.pk r.open_amendment.pk %}">Open amendment</a>
