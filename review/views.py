@@ -250,8 +250,13 @@ def _quick_summary(review: Review) -> dict:
     }
 
 
-def _quick_rows(review: Review, comments: dict | None = None) -> list[dict]:
+def _quick_rows(
+    review: Review,
+    comments: dict | None = None,
+    defaults: dict | None = None,
+) -> list[dict]:
     comments = comments or {}
+    defaults = defaults or {}
     items = scope.item_map(review)
     visibility = conditions.visibility(review)
     rows = []
@@ -260,11 +265,14 @@ def _quick_rows(review: Review, comments: dict | None = None) -> list[dict]:
         if not visibility[key].applies:
             continue
         item = items.get(key)
+        current = _current(item, field)
+        if not current:
+            current = defaults.get(key, "")
         rows.append(
             {
                 "field": field,
                 "key": key,
-                "current": _current(item, field),
+                "current": current,
                 "current_list": (
                     item.value_json
                     if item and isinstance(item.value_json, list)
@@ -352,6 +360,21 @@ def quick_review(request, pk: int):
                 messages.success(request, "Submitted for review")
                 return redirect("index")
 
+    facility = review.reporting_facility
+    designation = (
+        "District Health Officer"
+        if request.user.groups.filter(name="FNO").exists()
+        else "Medical Officer"
+    )
+    defaults = {
+        "f4.summary.mo_name": request.user.get_full_name()
+        or request.user.get_username(),
+        "f4.summary.fno_name": facility.nodal_name,
+        "f4.summary.designation": designation,
+        "f4.summary.institution_address": facility.address or facility.name,
+        "f4.summary.signed_on": timezone.localdate().isoformat(),
+    }
+
     factor_rows = []
     for key in FACTOR_KEYS:
         item = scope.get_item(review, key)
@@ -373,7 +396,9 @@ def quick_review(request, pk: int):
             "review": review,
             "summary": _quick_summary(review),
             "rows": _quick_rows(
-                review, open_return.comments if open_return else None
+                review,
+                open_return.comments if open_return else None,
+                defaults,
             ),
             "can_submit": can_submit,
             "open_proposals": open_proposals,

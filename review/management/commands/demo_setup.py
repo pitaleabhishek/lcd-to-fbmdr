@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
@@ -30,6 +31,15 @@ class Command(BaseCommand):
             ):
                 self.stdout.write(f"Seeding {name}...")
                 call_command(name, verbosity=0)
+
+        for username, first_name, last_name in (
+            ("resident", "Dr A.", "Rane"),
+            ("fno", "Dr R.", "Kulkarni"),
+        ):
+            user, _ = User.objects.get_or_create(username=username)
+            user.first_name = first_name
+            user.last_name = last_name
+            user.save(update_fields=["first_name", "last_name"])
 
         self.stdout.write(
             self.style.SUCCESS(
