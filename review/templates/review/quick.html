@@ -44,20 +44,16 @@
   <table class="fields">
     <tbody>
       <tr>
-        <td>UHID / inpatient</td>
-        <td>{{ summary.uhid|default:"Not recorded" }}</td>
+        <td>Patient</td>
+        <td>
+          <b>{{ summary.patient.name }}</b> · {{ summary.patient.age }}
+          · {{ summary.uhid|default:"No UHID" }}
+          · {{ summary.phone|default:"No phone" }}
+        </td>
       </tr>
       <tr>
-        <td>Obstetric history</td>
-        <td>{{ summary.gpla|default:"Not recorded" }}</td>
-      </tr>
-      <tr>
-        <td>Gestation</td>
-        <td>{{ summary.gestation }}</td>
-      </tr>
-      <tr>
-        <td>Phone</td>
-        <td>{{ summary.phone|default:"Not recorded" }}</td>
+        <td>Obstetric</td>
+        <td>{{ summary.gpla|default:"Not recorded" }} · {{ summary.gestation }}</td>
       </tr>
       <tr>
         <td>Admission</td>
@@ -68,18 +64,12 @@
       </tr>
       <tr>
         <td>Outcome</td>
-        <td>{{ summary.outcome }}</td>
-      </tr>
-      <tr>
-        <td>Delivery</td>
         <td>
-          {{ summary.mode }}
+          {{ summary.outcome }}
+          · {{ summary.mode }}
           {% if summary.delivered_at %}· {{ summary.delivered_at }}{% endif %}
+          · Baby {{ summary.baby_outcome|lower }}
         </td>
-      </tr>
-      <tr>
-        <td>Baby</td>
-        <td>{{ summary.baby_outcome }}</td>
       </tr>
       <tr>
         <td>Death</td>

@@ -46,7 +46,9 @@ This case is a clean LCG and a complete draft:
 The page shows:
 
 - a read-only **From the record** summary
-- 11 clinical fields: diagnosis, cause of death, autopsy, summary and sign-off
+- clinical fields: diagnosis, cause of death, autopsy, summary and sign-off
+- a collapsible contributing-factors checklist
+- only the conditional fields that apply, such as autopsy diagnosis or neonatal cause
 - a **Full Form 4** link for the complete 99-field record
 
 There is no history or provenance on this page. Those stay in the full record.
@@ -286,7 +288,7 @@ The suite has **264 passing tests**.
 - Accept, reject and correct.
 - Conditional Form 4.
 - Pre-submission checks.
-- Quick clinical review: 11 judgement and sign-off fields plus exceptions. No history or provenance on the clinician page.
+- Quick clinical review: judgement and sign-off fields, a contributing-factors checklist, conditional fields and exceptions. No history or provenance on the clinician page.
 - Submit, return, resubmit and approve.
 - Amendments with a second approval.
 - Form 1 from the same review.
