@@ -53,7 +53,7 @@ Write-Host "Starting the app..."
 docker compose up -d web
 
 Write-Host ""
-Write-Host "LCD to FBMDR is running."
+Write-Host "LCG to FBMDR is running."
 Write-Host "  URL:      http://127.0.0.1:8000"
 Write-Host "  Resident: resident / resident123"
 Write-Host "  FNO:      fno / fno123"

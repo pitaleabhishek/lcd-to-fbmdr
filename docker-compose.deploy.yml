@@ -23,8 +23,8 @@ services:
       DEBUG: "0"
       SECURE: "0"
       TRUST_PROXY: "1"
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-lcdtofbmdr.nirovia.in,lcgtomsrd.nirovia.in,127.0.0.1,localhost}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-https://lcdtofbmdr.nirovia.in,https://lcgtomsrd.nirovia.in}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-lcdtofbmdr.nirovia.in,lcgtofbmdr.nirovia.in,lcgtomsrd.nirovia.in,127.0.0.1,localhost}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-https://lcdtofbmdr.nirovia.in,https://lcgtofbmdr.nirovia.in,https://lcgtomsrd.nirovia.in}
       BASIC_AUTH_USER: ${BASIC_AUTH_USER:?set BASIC_AUTH_USER}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:?set BASIC_AUTH_PASSWORD}
     networks:

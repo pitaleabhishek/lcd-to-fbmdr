@@ -1,6 +1,7 @@
 {% extends "review/base.html" %}
 {% block title %}Clinical review — {{ review.pregnancy.patient.name }}{% endblock %}
 {% block content %}
+<div class="quick-page">
 
 <div class="review-head">
   <div>
@@ -42,6 +43,22 @@
   <h2>From the record</h2>
   <table class="fields">
     <tbody>
+      <tr>
+        <td>UHID / inpatient</td>
+        <td>{{ summary.uhid|default:"Not recorded" }}</td>
+      </tr>
+      <tr>
+        <td>Obstetric history</td>
+        <td>{{ summary.gpla|default:"Not recorded" }}</td>
+      </tr>
+      <tr>
+        <td>Gestation</td>
+        <td>{{ summary.gestation }}</td>
+      </tr>
+      <tr>
+        <td>Phone</td>
+        <td>{{ summary.phone|default:"Not recorded" }}</td>
+      </tr>
       <tr>
         <td>Admission</td>
         <td>
@@ -148,6 +165,16 @@
                   </label>
                 {% endfor %}
               </div>
+            {% elif row.type == "multi" %}
+              <div class="multi-list">
+                {% for option in row.options %}
+                  <label>
+                    <input type="checkbox" name="{{ row.key }}" value="{{ option.value }}"
+                           {% if option.value in row.current_list %}checked{% endif %}>
+                    {{ option.label }}
+                  </label>
+                {% endfor %}
+              </div>
             {% elif row.type == "date" %}
               <input type="date" name="{{ row.key }}" value="{{ row.current }}">
             {% elif row.textarea %}
@@ -162,6 +189,25 @@
     </table>
 
     {% if can_submit %}
+      <details class="form-section">
+        <summary>
+          Contributing factors
+          <span class="count">
+            {% if factor_selected %}{{ factor_selected }} selected{% else %}none identified{% endif %}
+          </span>
+        </summary>
+        <div class="factor-grid">
+          {% for factor in factor_rows %}
+            <label>
+              <input type="checkbox" name="factor" value="{{ factor.key }}"
+                     {% if factor.current == "yes" %}checked{% endif %}>
+              {{ factor.label }}
+            </label>
+          {% endfor %}
+        </div>
+        <p class="muted small">Leave all unchecked to record “No factors identified”.</p>
+      </details>
+
       <div class="form-section">
         <h2>Note for the FNO <span class="count">not printed</span></h2>
         <textarea name="note" rows="2" class="auto"
@@ -180,4 +226,5 @@
   </form>
 </section>
 
+</div>
 {% endblock %}

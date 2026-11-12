@@ -91,6 +91,9 @@ class Command(BaseCommand):
             header_json={
                 "name": patient.name,
                 "parity": 1,
+                "gravida": 2,
+                "living_children": 1,
+                "abortions": 0,
                 "labour_onset": "spontaneous",
                 "active_labour_dx": dt(12, 18, 30).isoformat(),
                 "risk_factors": "none",

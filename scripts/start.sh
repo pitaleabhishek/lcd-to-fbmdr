@@ -55,7 +55,7 @@ $compose up -d web
 
 cat <<EOF
 
-LCD to FBMDR is running.
+LCG to FBMDR is running.
 
   URL:      http://127.0.0.1:8000
   Resident: resident / resident123

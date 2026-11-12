@@ -153,12 +153,25 @@ CASE_LABELS = {
 }
 
 
+FACTOR_KEYS = tuple(
+    field.key for field in registry.all() if field.key.startswith("f4.factors.")
+)
+
 QUICK_KEYS = (
     "f4.primary_diagnosis.dx",
     "f4.cause_of_death.a_antecedent",
     "f4.cause_of_death.b_antecedent",
     "f4.cause_of_death.c_antecedent",
     "f4.autopsy.performed",
+    "f4.autopsy.diagnosis",
+    "f4.delivery.mode_indication",
+    "f4.delivery.complications",
+    "f4.delivery.complications_other",
+    "f4.delivery.neonatal_cause",
+    "f4.delivery.neonatal_cause_other",
+    "f4.delivery.postnatal_cause",
+    "f4.delivery.postnatal_cause_medical",
+    "f4.delivery.postnatal_cause_other",
     "f4.summary.text",
     "f4.summary.mo_name",
     "f4.summary.fno_name",
@@ -171,6 +184,29 @@ QUICK_KEYS = (
 def _quick_summary(review: Review) -> dict:
     pregnancy = review.pregnancy
     patient = pregnancy.patient
+    items = scope.item_map(review)
+
+    def answered(key, fallback=None):
+        item = items.get(key)
+        if item and item.answer_state == ReviewItem.AnswerState.ANSWERED:
+            return item.value_json
+        return fallback
+
+    header = (
+        review.source_document.header_json
+        if review.source_document is not None
+        else {}
+    )
+    gpla = []
+    for label, key, header_key in (
+        ("G", "f4.admission.gravida", "gravida"),
+        ("P", "f4.admission.para", "parity"),
+        ("L", "f4.admission.living_children", "living_children"),
+        ("A", "f4.admission.abortions", "abortions"),
+    ):
+        value = answered(key, header.get(header_key))
+        if value not in (None, ""):
+            gpla.append(f"{label}{value}")
     admission = (
         review.reporting_admission
         or pregnancy.admissions.order_by("-admitted_at").first()
@@ -191,16 +227,22 @@ def _quick_summary(review: Review) -> dict:
         "admitted_at": _fmt_when(admission.admitted_at) if admission else "",
         "died_at": _fmt_when(death.died_at) if death else "",
         "delivered_at": _fmt_when(delivery.delivered_at) if delivery else "",
+        "uhid": admission.uin if admission else "",
+        "gpla": " ".join(gpla),
+        "gestation": (
+            f"{pregnancy.gestation_weeks} weeks"
+            if pregnancy.gestation_weeks
+            else "Not recorded"
+        ),
+        "phone": patient.phone,
         "outcome": pregnancy.get_outcome_display() if pregnancy.outcome else "Not recorded",
         "mode": (
-            field_display(registry["f4.delivery.mode"], delivery.mode)
+            str(delivery.mode).replace("_", " ").capitalize()
             if delivery is not None and delivery.mode
             else "Not recorded"
         ),
         "baby_outcome": (
-            field_display(
-                registry["f4.delivery.neonatal_outcome"], baby.outcome
-            )
+            str(baby.outcome).replace("_", " ").capitalize()
             if baby is not None
             else "Not recorded"
         ),
@@ -223,6 +265,11 @@ def _quick_rows(review: Review, comments: dict | None = None) -> list[dict]:
                 "field": field,
                 "key": key,
                 "current": _current(item, field),
+                "current_list": (
+                    item.value_json
+                    if item and isinstance(item.value_json, list)
+                    else []
+                ),
                 "display": field_display(field, item.value_json) if item else "—",
                 "options": [
                     {"value": option, "label": field.label_for(option)}
@@ -271,12 +318,26 @@ def quick_review(request, pk: int):
             if key not in request.POST:
                 continue
             field = registry[key]
+            if field.type == "multi":
+                values = [
+                    value for value in request.POST.getlist(key) if value
+                ]
+                if values:
+                    services.set_answer(review, key, values, request.user)
+                elif scope.get_item(review, key) is not None:
+                    services.clear_answer(review, key, request.user)
+                continue
             raw = (request.POST.get(key) or "").strip()
             if raw == "":
                 if scope.get_item(review, key) is not None:
                     services.clear_answer(review, key, request.user)
                 continue
             value = _coerce(field, raw)
+            services.set_answer(review, key, value, request.user)
+
+        chosen_factors = set(request.POST.getlist("factor"))
+        for key in FACTOR_KEYS:
+            value = "yes" if key in chosen_factors else "no"
             services.set_answer(review, key, value, request.user)
 
         issues = checks.run_checks(review)
@@ -290,6 +351,20 @@ def quick_review(request, pk: int):
             else:
                 messages.success(request, "Submitted for review")
                 return redirect("index")
+
+    factor_rows = []
+    for key in FACTOR_KEYS:
+        item = scope.get_item(review, key)
+        factor_rows.append(
+            {
+                "key": key,
+                "label": registry[key].label_printed,
+                "current": item.value_json if item else "",
+            }
+        )
+    factor_selected = sum(
+        1 for row in factor_rows if row["current"] == "yes"
+    )
 
     return render(
         request,
@@ -308,6 +383,8 @@ def quick_review(request, pk: int):
             "check_warnings": [i for i in issues if i.severity == checks.WARNING],
             "note": note,
             "open_return": open_return,
+            "factor_rows": factor_rows,
+            "factor_selected": factor_selected,
         },
     )
 
@@ -1720,7 +1797,10 @@ EXAMPLES = {
 
 
 def _fmt_when(value):
-    dt = _parse_dt(value) if isinstance(value, str) else None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = _parse_dt(value) if isinstance(value, str) else None
     if dt is None:
         return ""
     if timezone.is_aware(dt):

@@ -1,4 +1,4 @@
-# LCD to FBMDR: technical design
+# LCG to FBMDR: technical design
 
 This prototype reuses labour documentation in Form 4. It keeps the source of each
 value.

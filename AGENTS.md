@@ -1,4 +1,4 @@
-# Agent handoff — LCD to FBMDR
+# Agent handoff — LCG to FBMDR
 
 Read this file first. It describes the current repository. It is not the original
 seven-day plan. `TODO.md` is the task list. `docs/design.md` is the architecture

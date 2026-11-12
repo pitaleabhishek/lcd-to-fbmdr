@@ -1,10 +1,10 @@
-# LCD to FBMDR
+# LCG to FBMDR
 
 This app reuses labour data from the WHO Labour Care Guide (LCG) in a
 Facility-Based Maternal Death Review (Form 4). Each value keeps its source. The
 user does not type the same data again.
 
-Hosted demo: `https://lcdtofbmdr.nirovia.in`
+Hosted demo: `https://lcgtofbmdr.nirovia.in`
 
 The hosted demo has two gates:
 

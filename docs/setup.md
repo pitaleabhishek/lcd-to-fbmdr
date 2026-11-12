@@ -102,15 +102,15 @@ Set both variables or neither. The app will not start with only one.
 The planned host name is:
 
 ```text
-https://lcdtofbmdr.nirovia.in
+https://lcgtofbmdr.nirovia.in
 ```
 
 The zone uses Cloudflare named tunnels. Do not add a public A record or a
 Transform Rule. Create a separate tunnel:
 
 ```sh
-cloudflared tunnel create lcdtofbmdr
-cloudflared tunnel route dns --overwrite-dns lcdtofbmdr lcdtofbmdr.nirovia.in
+cloudflared tunnel create lcgtofbmdr
+cloudflared tunnel route dns --overwrite-dns lcgtofbmdr lcgtofbmdr.nirovia.in
 ```
 
 Use a separate config. Do not reuse another tunnel or its credentials:
@@ -120,7 +120,7 @@ tunnel: <tunnel-id>
 credentials-file: /etc/cloudflared/<tunnel-id>.json
 
 ingress:
-  - hostname: lcdtofbmdr.nirovia.in
+  - hostname: lcgtofbmdr.nirovia.in
     service: http://127.0.0.1:8800
   - service: http_status:404
 ```
@@ -130,8 +130,8 @@ Run the tunnel as its own service. The app listens on `127.0.0.1:8800`. Set the
 
 ```text
 SECRET_KEY=a long random value
-ALLOWED_HOSTS=lcdtofbmdr.nirovia.in
-CSRF_TRUSTED_ORIGINS=https://lcdtofbmdr.nirovia.in
+ALLOWED_HOSTS=lcgtofbmdr.nirovia.in
+CSRF_TRUSTED_ORIGINS=https://lcgtofbmdr.nirovia.in
 BASIC_AUTH_USER=demo
 BASIC_AUTH_PASSWORD=a long password
 ```

@@ -35,6 +35,6 @@ class BasicAuthMiddleware:
 
         response = HttpResponse("Authentication required.", status=401)
         response["WWW-Authenticate"] = (
-            f'Basic realm="{getattr(settings, "BASIC_AUTH_REALM", "LCD to FBMDR")}"'
+            f'Basic realm="{getattr(settings, "BASIC_AUTH_REALM", "LCG to FBMDR")}"'
         )
         return response

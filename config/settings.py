@@ -12,7 +12,7 @@ if SECURE_MODE and SECRET_KEY == "dev-only-not-secret":
 
 BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "")
 BASIC_AUTH_PASSWORD = os.environ.get("BASIC_AUTH_PASSWORD", "")
-BASIC_AUTH_REALM = os.environ.get("BASIC_AUTH_REALM", "LCD to FBMDR")
+BASIC_AUTH_REALM = os.environ.get("BASIC_AUTH_REALM", "LCG to FBMDR")
 if bool(BASIC_AUTH_USER) != bool(BASIC_AUTH_PASSWORD):
     raise ImproperlyConfigured(
         "Set both BASIC_AUTH_USER and BASIC_AUTH_PASSWORD, or neither."

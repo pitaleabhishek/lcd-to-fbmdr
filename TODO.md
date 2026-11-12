@@ -103,7 +103,7 @@ LCG variables.
 ## Deliverables
 
 - [x] Overlap document (`docs/overlap.md`).
-- [x] Hosted demo at `https://lcdtofbmdr.nirovia.in` through a separate named Cloudflare tunnel.
+- [x] Hosted demo at `https://lcgtofbmdr.nirovia.in` through a separate named Cloudflare tunnel.
 - [ ] Demo script.
 - [ ] Final security and limitations note.
 
