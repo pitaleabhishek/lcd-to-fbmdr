@@ -28,6 +28,9 @@ def test_quick_review_is_the_short_clinician_form(client, happy):
     assert "Primary diagnosis" in page
     assert "Case summary" in page
     assert "Submit review" in page
+    assert '<details class="form-section">' in page
+    assert '<textarea name="f4.cause_of_death.a_antecedent"' in page
+    assert "You are signed in as" in page
     assert "History" not in page
     assert 'class="prov-link"' not in page
 

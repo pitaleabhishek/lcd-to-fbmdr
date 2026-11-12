@@ -284,7 +284,17 @@ def _quick_rows(
                     for option in field.options
                 ],
                 "type": field.type,
-                "textarea": key in ("f4.summary.text",),
+                "textarea": key in (
+                    "f4.primary_diagnosis.dx",
+                    "f4.cause_of_death.a_antecedent",
+                    "f4.cause_of_death.b_antecedent",
+                    "f4.cause_of_death.c_antecedent",
+                    "f4.autopsy.diagnosis",
+                    "f4.delivery.mode_indication",
+                    "f4.summary.text",
+                    "f4.summary.institution_address",
+                ),
+                "rows": 4 if key == "f4.summary.text" else 1,
                 "comment": comments.get(key, ""),
             }
         )

@@ -39,8 +39,8 @@
   </div>
 {% endif %}
 
-<section class="form-section">
-  <h2>From the record</h2>
+<details class="form-section">
+  <summary>From the record <span class="count">6 values</span></summary>
   <table class="fields">
     <tbody>
       <tr>
@@ -87,7 +87,7 @@
       </tr>
     </tbody>
   </table>
-</section>
+</details>
 
 {% if open_proposals or needs %}
   <div class="statebox">
@@ -168,7 +168,7 @@
             {% elif row.type == "date" %}
               <input type="date" name="{{ row.key }}" value="{{ row.current }}">
             {% elif row.textarea %}
-              <textarea name="{{ row.key }}" rows="4" class="val auto">{{ row.current }}</textarea>
+              <textarea name="{{ row.key }}" rows="{{ row.rows }}" class="val auto">{{ row.current }}</textarea>
             {% else %}
               <input type="text" name="{{ row.key }}" value="{{ row.current }}" class="val">
             {% endif %}
@@ -180,8 +180,11 @@
 
     {% if can_submit %}
       <p class="muted small">
-        Sign-off details are prefilled from the facility and your account. Edit
-        them if needed. The signature itself stays on paper.
+        Sign-off details are prefilled from the facility and your account.
+        You are signed in as
+        <b>{{ user.get_full_name|default:user.username }}</b>.
+        Edit them if the signing MO is different. The signature itself stays on
+        paper.
       </p>
 
       <details class="form-section">
