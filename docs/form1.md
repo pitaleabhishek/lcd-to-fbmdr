@@ -14,35 +14,38 @@ The app reads these values from existing records:
 | Age | `Patient.age` |
 | MCTS ID | `Patient.mcts_no` |
 | Mobile number | `Patient.phone` |
+| State, block, village | `Form1.*`, else `Patient.state/block/village` |
+| Native place | `Form1.native_place`, else `Patient.native_place` |
+| Husband, father | `Form1.*`, else `Patient.husband_name/father_name` |
 | Current residence | `Form1.current_residence`, else `Patient.address` |
 | District | `Form1.district`, else `Facility.district` |
 | Date and time of death | `Death.died_at` |
 | Place of death detail | `Form1.place_detail`, else `Death.place` |
-| Place of death category | `Form1.place_type`. The place text is a hint only. |
+| Place of death category | `Form1.place_type`, else derived from `Death.place` |
 | Reporting person | `Form1.reported_by_name`, else the review author |
-| When death occurred | An explicit `Form1` answer. Recorded times are a hint only. |
+| When death occurred | Derived from the recorded times, except during delivery |
+
+A saved `Form1` value always wins over the patient record, so the reporting
+person can correct the registration data on Form 1 without changing the patient.
 
 ## Data entered once
 
-`Form1` has a one-to-one link to the review. It holds only fields that Form
-4 does not have:
+`Form1` has a one-to-one link to the review. It holds only fields that are not
+part of the patient, admission, death or delivery records:
 
-- state, block and village.
-- husband and father names.
-- native place.
-- structured place of death.
 - reporting person and designation.
 - date of report.
 - ANM name, sub-centre and verification date.
-- explicit answers for the four “when did death occur” flags.
+- confirmation of death during delivery.
+- overrides for any shared value.
 
 The author fills these in the **Form 1 details** panel in the review
 workspace. The panel shows while the review is a draft or returned. It also shows
 a count of fields that are not recorded.
 
-## Suggested time of death
+## Derived time of death
 
-The form gives hints. It does not record an answer for the clinician.
+The form fills the unambiguous classifications from the recorded times:
 
 - **During pregnancy**: the death is before delivery or outcome, or the outcome is
   “death undelivered”.
@@ -50,16 +53,16 @@ The form gives hints. It does not record an answer for the clinician.
   days later.
 - **During abortion or within 6 weeks after abortion**: the outcome is abortion or
   ectopic and the death is within 42 days of the outcome.
-- **During delivery**: the app does not infer this from a clock comparison. The
-  answer stays blank until the clinician confirms it.
+- **During delivery**: the app does not infer this from a clock comparison. It
+  stays a suggestion until the clinician confirms it.
 
-The app returns hints in a separate `suggested` map, not in `values`. The edit page
-shows them beside the control, for example “suggested: Yes”. The input stays
-blank until the user chooses.
+Filled values show **derived** beside the control and carry a source note. The
+input holds the derived value and can be overridden. Only **death during
+delivery** stays a suggestion (`suggested: Yes/No`).
 
-If the user prints before choosing, the print copy shows tick boxes: Yes, No and
-all place-of-death options. It does not print an invented answer. If a date is
-missing, the app gives no hint.
+If the user prints before choosing death during delivery, the print copy shows
+tick boxes for that row. Derived rows print their value. If a date is missing,
+the app derives nothing.
 
 ## Output and editability
 

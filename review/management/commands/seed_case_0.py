@@ -52,6 +52,9 @@ class Command(BaseCommand):
         )
         patient = Patient.objects.create(
             mcts_no="MH-2026-005512", name="Meena Kulkarni", age=24, address="Hinganghat",
+            state="Maharashtra", block="Hinganghat", village="Hinganghat",
+            native_place="Hinganghat", husband_name="Sandeep Kulkarni",
+            father_name="Mohan Kulkarni",
         )
         pregnancy = Pregnancy.objects.create(
             patient=patient, outcome=Pregnancy.Outcome.DELIVERY, outcome_at=dt(23, 20),

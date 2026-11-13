@@ -71,6 +71,9 @@ Last update: 13 November 2026. 280 tests pass. The app has 99 Form 4 fields and
 - [x] Clinical amendment page: the author gets the small clinical form on the
   staged amendment, with reason, changed fields and confirmation. `/quick/`
   redirects to it. The FNO keeps the full audit workspace.
+- [x] Form 1 auto-fill: registration fields live on the patient record, and the
+  unambiguous death-time and place classifications are derived. Not-recorded
+  fields drop from 16 to 6 per case.
 
 ## Essential, open
 

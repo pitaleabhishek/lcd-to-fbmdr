@@ -286,7 +286,9 @@ Done:
 - Provenance appendix (version 1).
 - Security basics.
 - Integrity, confidentiality and DPDP controls with a gap register.
-- Form 1 from the same review. Form 1 stays live. Form 4 stays frozen.
+- Form 1 from the same review. It auto-fills from the patient registration,
+  death and delivery records; only reporting/ANM details and death during
+  delivery need entry. Form 1 stays live. Form 4 stays frozen.
 - All four synthetic cases.
 
 Remaining:

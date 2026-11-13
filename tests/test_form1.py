@@ -39,28 +39,33 @@ def test_form1_derives_available_fields_and_place(client, case_a):
     assert values["mcts_no"] == "MH-2026-004177"
     assert values["district"] == "Wardha"
     assert values["current_residence"] == "Village Talegaon, Wardha"
-    # Suggested values are not answers: they stay out of ``values``.
-    assert values["place_type"] is None
-    assert data["suggested"]["place_type"] == Form1.PlaceType.HEALTH_FACILITY
+    # Unambiguous values are filled from the record.
+    assert values["place_type"] == Form1.PlaceType.HEALTH_FACILITY
     assert data["derived"]["place_type"] is True
-    assert values["death_within_42_days"] is None
-    assert data["suggested"]["death_within_42_days"] is True
-    assert values["death_during_pregnancy"] is None
-    assert data["suggested"]["death_during_pregnancy"] is False
+    assert data["suggested"]["place_type"] == Form1.PlaceType.HEALTH_FACILITY
+    assert values["death_within_42_days"] is True
+    assert values["death_during_pregnancy"] is False
+    assert values["death_after_abortion_6_weeks"] is False
+    # "During delivery" needs a human confirmation and stays a hint.
     assert values["death_during_delivery"] is None
     assert data["suggested"]["death_during_delivery"] is None
-    assert values["death_after_abortion_6_weeks"] is None
-    assert data["suggested"]["death_after_abortion_6_weeks"] is False
-    assert values["husband_name"] == ""
+    # Registration fields come from the patient record.
+    assert values["state"] == "Maharashtra"
+    assert values["block"] == "Wardha"
+    assert values["village"] == "Talegaon"
+    assert values["native_place"] == "Talegaon"
+    assert values["husband_name"] == "Raju Devi"
+    assert values["father_name"] == "Shankar Devi"
 
 
-def test_form1_suggestions_are_hints_not_prefilled_answers(client, case_a):
+def test_form1_derived_values_are_filled_and_delivery_stays_a_hint(client, case_a):
     review, document = case_a
     client.force_login(User.objects.get(username="resident"))
     page = client.get(f"/review/{review.pk}/form1/").content.decode()
-    assert "suggested: Health facility" in page
-    assert "suggested: Yes" in page
-    assert "suggested: No" in page
+    assert "derived" in page
+    assert 'name="death_within_42_days" value="yes" checked' in page
+    assert 'name="death_during_pregnancy" value="no" checked' in page
+    assert '<option value="health_facility" selected>' in page
 
 
 def test_form1_output_is_scoped_and_renders(client, case_a, other):

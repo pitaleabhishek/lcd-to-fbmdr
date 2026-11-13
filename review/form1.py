@@ -7,10 +7,10 @@ the Form1 record (husband/father, state/block/village, reporting person, ANM
 verification). Those fields are entered once and then frozen with the review version.
 
 The "when did death occur" classification and the place-of-death category are
-suggested from the recorded data where unambiguous. Suggestions are returned
-separately and never fill an answer: "During delivery" is left blank unless the
-clinician confirms it; a timestamp comparison must not assert a clinical/legal
-classification.
+filled from the recorded data where unambiguous: death during pregnancy, within
+42 days of delivery, after an abortion, and the place category. "During
+delivery" stays a suggestion only. A timestamp comparison must not assert that
+classification; the clinician confirms it.
 """
 
 from __future__ import annotations
@@ -90,11 +90,21 @@ FORM1_KEYS = {
 }
 
 SHARED_SOURCE = {
+    "state": "patient record",
+    "block": "patient record",
+    "village": "patient record",
+    "native_place": "patient record",
     "name": "patient record",
+    "husband_name": "patient record",
+    "father_name": "patient record",
     "age": "patient record",
     "mcts_no": "patient record",
     "phone": "patient record",
     "died_at": "death record",
+    "place_type": "death record",
+    "death_during_pregnancy": "death, delivery and outcome records",
+    "death_within_42_days": "death and delivery records",
+    "death_after_abortion_6_weeks": "death and outcome records",
 }
 
 
@@ -140,7 +150,11 @@ def _suggest_place_type(text: str) -> str:
 
 
 def _place(form1, death):
-    """Return (explicit value, suggestion, suggested?)."""
+    """Return (value, suggestion, derived?).
+
+    The place text fills the category when it is unambiguous. The fallback
+    "Other" stays a suggestion so the app does not invent a category.
+    """
     detail = (
         form1.place_detail
         if form1 is not None and form1.place_detail
@@ -149,6 +163,12 @@ def _place(form1, death):
     if form1 is not None and form1.place_type:
         return form1.place_type, None, False
     suggested = _suggest_place_type(detail)
+    if suggested in (
+        Form1.PlaceType.HOME,
+        Form1.PlaceType.HEALTH_FACILITY,
+        Form1.PlaceType.TRANSIT,
+    ):
+        return suggested, suggested, True
     return None, suggested, bool(suggested)
 
 
@@ -191,7 +211,14 @@ def _occurrence(pregnancy, death, delivery, form1):
     derived = {}
     for key, suggested_value in suggested.items():
         explicit = getattr(form1, key, None) if form1 is not None else None
-        values[key] = explicit
+        # The date-derived flags fill the form. "During delivery" stays a hint
+        # because no clock comparison can establish it.
+        fill = (
+            explicit is None
+            and suggested_value is not None
+            and key != "death_during_delivery"
+        )
+        values[key] = suggested_value if fill else explicit
         suggestions[key] = suggested_value
         derived[key] = explicit is None and suggested_value is not None
     return values, suggestions, derived
@@ -213,23 +240,41 @@ def build(review) -> dict:
     derived["place_type"] = place_derived
 
     values = {
-        "state": form1.state if form1 else "",
+        "state": (
+            form1.state if form1 is not None and form1.state else patient.state
+        ),
         "district": (
             form1.district
             if form1 is not None and form1.district
             else facility.district
         ),
-        "block": form1.block if form1 else "",
-        "village": form1.village if form1 else "",
+        "block": (
+            form1.block if form1 is not None and form1.block else patient.block
+        ),
+        "village": (
+            form1.village if form1 is not None and form1.village else patient.village
+        ),
         "current_residence": (
             form1.current_residence
             if form1 is not None and form1.current_residence
             else patient.address
         ),
-        "native_place": form1.native_place if form1 else "",
+        "native_place": (
+            form1.native_place
+            if form1 is not None and form1.native_place
+            else patient.native_place
+        ),
         "name": patient.name,
-        "husband_name": form1.husband_name if form1 else "",
-        "father_name": form1.father_name if form1 else "",
+        "husband_name": (
+            form1.husband_name
+            if form1 is not None and form1.husband_name
+            else patient.husband_name
+        ),
+        "father_name": (
+            form1.father_name
+            if form1 is not None and form1.father_name
+            else patient.father_name
+        ),
         "age": patient.age,
         "mcts_no": patient.mcts_no,
         "phone": patient.phone,
@@ -273,14 +318,16 @@ def build(review) -> dict:
             display = str(value).strip() if value not in (None, "") else "Not recorded."
         if display == "Not recorded.":
             not_recorded += 1
+        filled_from_record = bool(derived.get(key) and value not in (None, ""))
         note = ""
-        if derived.get(key):
-            if kind == "choice":
-                note = "Suggested from the recorded place text."
-            elif kind == "bool":
-                note = "Suggested from the recorded pregnancy/delivery/death times."
         if key == "death_during_delivery" and value is None:
             note = "Confirm from the clinical record."
+        elif filled_from_record:
+            note = (
+                "Derived from the recorded place text."
+                if kind == "choice"
+                else "Derived from the recorded pregnancy, delivery and death times."
+            )
         suggested_value = suggestions.get(key)
         suggested_display = ""
         if derived.get(key) and suggested_value is not None:
@@ -296,6 +343,7 @@ def build(review) -> dict:
                 "value": value.isoformat() if isinstance(value, datetime) else value,
                 "display": display,
                 "derived": bool(derived.get(key)),
+                "filled_from_record": filled_from_record,
                 "suggested_display": suggested_display,
                 "note": note,
                 "editable": key in FORM1_KEYS,

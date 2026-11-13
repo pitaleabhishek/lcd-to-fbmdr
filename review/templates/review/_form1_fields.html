@@ -28,7 +28,11 @@
             <input type="text" name="{{ field.key }}" value="{{ field.input }}">
           {% endif %}
           {% if field.derived and field.suggested_display %}
-            <span class="count">suggested: {{ field.suggested_display }}</span>
+            {% if field.filled_from_record %}
+              <span class="count">derived</span>
+            {% else %}
+              <span class="count">suggested: {{ field.suggested_display }}</span>
+            {% endif %}
           {% endif %}
           {% if field.note %}<div class="key">{{ field.note }}</div>{% endif %}
         {% elif print_mode %}
@@ -52,7 +56,7 @@
           {% endif %}
         {% else %}
           <span class="{% if field.display == 'Not recorded.' %}muted{% endif %}">{{ field.display }}</span>
-          {% if field.derived %}<span class="count">suggested</span>{% endif %}
+          {% if field.derived %}<span class="count">{% if field.filled_from_record %}derived{% else %}suggested{% endif %}</span>{% endif %}
           {% if field.source_note %}<span class="key">from the {{ field.source_note }}</span>{% endif %}
           {% if field.note %}<div class="key">{{ field.note }}</div>{% endif %}
         {% endif %}

@@ -302,7 +302,9 @@ The suite has **280 passing tests**.
 - Submit, return, resubmit and approve.
 - Amendments with a second approval, plus a small clinical amendment page for the
   author; the FNO keeps the full audit workspace.
-- Form 1 from the same review.
+- Form 1 from the same review, auto-filled from the patient registration, death
+  and delivery records. Only reporting/ANM details and the death-during-delivery
+  confirmation need entry.
 - Printable Form 4 and frozen HTML/JSON output.
 - One-command local setup.
 - Optional HTTP Basic auth for the hosted demo.
