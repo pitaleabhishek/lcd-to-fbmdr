@@ -38,8 +38,8 @@
           · <a href="{% url 'workspace' r.pk %}">Full Form 4</a>
         {% endif %}
         · <a href="{% url 'form1_output' r.pk %}">Form 1</a>
-        {% if r.open_amendment %}
-          · <a href="{% url 'amendment_workspace' r.pk r.open_amendment.pk %}">Open amendment</a>
+        {% if r.open_amendment and is_fno %}
+          · <a href="{% url 'amendment_workspace' r.pk r.open_amendment.pk %}">Full amendment</a>
         {% endif %}
         {% if r.current_version %} · <a href="{% url 'output' r.pk %}">Output</a>{% endif %}
       </td>
