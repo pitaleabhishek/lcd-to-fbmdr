@@ -14,12 +14,29 @@ the UI guide and not the clinical rulebook.
 Checks run only on **Check before submitting** or **Submit**. They do not run when
 the form opens.
 
+Only a required **clinical judgement** blocks the author. A missing document value
+is a record gap for the reviewer or records team, never a reason to stop the
+clinician.
+
 | Result | Effect |
 |---|---|
-| Error | Blocks submit. The app creates no version. |
-| Warning | Shows in amber. The user must select **Submit anyway** once. |
+| Required clinical answer missing | Blocks submit. The app creates no version. |
+| Any other check (impossible, inconsistent, precision, source, document gap) | Does not block. Frozen with the version and shown to the FNO as a notice. |
+| Warning | Does not block. Frozen and shown to the FNO. |
 
-`Check` creates no version. `Submit` creates one only if the app finds no errors.
+`Check` creates no version. `Submit` asks for one confirmation, then creates the
+version. The confirmation lists the advisory notices; they never stop the
+submission.
+
+The blocking answer set is the registry's required fields, the ERROR-severity
+conditional follow-ups, and the specification fields — filtered to fields with no
+source document (`Field.is_clinician_only`). See `checks.blocks_submission`.
+
+## The reviewer sees the checks
+
+Every submission freezes its full check result in the version payload under
+`checks`. The workspace shows **Checks at submission**, split into **Clinical
+answers** and **Source values**, for the FNO deciding to approve or return.
 
 ## Groups
 
@@ -32,9 +49,22 @@ the form opens.
 | Possible or needs review | Unusual but clinically possible |
 | Source record | A newer source correction needs review |
 
+## Who sees the checks
+
+The full check list is reviewer-facing. The author sees:
+
+- blocking required clinical answers when a submit is refused, and
+- a plain “Submit this review?” confirmation when nothing clinical blocks.
+
+Advisory notices — document gaps, impossible/inconsistent values, source notes —
+are not shown to the author at submit. They are frozen with the version and shown
+to the FNO under **Checks at submission**, split into clinical answers and source
+values. **Check before submitting** runs the checks for the author but shows only
+the blocking required answers.
+
 ## Panel
 
-The panel appears after Check or a failed Submit. It is grouped and plain.
+For the reviewer, the frozen panel is grouped and plain.
 
 - The bar stays below the legend and stays visible when the form scrolls.
 - The full list is closed by default.
@@ -162,12 +192,10 @@ These are warnings. They never block.
 - Impossible-date messages include both times.
 - Each message says what to do next.
 - Each issue links to the field. If hidden, the message names the answer.
-- The panel appears only after Check or Submit.
-- The bar stays visible. The full list is closed.
-- The submit area shows a short summary and **View all checks**.
-- Errors open the panel. Warnings need one confirmation.
+- The full panel is reviewer-facing and frozen at submission.
+- The author sees only blocking required clinical answers and the confirmation.
+- Advisory notices never interrupt the author's submit.
 - The resident note survives a blocked submit.
-- Inline messages appear after Submit only.
 
 ## Enforcement
 

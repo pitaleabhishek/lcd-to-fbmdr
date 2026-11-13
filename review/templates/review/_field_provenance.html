@@ -10,6 +10,9 @@
 </p>
 
 <div class="prov-meta">
+  {% if provenance.document_label %}
+    <div><b>Source document:</b> {{ provenance.document_label }}</div>
+  {% endif %}
   {% if provenance.changed %}
     <b>Changed in this amendment.</b>
   {% elif provenance.carried %}

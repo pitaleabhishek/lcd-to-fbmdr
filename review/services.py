@@ -272,6 +272,32 @@ def _hash(value, inputs) -> str:
     return hashlib.sha256(body.encode()).hexdigest()
 
 
+def _checks_payload(issues) -> list[dict]:
+    """Freeze what the checks found at submit, blocking or not."""
+    return [
+        {
+            "key": issue.key,
+            "severity": issue.severity,
+            "field": issue.field,
+            "label": issue.label,
+            "message": issue.message,
+            "fix": issue.fix,
+            "category": issue.category,
+            "target": issue.target,
+        }
+        for issue in issues
+    ]
+
+
+def _checks_counts(issues) -> dict:
+    return {
+        "total": len(issues),
+        "errors": sum(1 for i in issues if i.severity == checks.ERROR),
+        "warnings": sum(1 for i in issues if i.severity == checks.WARNING),
+        "blocking": sum(1 for i in issues if checks.blocks_submission(i)),
+    }
+
+
 @transaction.atomic
 def reevaluate(review: Review, actor=None) -> list[Proposal]:
     """Recompute proposals. Never touches an accepted answer; flags it instead."""
@@ -352,8 +378,14 @@ def reevaluate(review: Review, actor=None) -> list[Proposal]:
 
         item = scope.get_item(review, field.key)
         if item and item.answer_state == ReviewItem.AnswerState.ANSWERED:
-            if item.value_json != result.value:
-                item.needs_reconsideration = True
+            if item.accepted_proposal_id is not None:
+                # A value taken from a record: new evidence may supersede it.
+                if item.value_json != result.value:
+                    item.needs_reconsideration = True
+                    item.save(update_fields=["needs_reconsideration"])
+            elif item.needs_reconsideration:
+                # A typed answer overrides the record; it is never "stale".
+                item.needs_reconsideration = False
                 item.save(update_fields=["needs_reconsideration"])
 
     review.edit_revision += 1
@@ -397,6 +429,75 @@ def accept_proposal(review: Review, proposal: Proposal, user, reason: str = "") 
     audit(review, user, "proposal_accepted", "Proposal", proposal.pk,
           {"field_key": proposal.field_key, "value": proposal.value_json})
     return item
+
+
+@transaction.atomic
+def auto_accept_record_values(review: Review, actor=None) -> int:
+    """Accept every open proposal that comes from a record document.
+
+    The quick form treats record values as already known: the clinician only
+    decides the questions no document can answer. Clinical-judgement fields are
+    never auto-accepted here.
+    """
+    review = Review.objects.select_for_update().get(pk=review.pk)
+    if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
+        return 0
+    actor = actor or review.created_by
+    if actor is None:
+        return 0
+
+    accepted = 0
+    for proposal in list(
+        review.proposals.filter(status=Proposal.Status.PROPOSED).order_by("id")
+    ):
+        field = registry.get(proposal.field_key)
+        if field is None or field.document is None:
+            continue
+        item = scope.get_item(review, proposal.field_key)
+        if item is not None:
+            if item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE:
+                # An explicit N/A is an answer. Close the record candidate.
+                reject_proposal(
+                    review, proposal, actor, reason="answer is not applicable"
+                )
+                continue
+            if item.answer_state == ReviewItem.AnswerState.ANSWERED:
+                from_record = item.accepted_proposal_id is not None or item.origin in (
+                    ReviewItem.Origin.REUSED,
+                    ReviewItem.Origin.DERIVED,
+                )
+                if not from_record and item.value_json != proposal.value_json:
+                    # The clinician's answer wins. Close the record candidate
+                    # instead of asking a question the quick form has no room for.
+                    reject_proposal(
+                        review,
+                        proposal,
+                        actor,
+                        reason="kept the clinician's answer",
+                    )
+                    if item.needs_reconsideration:
+                        item.needs_reconsideration = False
+                        item.save(update_fields=["needs_reconsideration"])
+                    continue
+        accept_proposal(
+            review,
+            proposal,
+            actor,
+            reason=f"Auto-filled from {field.document_label}",
+        )
+        accepted += 1
+
+    # Legacy typed answers may carry a flag from before the override rule.
+    stale = review.items.filter(
+        amendment__isnull=True,
+        needs_reconsideration=True,
+        accepted_proposal__isnull=True,
+        origin__in=(ReviewItem.Origin.ENTERED, ReviewItem.Origin.CORRECTED),
+    )
+    for item in stale:
+        item.needs_reconsideration = False
+        item.save(update_fields=["needs_reconsideration"])
+    return accepted
 
 
 @transaction.atomic
@@ -454,6 +555,8 @@ def set_answer(review: Review, key: str, value, user, reason: str = "", correcte
     item.answer_state = ReviewItem.AnswerState.ANSWERED
     item.applicability_state = ReviewItem.Applicability.APPLICABLE
     item.origin = ReviewItem.Origin.CORRECTED if corrected else ReviewItem.Origin.ENTERED
+    # A typed answer is no longer the proposal's value.
+    item.accepted_proposal = None
     item.reason = reason
     item.decided_by = user
     item.decided_at = timezone.now()
@@ -766,14 +869,15 @@ def submit(review: Review, user, note: str = "") -> ReviewVersion:
     if review.status not in (Review.Status.DRAFT, Review.Status.RETURNED):
         raise ValidationError("review is not in a submittable state")
     issues = checks.run_checks(review)
-    errors = [issue for issue in issues if issue.severity == checks.ERROR]
-    if errors:
-        detail = "; ".join(issue.message for issue in errors[:4])
-        if len(errors) > 4:
-            detail += f" (+{len(errors) - 4} more)"
+    blocking = [issue for issue in issues if checks.blocks_submission(issue)]
+    if blocking:
+        detail = "; ".join(issue.message for issue in blocking[:4])
+        if len(blocking) > 4:
+            detail += f" (+{len(blocking) - 4} more)"
         raise ValidationError(detail)
 
     payload = canonical_payload(review)
+    payload["checks"] = _checks_payload(issues)
     body = json.dumps(payload, sort_keys=True, default=str)
     version_no = review.current_version + 1
     version = ReviewVersion.objects.create(
@@ -804,7 +908,11 @@ def submit(review: Review, user, note: str = "") -> ReviewVersion:
         "submitted",
         "ReviewVersion",
         version.pk,
-        {"version_no": version_no, "checks_version": checks.CHECK_VERSION},
+        {
+            "version_no": version_no,
+            "checks_version": checks.CHECK_VERSION,
+            "checks": _checks_counts(issues),
+        },
     )
     return version
 
@@ -1139,14 +1247,15 @@ def submit_amendment(amendment: Amendment, user, note: str = "") -> Amendment:
 
     visibility = conditions.visibility(review, amendment=amendment)
     issues = checks.run_checks(review, visibility=visibility, amendment=amendment)
-    errors = [issue for issue in issues if issue.severity == checks.ERROR]
-    if errors:
-        detail = "; ".join(issue.message for issue in errors[:4])
-        if len(errors) > 4:
-            detail += f" (+{len(errors) - 4} more)"
+    blocking = [issue for issue in issues if checks.blocks_submission(issue)]
+    if blocking:
+        detail = "; ".join(issue.message for issue in blocking[:4])
+        if len(blocking) > 4:
+            detail += f" (+{len(blocking) - 4} more)"
         raise ValidationError(detail)
 
     payload = canonical_payload(review, amendment=amendment)
+    payload["checks"] = _checks_payload(issues)
     body = json.dumps(payload, sort_keys=True, default=str)
     payload_hash = hashlib.sha256(body.encode()).hexdigest()
     amendment.payload_json = payload
@@ -1177,6 +1286,8 @@ def submit_amendment(amendment: Amendment, user, note: str = "") -> Amendment:
             "changes": len(changes),
             "payload_hash": payload_hash,
             "note": (note or "").strip(),
+            "checks_version": checks.CHECK_VERSION,
+            "checks": _checks_counts(issues),
         },
     )
     return amendment

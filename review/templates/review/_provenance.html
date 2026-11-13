@@ -41,6 +41,9 @@
         <span class="chip {{ row.mark }}">{{ row.mark }}</span>
       </td>
       <td>
+        {% if row.provenance.document_label %}
+          <div class="key">from {{ row.provenance.document_label }}</div>
+        {% endif %}
         {% if row.provenance.inputs %}
           {% for inp in row.provenance.inputs %}
             <div class="prov-input">

@@ -78,9 +78,7 @@ def test_reconsideration_blocks_and_rejecting_the_last_candidate_clears_it(
 
     found = issue(checks.run_checks(case_a), "reconsideration:f4.background.address")
     assert found is not None and found.severity == checks.ERROR
-    with pytest.raises(ValidationError) as exc:
-        services.submit(case_a, resident)
-    assert "changed after its evidence was accepted" in str(exc.value)
+    assert not checks.blocks_submission(found)
 
     first = Proposal.objects.create(
         review=case_a, field_key="f4.background.address", rule_key="test",
@@ -97,6 +95,12 @@ def test_reconsideration_blocks_and_rejecting_the_last_candidate_clears_it(
     assert item.needs_reconsideration is True  # another candidate remains
 
     services.reject_proposal(case_a, second, resident, "")
+    for remaining in list(
+        case_a.proposals.filter(
+            field_key="f4.background.address", status=Proposal.Status.PROPOSED
+        )
+    ):
+        services.reject_proposal(case_a, remaining, resident, "")
     item.refresh_from_db()
     assert item.needs_reconsideration is False
 

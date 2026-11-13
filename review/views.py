@@ -32,7 +32,7 @@ from .models import (
     SourceDocument,
     TimePrecision,
 )
-from .registry import CATEGORIES, LEGACY_FIELDS, registry
+from .registry import CATEGORIES, DOCUMENTS, LEGACY_FIELDS, registry
 from .evidence import EVIDENCE
 from .rules import CALCULATIONS, RULES
 from . import thresholds
@@ -80,6 +80,16 @@ def fmt(value) -> str:
     return str(value)
 
 
+def _option_label(field, value) -> str:
+    """Printed label when one exists, otherwise a readable form of the code."""
+    raw = str(value)
+    label = field.label_for(raw)
+    if label != raw:
+        return label
+    text = raw.replace("_", " ")
+    return text[:1].upper() + text[1:]
+
+
 def field_display(field, value) -> str:
     if value is None or value == "":
         return "—"
@@ -87,6 +97,25 @@ def field_display(field, value) -> str:
         return field.label_for(str(value))
     if field.type == "multi" and isinstance(value, list):
         return ", ".join(field.label_for(str(v)) for v in value) if value else "—"
+    return fmt(value)
+
+
+_FORM_NUMBER = re.compile(r"^\d+\.[a-z]?\s*")
+
+
+def quick_label(field) -> str:
+    """The printed item without its Form 4 number, for the clinical page."""
+    return _FORM_NUMBER.sub("", field.label_printed)
+
+
+def quick_display(field, value) -> str:
+    """Readable value for the clinical page, including codes with no label."""
+    if value is None or value == "":
+        return "—"
+    if field.type == "enum":
+        return _option_label(field, value)
+    if field.type == "multi" and isinstance(value, list):
+        return ", ".join(_option_label(field, v) for v in value) if value else "—"
     return fmt(value)
 
 
@@ -157,28 +186,33 @@ FACTOR_KEYS = tuple(
     field.key for field in registry.all() if field.key.startswith("f4.factors.")
 )
 
-QUICK_KEYS = (
+#: The only questions the quick clinical form asks: no record document can
+#: answer them. Contributions are the 13 factor checkboxes, rendered as one
+#: group, so the page shows ten decisions plus that group.
+DECISION_KEYS = (
     "f4.primary_diagnosis.dx",
     "f4.cause_of_death.a_antecedent",
     "f4.cause_of_death.b_antecedent",
     "f4.cause_of_death.c_antecedent",
-    "f4.autopsy.performed",
-    "f4.autopsy.diagnosis",
-    "f4.delivery.mode_indication",
-    "f4.delivery.complications",
-    "f4.delivery.complications_other",
     "f4.delivery.neonatal_cause",
     "f4.delivery.neonatal_cause_other",
     "f4.delivery.postnatal_cause",
     "f4.delivery.postnatal_cause_medical",
     "f4.delivery.postnatal_cause_other",
     "f4.summary.text",
+)
+
+#: Sign-off is document/admin data with the signer filled in from the account,
+#: so it stays collapsed and editable.
+SIGN_OFF_KEYS = (
     "f4.summary.mo_name",
     "f4.summary.fno_name",
     "f4.summary.designation",
     "f4.summary.institution_address",
     "f4.summary.signed_on",
 )
+
+QUICK_KEYS = DECISION_KEYS + SIGN_OFF_KEYS
 
 
 def _quick_summary(review: Review) -> dict:
@@ -198,13 +232,13 @@ def _quick_summary(review: Review) -> dict:
         else {}
     )
     gpla = []
-    for label, key, header_key in (
-        ("G", "f4.admission.gravida", "gravida"),
-        ("P", "f4.admission.para", "parity"),
-        ("L", "f4.admission.living_children", "living_children"),
-        ("A", "f4.admission.abortions", "abortions"),
+    for label, key, fallback in (
+        ("G", "f4.admission.gravida", pregnancy.gravida),
+        ("P", "f4.admission.para", header.get("parity")),
+        ("L", "f4.admission.living_children", pregnancy.living_children),
+        ("A", "f4.admission.abortions", pregnancy.abortions),
     ):
-        value = answered(key, header.get(header_key))
+        value = answered(key, fallback)
         if value not in (None, ""):
             gpla.append(f"{label}{value}")
     admission = (
@@ -254,13 +288,14 @@ def _quick_rows(
     review: Review,
     comments: dict | None = None,
     defaults: dict | None = None,
+    keys: tuple[str, ...] = DECISION_KEYS,
 ) -> list[dict]:
     comments = comments or {}
     defaults = defaults or {}
     items = scope.item_map(review)
     visibility = conditions.visibility(review)
     rows = []
-    for key in QUICK_KEYS:
+    for key in keys:
         field = registry[key]
         if not visibility[key].applies:
             continue
@@ -272,15 +307,16 @@ def _quick_rows(
             {
                 "field": field,
                 "key": key,
+                "short_label": quick_label(field),
                 "current": current,
                 "current_list": (
                     item.value_json
                     if item and isinstance(item.value_json, list)
                     else []
                 ),
-                "display": field_display(field, item.value_json) if item else "—",
+                "display": quick_display(field, item.value_json) if item else "—",
                 "options": [
-                    {"value": option, "label": field.label_for(option)}
+                    {"value": option, "label": _option_label(field, option)}
                     for option in field.options
                 ],
                 "type": field.type,
@@ -301,6 +337,78 @@ def _quick_rows(
     return rows
 
 
+def _record_sections(review: Review) -> list[dict]:
+    """Visible, already-answered values grouped by the document that holds them."""
+    items = scope.item_map(review)
+    visibility = conditions.visibility(review)
+    sections = []
+    for document, label in DOCUMENTS.items():
+        rows = []
+        for field in registry.all():
+            if field.document != document or not visibility[field.key].applies:
+                continue
+            item = items.get(field.key)
+            if item is None:
+                continue
+            recorded = item.origin in (
+                ReviewItem.Origin.REUSED,
+                ReviewItem.Origin.DERIVED,
+            )
+            has_rule = field.key in RULES
+            if item.answer_state == ReviewItem.AnswerState.ANSWERED:
+                if not recorded and not has_rule:
+                    # Manually typed on a field the record cannot supply.
+                    continue
+                rows.append(
+                    {
+                        "field": field,
+                        "short_label": quick_label(field),
+                        "display": quick_display(field, item.value_json),
+                        "state": "recorded" if recorded else "overridden",
+                        "origin": item.origin,
+                    }
+                )
+            elif item.applicability_state == ReviewItem.Applicability.NOT_APPLICABLE:
+                if not recorded and not has_rule:
+                    continue
+                rows.append(
+                    {
+                        "field": field,
+                        "display": "Not applicable",
+                        "state": "na",
+                        "origin": item.origin,
+                    }
+                )
+        if rows:
+            sections.append({"key": document, "label": label, "rows": rows})
+    return sections
+
+
+def _document_summary(review: Review, amendment=None) -> dict:
+    """How many values each record document supplied, for the full-form banner."""
+    items = scope.item_map(review, amendment)
+    sections = []
+    answered_total = 0
+    for key, label in DOCUMENTS.items():
+        fields = [f for f in registry.all() if f.document == key]
+        answered = sum(
+            1
+            for f in fields
+            if (items.get(f.key) is not None)
+            and items[f.key].answer_state == ReviewItem.AnswerState.ANSWERED
+            and items[f.key].origin
+            in (ReviewItem.Origin.REUSED, ReviewItem.Origin.DERIVED)
+        )
+        sections.append({"key": key, "label": label, "answered": answered, "total": len(fields)})
+        answered_total += answered
+    return {
+        "sections": sections,
+        "answered": answered_total,
+        "total": len(registry.all()),
+        "clinician": sum(1 for f in registry.all() if f.is_clinician_only),
+    }
+
+
 @login_required
 def quick_review(request, pk: int):
     review = review_for_user(request, pk)
@@ -308,6 +416,15 @@ def quick_review(request, pk: int):
         review.created_by_id,
         review.assigned_to_id,
     } - {None}
+    editable = review.status in (Review.Status.DRAFT, Review.Status.RETURNED)
+
+    # Record values are not decisions: accept them before the page is drawn so
+    # the clinician never has to accept a proposal by hand.
+    if editable and can_author:
+        services.auto_accept_record_values(review, request.user)
+
+    editable_form = can_author and editable
+
     open_proposals = review.proposals.filter(
         status=Proposal.Status.PROPOSED
     ).count()
@@ -317,19 +434,15 @@ def quick_review(request, pk: int):
         if item.needs_reconsideration
         and item.answer_state == ReviewItem.AnswerState.ANSWERED
     ]
-    can_submit = (
-        can_author
-        and review.status in (Review.Status.DRAFT, Review.Status.RETURNED)
-        and open_proposals == 0
-        and not needs
-    )
+    can_submit = editable_form and not open_proposals and not needs
 
     open_return = services.latest_return(review, open_only=True)
     note = request.POST.get("note", "") if request.method == "POST" else ""
     issues = []
+    confirm_submit = False
     if request.method == "POST" and request.POST.get("action") == "submit_quick":
         if not can_submit:
-            messages.error(request, "This review needs the full form.")
+            messages.error(request, "This review still needs the full form.")
             return redirect("quick_review", pk=review.pk)
 
         for key in QUICK_KEYS:
@@ -358,10 +471,14 @@ def quick_review(request, pk: int):
             value = "yes" if key in chosen_factors else "no"
             services.set_answer(review, key, value, request.user)
 
+        services.auto_accept_record_values(review, request.user)
         issues = checks.run_checks(review)
-        errors = [issue for issue in issues if issue.severity == checks.ERROR]
-        warnings = [issue for issue in issues if issue.severity == checks.WARNING]
-        if not errors and (not warnings or request.POST.get("confirm") == "yes"):
+        blocking = [issue for issue in issues if checks.blocks_submission(issue)]
+        advisory = [issue for issue in issues if not checks.blocks_submission(issue)]
+        if blocking:
+            # A required clinical judgement is missing: the only refusal.
+            issues = blocking
+        elif request.POST.get("confirm_submit") == "yes":
             try:
                 services.submit(review, request.user, note)
             except ValidationError as exc:
@@ -369,6 +486,10 @@ def quick_review(request, pk: int):
             else:
                 messages.success(request, "Submitted for review")
                 return redirect("index")
+        else:
+            # Everything else is advisory. Ask once, then submit.
+            issues = advisory
+            confirm_submit = True
 
     facility = review.reporting_facility
     designation = (
@@ -392,6 +513,7 @@ def quick_review(request, pk: int):
             {
                 "key": key,
                 "label": registry[key].label_printed,
+                "short_label": quick_label(registry[key]),
                 "current": item.value_json if item else "",
             }
         )
@@ -409,13 +531,23 @@ def quick_review(request, pk: int):
                 review,
                 open_return.comments if open_return else None,
                 defaults,
+                DECISION_KEYS,
             ),
+            "signoff_rows": _quick_rows(
+                review,
+                None,
+                defaults,
+                SIGN_OFF_KEYS,
+            ),
+            "record_sections": _record_sections(review),
+            "editable_form": editable_form,
             "can_submit": can_submit,
+            "confirm_submit": confirm_submit,
             "open_proposals": open_proposals,
             "needs": needs,
             "issues": issues,
-            "check_errors": [i for i in issues if i.severity == checks.ERROR],
-            "check_warnings": [i for i in issues if i.severity == checks.WARNING],
+            "check_errors": [i for i in issues if checks.blocks_submission(i)],
+            "check_warnings": [i for i in issues if not checks.blocks_submission(i)],
             "note": note,
             "open_return": open_return,
             "factor_rows": factor_rows,
@@ -1054,6 +1186,13 @@ def correct_observation(request, pk: int, obs_pk: int):
 @login_required
 def workspace(request, pk: int):
     review = review_for_user(request, pk)
+    if request.method == "GET":
+        authors = {review.created_by_id, review.assigned_to_id} - {None}
+        if request.user.pk in authors and review.status in (
+            Review.Status.DRAFT,
+            Review.Status.RETURNED,
+        ):
+            services.auto_accept_record_values(review, request.user)
     return _workspace_page(request, review, None)
 
 
@@ -1130,6 +1269,7 @@ def _workspace_page(request, review: Review, amendment=None):
     draft_note = ""
     show_checks = False
     check_only = False
+    confirm_submit = False
     if request.method == "POST":
         action = request.POST.get("action")
         check_only = request.POST.get("check_only") == "yes"
@@ -1150,10 +1290,8 @@ def _workspace_page(request, review: Review, amendment=None):
                 pending = checks.run_checks(
                     review, visibility=visibility, amendment=amendment
                 )
-                errors = [i for i in pending if i.severity == checks.ERROR]
-                warnings = [i for i in pending if i.severity == checks.WARNING]
-                confirmed = request.POST.get("confirm") == "yes"
-                if errors or (warnings and not confirmed):
+                blocking = [i for i in pending if checks.blocks_submission(i)]
+                if blocking:
                     show_checks = True
                 else:
                     try:
@@ -1223,13 +1361,14 @@ def _workspace_page(request, review: Review, amendment=None):
         elif action == "submit":
             draft_note = request.POST.get("note", "")
             pending = checks.run_checks(review)
-            errors = [i for i in pending if i.severity == checks.ERROR]
-            warnings = [i for i in pending if i.severity == checks.WARNING]
-            confirmed = request.POST.get("confirm") == "yes"
-            if errors or (warnings and not confirmed):
-                # Do not create a version. Show the checks only now, when the
-                # resident has actually finished and pressed Submit.
+            blocking = [i for i in pending if checks.blocks_submission(i)]
+            if blocking:
+                # Only a required clinical judgement stops the author.
                 show_checks = True
+            elif request.POST.get("confirm") != "yes":
+                # Everything else is advisory and reviewer-facing. Ask once,
+                # without showing the resident the check list.
+                confirm_submit = True
             else:
                 try:
                     _handle_action(request, review)
@@ -1398,8 +1537,31 @@ def _workspace_page(request, review: Review, amendment=None):
         if show_checks
         else []
     )
-    check_errors = [i for i in check_issues if i.severity == checks.ERROR]
-    check_warnings = [i for i in check_issues if i.severity == checks.WARNING]
+    if check_issues and not is_fno(request.user):
+        # The full check list is reviewer-facing. The author sees only the
+        # required clinical answers that actually block submission.
+        check_issues = [i for i in check_issues if checks.blocks_submission(i)]
+    check_errors = [i for i in check_issues if checks.blocks_submission(i)]
+    check_warnings = [i for i in check_issues if not checks.blocks_submission(i)]
+
+    submission_checks = None
+    submission_version = (
+        review.versions.filter(kind=ReviewVersion.Kind.SUBMISSION)
+        .order_by("-version_no")
+        .first()
+    )
+    if submission_version is not None:
+        frozen = (submission_version.payload_json or {}).get("checks")
+        if frozen is not None:
+            clinical, source = [], []
+            for issue in frozen:
+                field = registry.get(issue.get("field", ""))
+                (clinical if field is not None and field.is_clinician_only else source).append(issue)
+            submission_checks = {
+                "version": submission_version.version_no,
+                "clinical": clinical,
+                "source": source,
+            }
     check_groups = []
     for key, label in checks.GROUPS:
         issues = [i for i in check_issues if i.category == key]
@@ -1499,7 +1661,7 @@ def _workspace_page(request, review: Review, amendment=None):
                     "display": field_display(f, item.value_json) if item else "—",
                     "widget": f.widget,
                     "options": [
-                        {"value": opt, "label": f.label_for(opt)} for opt in f.options
+                        {"value": opt, "label": _option_label(f, opt)} for opt in f.options
                     ],
                     "evidence": [
                         c
@@ -1590,14 +1752,17 @@ def _workspace_page(request, review: Review, amendment=None):
             "hidden_fields": hidden_fields,
             "legacy_items": legacy_items,
             "show_checks": show_checks,
+            "confirm_submit": confirm_submit,
             "draft_note": draft_note,
             "check_errors": check_errors,
             "check_warnings": check_warnings,
+            "submission_checks": submission_checks,
             "check_issues": check_issues,
             "check_groups": check_groups,
             "check_only": check_only,
             "controller_keys": conditions.controller_keys(),
             "stats": stats,
+            "document_summary": _document_summary(review, amendment),
             "years": list(range(timezone.now().year + 1, 1989, -1)),
             "months": [
                 {"value": i, "label": name}
@@ -1646,7 +1811,13 @@ def _handle_action(request, review: Review, amendment=None):
 
     if action == "reevaluate":
         services.reevaluate(review, user)
-        messages.success(request, "Proposals refreshed")
+        auto = services.auto_accept_record_values(review, user)
+        if auto:
+            messages.success(
+                request, f"Refreshed; {auto} record value{'' if auto == 1 else 's'} accepted"
+            )
+        else:
+            messages.success(request, "Proposals refreshed")
         return
 
     if action == "clear":
@@ -2661,6 +2832,8 @@ def field_provenance(request, pk: int, key: str):
                 "note": "No provenance was frozen for this field.",
             }
         )
+    detail = dict(detail)
+    detail.setdefault("document_label", field.document_label)
 
     events = []
     for event in (
@@ -2741,6 +2914,8 @@ def _provenance_sections(payload: dict, review: Review) -> list[dict]:
                 and entry.get("value") in (None, "", [], {})
             ):
                 continue
+            detail = dict(detail)
+            detail.setdefault("document_label", f.document_label)
             rows.append(
                 {
                     "field": f,

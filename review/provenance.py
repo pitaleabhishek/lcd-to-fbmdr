@@ -72,20 +72,31 @@ def _decision(item) -> dict:
     }
 
 
-def _field(review, item, death) -> dict:
+def _field(review, item, death, field=None) -> dict:
     """One field's source chain, independent of which version carries it."""
+    document = field.document if field is not None else None
+    document_label = field.document_label if field is not None else ""
     if item is None:
         return {
             "state": "unanswered",
             "origin": "none",
             "accepted_proposal_id": None,
+            "document": document,
+            "document_label": document_label,
             "decision": {"by": None, "at": None, "reason": ""},
         }
 
+    if document and item.origin in (
+        ReviewItem.Origin.ENTERED,
+        ReviewItem.Origin.CORRECTED,
+    ):
+        document_label = f"{document_label} (overridden)"
     provenance = {
         "state": "unanswered",
         "origin": item.origin,
         "accepted_proposal_id": item.accepted_proposal_id,
+        "document": document,
+        "document_label": document_label,
         "decision": _decision(item),
     }
 
@@ -135,7 +146,7 @@ def build(
             value["carried"] = True
             out[key] = value
             continue
-        value = _field(review, items.get(key), death)
+        value = _field(review, items.get(key), death, field)
         if amendment is not None:
             value["amendment_id"] = amendment.pk
             value["changed"] = True

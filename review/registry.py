@@ -41,6 +41,19 @@ CATEGORIES: dict[int, str] = {
 HANDLING = ("propose", "derive", "prompt", "manual", "evidence")
 TYPES = ("text", "int", "bool", "datetime", "date", "duration", "enum", "multi", "block")
 
+#: The documents a Form 4 value can be read from. A field with no document is a
+#: clinical judgement: no record can supply it, so it is shown on the quick form.
+DOCUMENTS: dict[str, str] = {
+    "patient_record": "Patient record",
+    "anc_card": "ANC card",
+    "admission_register": "Admission register",
+    "labour_record": "Labour record (LCG)",
+    "ot_note": "OT / delivery note",
+    "referral_slip": "Referral slip",
+    "death_record": "Death record / postmortem",
+    "fbmdr_register": "FBMDR register",
+}
+
 
 @dataclass(frozen=True)
 class Field:
@@ -64,6 +77,21 @@ class Field:
     @property
     def slug(self) -> str:
         return self.key.split(".", 2)[2]
+
+    @property
+    def document(self) -> str | None:
+        """Which record document supplies this value, or None for judgement."""
+        return FIELD_DOCUMENT.get(self.key)
+
+    @property
+    def document_label(self) -> str:
+        if self.document is None:
+            return "Clinical judgement"
+        return DOCUMENTS[self.document]
+
+    @property
+    def is_clinician_only(self) -> bool:
+        return self.document is None
 
     def label_for(self, option: str) -> str:
         return self.option_labels.get(option, option)
@@ -100,6 +128,9 @@ class Registry:
 
     def __contains__(self, key: object) -> bool:
         return key in self._fields
+
+    def get(self, key: str, default=None):
+        return self._fields.get(key, default)
 
     def all(self) -> list[Field]:
         return list(self._fields.values())
@@ -191,7 +222,16 @@ F("abortions", "admission", "2.b Abortions", "int", 2)
 F("living_children", "admission", "2.b No. of living children", "int", 2)
 F("gestation", "admission", "2.c Period of gestation", "enum", 2,
   options=("before_22", "22_34", "34_plus", "intrapartum", "postpartum_24h",
-           "postnatal_1w", "postnatal_42d"))
+           "postnatal_1w", "postnatal_42d"),
+  option_labels={
+      "before_22": "Before 22 weeks",
+      "22_34": "22–34 weeks",
+      "34_plus": "34+ weeks",
+      "intrapartum": "Intrapartum",
+      "postpartum_24h": "Postpartum, within 24 h",
+      "postnatal_1w": "Postnatal, within 1 week",
+      "postnatal_42d": "Postnatal, within 42 days",
+  })
 
 # --- Condition + referral (4) ------------------------------------------------
 F("status", "condition", "3. Condition on admission", "enum", 2,
@@ -261,11 +301,29 @@ F("centres", "abortion", "2.d Centres visited", "text", 2,
 # --- Antenatal care (7) ------------------------------------------------------
 F("received", "antenatal_care", "3.a Did she receive ANC", "enum", 2, options=YNU)
 F("facility", "antenatal_care", "3.b Type of facility", "enum", 2,
-  options=("sc", "phc", "chc", "sdh", "dh", "medical_college", "private", "other"))
+  options=("sc", "phc", "chc", "sdh", "dh", "medical_college", "private", "other"),
+  option_labels={
+      "sc": "SC (sub-centre)",
+      "phc": "PHC",
+      "chc": "CHC",
+      "sdh": "SDH",
+      "dh": "DH",
+      "medical_college": "Medical college",
+      "private": "Private",
+      "other": "Other",
+  })
 F("facility_other", "antenatal_care", "3.b Other facility, specify", "text", 2,
   applicability="other")
 F("provider", "antenatal_care", "3.c Services provided by", "enum", 2,
-  options=("anm", "mo", "obstetrician", "ayush", "nurse", "other_specialist"))
+  options=("anm", "mo", "obstetrician", "ayush", "nurse", "other_specialist"),
+  option_labels={
+      "anm": "ANM",
+      "mo": "MO",
+      "obstetrician": "Obstetrician",
+      "ayush": "AYUSH",
+      "nurse": "Nurse",
+      "other_specialist": "Other specialist",
+  })
 F("provider_other", "antenatal_care", "3.c Other specialist, specify", "text", 2,
   applicability="other_specialist")
 F("counselled", "antenatal_care", "3.d Told about a disorder / complication", "enum", 2,
@@ -274,7 +332,25 @@ F("risks", "antenatal_care", "3.e Risk factor identified", "multi", 2,
   options=("abortion", "ectopic", "vesicular_mole", "aph", "hydramnios_oligohydramnios",
            "short_stature", "pih_pe", "previous_cs", "multiple_pregnancy",
            "grand_multi", "abnormal_presentation", "big_baby", "anaemia",
-           "diabetes_gdm", "medical_conditions", "others"))
+           "diabetes_gdm", "medical_conditions", "others"),
+  option_labels={
+      "abortion": "Abortion",
+      "ectopic": "Ectopic",
+      "vesicular_mole": "Vesicular mole",
+      "aph": "APH",
+      "hydramnios_oligohydramnios": "Hydramnios / oligohydramnios",
+      "short_stature": "Short stature",
+      "pih_pe": "PIH / PE",
+      "previous_cs": "Previous CS",
+      "multiple_pregnancy": "Multiple pregnancy",
+      "grand_multi": "Grand multi",
+      "abnormal_presentation": "Abnormal presentation",
+      "big_baby": "Big baby",
+      "anaemia": "Anaemia",
+      "diabetes_gdm": "Diabetes / GDM",
+      "medical_conditions": "Medical conditions",
+      "others": "Others",
+  })
 F("risks_medical", "antenatal_care", "3.e Medical conditions, specify", "text", 2,
   applicability="medical_conditions")
 F("risks_others", "antenatal_care", "3.e Others, specify", "text", 2,
@@ -293,7 +369,17 @@ F("partograph_current", "delivery", "4.b.ii Partograph used - current facility",
 F("complications", "delivery", "4.c Complications during labour", "multi", 2,
   options=("prolonged_labour", "obstructed_labour_rupture", "diabetes_gdm",
            "eclampsia_pre_eclampsia", "inversion_uterus", "intrapartum_haemorrhage",
-           "ip_sepsis", "others"))
+           "ip_sepsis", "others"),
+  option_labels={
+      "prolonged_labour": "Prolonged labour",
+      "obstructed_labour_rupture": "Obstructed labour / rupture",
+      "diabetes_gdm": "Diabetes / GDM",
+      "eclampsia_pre_eclampsia": "Eclampsia / pre-eclampsia",
+      "inversion_uterus": "Inversion of uterus",
+      "intrapartum_haemorrhage": "Intrapartum haemorrhage",
+      "ip_sepsis": "Intrapartum sepsis",
+      "others": "Others",
+  })
 F("complications_other", "delivery", "4.c Others, specify", "text", 2)
 F("mode", "delivery", "4.d Mode of delivery", "enum", 3,
   handling="propose", source="delivery", rule="f4.delivery.mode.from_delivery",
@@ -325,13 +411,32 @@ F("neonatal_outcome", "delivery", "4.g Neonatal outcome", "enum", 2,
   options=("alive", "fresh_still_birth", "macerated_still_birth", "neonatal_death"))
 F("neonatal_cause", "delivery", "4.h Probable cause of death if baby died", "multi", 2,
   options=("birth_asphyxia", "respiratory_distress", "aspiration_mas", "sepsis",
-           "congenital_anomalies", "preterm", "others"))
+           "congenital_anomalies", "preterm", "others"),
+  option_labels={
+      "birth_asphyxia": "Birth asphyxia",
+      "respiratory_distress": "Respiratory distress",
+      "aspiration_mas": "Aspiration / MAS",
+      "sepsis": "Sepsis",
+      "congenital_anomalies": "Congenital anomalies",
+      "preterm": "Preterm",
+      "others": "Others",
+  })
 F("neonatal_cause_other", "delivery", "4.h Others, specify", "text", 2)
 F("postnatal", "delivery", "4.i Postnatal period", "enum", 2,
   options=("uneventful", "eventful"))
 F("postnatal_cause", "delivery", "4.i Probable cause if eventful", "multi", 2,
   options=("pph", "pe_eclampsia", "cva_pulmonary_embolism", "sepsis_ards",
-           "anaemia", "post_op_complication", "medical_conditions", "others"))
+           "anaemia", "post_op_complication", "medical_conditions", "others"),
+  option_labels={
+      "pph": "PPH",
+      "pe_eclampsia": "PE / eclampsia",
+      "cva_pulmonary_embolism": "CVA / pulmonary embolism",
+      "sepsis_ards": "Sepsis / ARDS",
+      "anaemia": "Anaemia",
+      "post_op_complication": "Post-op complication",
+      "medical_conditions": "Medical conditions",
+      "others": "Others",
+  })
 F("postnatal_cause_medical", "delivery", "4.i Medical conditions, specify", "text", 2,
   applicability="medical_conditions")
 F("postnatal_cause_other", "delivery", "4.i Others, specify", "text", 2)
@@ -410,6 +515,139 @@ F("designation", "summary", "Designation", "text", 1)
 F("institution_address", "summary", "Address of the Institution", "text", 1)
 F("signed_on", "summary", "Stamp & Date", "date", 1,
   precision_note="one date for the sign-off block")
+
+
+#: Field -> document. Every key not listed is a clinical judgement and is the
+#: only thing the quick clinical form asks. Keep this list complete: the checks at
+#: the bottom of this module fail if a field is left unassigned.
+FIELD_DOCUMENT: dict[str, str] = {}
+
+for _key in (
+    "f4.background.mcts_no",
+    "f4.background.name",
+    "f4.background.age",
+    "f4.background.address",
+    "f4.background.contact",
+    "f4.background.education",
+    "f4.background.bpl",
+):
+    FIELD_DOCUMENT[_key] = "patient_record"
+
+for _key in (
+    "f4.admission.gestation",
+    "f4.admission.gravida",
+    "f4.admission.abortions",
+    "f4.admission.living_children",
+    "f4.antenatal_care.received",
+    "f4.antenatal_care.facility",
+    "f4.antenatal_care.facility_other",
+    "f4.antenatal_care.provider",
+    "f4.antenatal_care.provider_other",
+    "f4.antenatal_care.counselled",
+    "f4.antenatal_care.risks",
+    "f4.antenatal_care.risks_medical",
+    "f4.antenatal_care.risks_others",
+):
+    FIELD_DOCUMENT[_key] = "anc_card"
+
+for _key in (
+    "f4.admission.complaints",
+    "f4.condition.status",
+    "f4.diagnosis.rows",
+    "f4.timing.a",
+    "f4.timing.c",
+    "f4.timing.d",
+    "f4.timing.e",
+    "f4.timing.f",
+    "f4.delivery.postnatal",
+):
+    FIELD_DOCUMENT[_key] = "admission_register"
+
+#: The LCG is the labour record. Only its header parity is reused today; the
+#: delivery mode and neonatal outcome belong to the delivery note, not the LCG.
+for _key in (
+    "f4.admission.para",
+    "f4.delivery.labour_pains",
+    "f4.delivery.partograph_current",
+    "f4.delivery.complications",
+    "f4.delivery.complications_other",
+    "f4.delivery.phase",
+    "f4.delivery.post_birth_complication_time",
+):
+    FIELD_DOCUMENT[_key] = "labour_record"
+
+for _key in (
+    "f4.abortion.type",
+    "f4.abortion.spontaneous_type",
+    "f4.abortion.induced_legality",
+    "f4.abortion.procedure",
+    "f4.abortion.post_abortal",
+    "f4.abortion.multiple_centres",
+    "f4.abortion.centres",
+    "f4.timing.g",
+    "f4.delivery.mode",
+    "f4.delivery.neonatal_outcome",
+    "f4.delivery.mode_indication",
+    "f4.delivery.anaesthesia",
+    "f4.delivery.anaesthesia_reaction",
+    "f4.interventions.matrix",
+    "f4.interventions.transfusion_given",
+    "f4.interventions.transfusion_units",
+    "f4.interventions.transfusion_components",
+    "f4.interventions.transfusion_reaction",
+):
+    FIELD_DOCUMENT[_key] = "ot_note"
+
+for _key in (
+    "f4.condition.referred",
+    "f4.condition.places",
+    "f4.condition.referral",
+    "f4.delivery.partograph_past",
+):
+    FIELD_DOCUMENT[_key] = "referral_slip"
+
+for _key in (
+    "f4.timing.b",
+    "f4.autopsy.performed",
+    "f4.autopsy.diagnosis",
+):
+    FIELD_DOCUMENT[_key] = "death_record"
+
+for _key in (
+    "f4.background.facility_name",
+    "f4.background.facility_type",
+    "f4.background.facility_address",
+    "f4.background.nodal_name",
+    "f4.background.nodal_contact",
+    "f4.background.fbmdr_no",
+    "f4.background.fbmdr_month",
+    "f4.background.fbmdr_year",
+    "f4.background.inpatient_no",
+    "f4.background.medico_legal",
+    "f4.summary.mo_name",
+    "f4.summary.fno_name",
+    "f4.summary.designation",
+    "f4.summary.institution_address",
+    "f4.summary.signed_on",
+):
+    FIELD_DOCUMENT[_key] = "fbmdr_register"
+
+#: Fields with no document. They are the clinician's own judgement.
+CLINICIAN_KEYS: tuple[str, ...] = tuple(
+    field.key for field in registry.all() if field.key not in FIELD_DOCUMENT
+)
+
+#: Document -> its visible fields, in printed order.
+FIELDS_BY_DOCUMENT: dict[str, list[str]] = {
+    key: [field.key for field in registry.all() if field.key in FIELD_DOCUMENT and FIELD_DOCUMENT[field.key] == key]
+    for key in DOCUMENTS
+}
+
+_unknown = set(FIELD_DOCUMENT) - set(registry._fields)
+if _unknown:
+    raise ValueError(f"document assigned to unknown fields: {sorted(_unknown)}")
+if not CLINICIAN_KEYS:
+    raise ValueError("every field is document-sourced; the quick form would be empty")
 
 
 #: Fields retired from the active form. Their old answers are kept and shown as

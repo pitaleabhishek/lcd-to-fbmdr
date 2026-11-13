@@ -1,0 +1,38 @@
+<tr>
+  <td>
+    <div class="label">{{ row.short_label|default:row.field.label_printed }}</div>
+    {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
+    {% if row.comment %}<div class="check-msg warning">{{ row.comment }}</div>{% endif %}
+  </td>
+  <td>
+    {% if not editable_form %}
+      <div class="value">{{ row.display }}</div>
+    {% elif row.type == "enum" %}
+      <div class="radio-group">
+        {% for option in row.options %}
+          <label class="radio-pill">
+            <input type="radio" name="{{ row.key }}" value="{{ option.value }}"
+                   {% if row.current == option.value %}checked{% endif %}>
+            {{ option.label }}
+          </label>
+        {% endfor %}
+      </div>
+    {% elif row.type == "multi" %}
+      <div class="multi-list">
+        {% for option in row.options %}
+          <label>
+            <input type="checkbox" name="{{ row.key }}" value="{{ option.value }}"
+                   {% if option.value in row.current_list %}checked{% endif %}>
+            {{ option.label }}
+          </label>
+        {% endfor %}
+      </div>
+    {% elif row.type == "date" %}
+      <input type="date" name="{{ row.key }}" value="{{ row.current }}">
+    {% elif row.textarea %}
+      <textarea name="{{ row.key }}" rows="1" class="val auto">{{ row.current }}</textarea>
+    {% else %}
+      <input type="text" name="{{ row.key }}" value="{{ row.current }}" class="val">
+    {% endif %}
+  </td>
+</tr>

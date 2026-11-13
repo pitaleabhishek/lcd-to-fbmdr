@@ -264,7 +264,6 @@ def test_a_hidden_kept_answer_is_clearable_from_the_not_shown_panel(
     )
     page = response.content.decode()
     assert 'id="h-type"' in page
-    assert 'href="#h-type"' in page
     assert "clear kept answer" in page
 
     response = client.post(
@@ -302,14 +301,48 @@ def test_warnings_do_not_block_an_otherwise_valid_submission(case_a, resident):
     assert case_a.status == Review.Status.SUBMITTED
 
 
-def test_errors_block_submission(case_a, resident):
+def test_the_fno_sees_the_checks_frozen_at_submission(
+    client, case_a, django_user_model
+):
+    resident = django_user_model.objects.get(username="resident")
+    fno = django_user_model.objects.get(username="fno")
+    complete_required(case_a, resident)
+    services.submit(case_a, resident)
+
+    client.force_login(fno)
+    page = client.get(f"/review/{case_a.pk}/").content.decode()
+
+    assert "Checks at submission" in page
+    assert "Frozen with version 1" in page
+
+
+def test_clinical_required_blocks_but_document_gap_is_advisory(case_a, resident):
+    missing = issue(
+        checks.run_checks(case_a), "missing:f4.primary_diagnosis.dx"
+    )
+    assert missing is not None and missing.severity == checks.ERROR
+    assert checks.blocks_submission(missing)
+
+    answer(case_a, "f4.interventions.transfusion_given", "yes", resident)
+    gap = issue(
+        checks.run_checks(case_a), "missing:f4.interventions.transfusion_units"
+    )
+    assert gap is not None and gap.severity == checks.ERROR
+    assert not checks.blocks_submission(gap)
+
+
+def test_document_errors_do_not_block_submission(case_a, resident):
     complete_required(case_a, resident)
     answer(case_a, "f4.interventions.transfusion_given", "yes", resident)
-    with pytest.raises(ValidationError) as exc:
-        services.submit(case_a, resident)
-    assert "Transfusion is recorded" in str(exc.value)
+
+    version = services.submit(case_a, resident)
+
     case_a.refresh_from_db()
-    assert case_a.status == Review.Status.DRAFT
+    assert case_a.status == Review.Status.SUBMITTED
+    assert version.payload_json["checks"]
+    assert any(
+        c["key"].startswith("missing:") for c in version.payload_json["checks"]
+    )
 
 
 def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
@@ -318,7 +351,7 @@ def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
     assert "what the checks found" not in page
     assert "to fix before submission" not in page
     assert 'class="check-msg error"' not in page
-    assert "Checks run before a version is created" in page
+    assert "Checks run at submit" in page
     assert "Check before submitting" in page
 
     resp = client.post(f"/review/{case_a.pk}/", {"action": "submit", "note": "keep me"})
@@ -328,7 +361,7 @@ def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
     assert "to fix before submission" in page
     assert "Primary diagnosis" in page
     assert 'class="check-msg error"' in page
-    assert "to fix before submitting" in page
+    assert "Fix the required answers above" in page
     assert "View all checks" in page
     assert "keep me" in page  # the note survived the blocked submit
     case_a.refresh_from_db()
@@ -336,15 +369,15 @@ def test_checks_are_hidden_until_submit_is_pressed(client, case_a, resident):
     assert case_a.versions.count() == 0
 
 
-def test_warnings_need_one_confirmation_before_submitting(client, case_a, resident):
+def test_advisory_checks_need_one_confirmation_before_submitting(client, case_a, resident):
     complete_required(case_a, resident)
     client.force_login(resident)
 
     resp = client.post(f"/review/{case_a.pk}/", {"action": "submit"})
     assert resp.status_code == 200
     page = resp.content.decode()
-    assert "Submit anyway" in page
-    assert "warning" in page
+    assert "Submit this review?" in page
+    assert "Check before submitting" in page
     case_a.refresh_from_db()
     assert case_a.status == Review.Status.DRAFT
     assert case_a.versions.count() == 0

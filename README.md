@@ -209,8 +209,10 @@ demo setup.
 
 ## Checks and conditions: what is implemented
 
-Checks run only on **Check before submitting** or **Submit**. Errors block.
-Warnings need one **Submit anyway** confirmation.
+Checks run on **Check before submitting** or **Submit**. Only a required clinical
+judgement blocks the author. Document gaps and every other check are advisory:
+they are frozen with the version and shown to the FNO. Submit asks for one
+confirmation and then creates the version.
 
 Checks cover:
 
@@ -256,6 +258,7 @@ The source documents are in [`docs/reference/`](docs/reference/):
 ## Project documents
 
 - Setup: [`docs/setup.md`](docs/setup.md)
+- Quick review sources: [`docs/quick-sources.md`](docs/quick-sources.md)
 - Design: [`docs/design.md`](docs/design.md)
 - Database audit: [`docs/db-audit.md`](docs/db-audit.md)
 - Amendments: [`docs/amendments.md`](docs/amendments.md)
@@ -277,7 +280,7 @@ uv run pytest
 uv run pytest -n 0     # one process for debugging
 ```
 
-The suite has **264 passing tests**.
+The suite has **275 passing tests**.
 
 ## Current state
 
@@ -287,8 +290,15 @@ The suite has **264 passing tests**.
 - Proposals, provenance and derived values.
 - Accept, reject and correct.
 - Conditional Form 4.
-- Pre-submission checks.
-- Quick clinical review: judgement and sign-off fields, a contributing-factors checklist, conditional fields and exceptions. No history or provenance on the clinician page.
+- Submit asks for one confirmation, then freezes. Only a required clinical
+  judgement blocks the author; document gaps and every other check are advisory
+  and frozen for the FNO under **Checks at submission**.
+- Quick clinical review: 76 of the 99 values are assigned to one of eight record
+  documents and accepted automatically. The clinician page asks only the ten
+  judgement questions plus the contributing-factors checklist. Sign-off is
+  prefilled and collapsed. A clinician edit overrides the record; overridden
+  values stay in the form and are marked **overridden** in the collapsed
+  sections. See [`docs/quick-sources.md`](docs/quick-sources.md).
 - Submit, return, resubmit and approve.
 - Amendments with a second approval.
 - Form 1 from the same review.

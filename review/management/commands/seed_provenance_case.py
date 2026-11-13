@@ -123,6 +123,9 @@ class Command(BaseCommand):
             outcome_at=_at(template.outcome_at),
             gestation_weeks=template.gestation_weeks,
             gestation_days=template.gestation_days,
+            gravida=2,
+            abortions=0,
+            living_children=1,
         )
         admission = Admission.objects.create(
             pregnancy=pregnancy,

@@ -145,7 +145,51 @@
   {% if show_checks and check_errors %}<div class="stat warn"><b>{{ check_errors|length }}</b> to fix</div>{% endif %}
   {% if show_checks and check_warnings %}<div class="stat"><b>{{ check_warnings|length }}</b> warning{{ check_warnings|length|pluralize }}</div>{% endif %}
 </div>
+<div class="doc-summary">
+  <span><b>{{ document_summary.answered }}</b> of {{ document_summary.total }} values
+    accepted from records.</span>
+  {% for d in document_summary.sections %}
+    {% if d.answered %}
+      <span class="doc-chip">{{ d.label }} <b>{{ d.answered }}</b></span>
+    {% endif %}
+  {% endfor %}
+  <span class="doc-chip clinician">Clinical judgement <b>{{ document_summary.clinician }}</b></span>
+  <a class="small" href="{% url 'quick_review' review.pk %}">Open clinical review</a>
+</div>
 <div class="legend"><b>R</b> reused · <b>D</b> derived · <b>E</b> entered · <b>C</b> corrected · questions hide when they cannot apply</div>
+{% if submission_checks %}
+<details class="form-section" id="submitted-checks">
+  <summary>
+    Checks at submission
+    <span class="count">
+      {{ submission_checks.clinical|length }} clinical ·
+      {{ submission_checks.source|length }} source
+    </span>
+  </summary>
+  <p class="muted small">
+    Frozen with version {{ submission_checks.version }}. These were advisory;
+    they did not block submission.
+  </p>
+  {% if submission_checks.clinical %}
+    <h3>Clinical answers</h3>
+    <ul class="comment-list">
+      {% for c in submission_checks.clinical %}
+        <li><span class="chip">{{ c.severity }}</span> {{ c.message }}
+          {% if c.fix %}<span class="muted">{{ c.fix }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+  {% if submission_checks.source %}
+    <h3>Source values</h3>
+    <ul class="comment-list">
+      {% for c in submission_checks.source %}
+        <li><span class="chip">{{ c.severity }}</span> {{ c.message }}
+          {% if c.fix %}<span class="muted">{{ c.fix }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</details>
+{% endif %}
 {% if show_checks and check_issues %}
 <details class="checks sticky-checks" id="checks">
   <summary>
@@ -346,6 +390,11 @@
             <td>
               <div class="label" title="{{ row.field.key }}">{{ row.field.label_printed }}</div>
               {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
+              {% if row.field.document %}
+                <div class="key">from {{ row.field.document_label }}</div>
+              {% else %}
+                <div class="key">clinical judgement</div>
+              {% endif %}
               <a class="see-source prov-link"
                  href="{% url 'field_provenance' review.pk row.field.key %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
                  data-url="{% url 'field_provenance' review.pk row.field.key %}{% if is_amendment %}?amendment={{ amendment.pk }}{% endif %}"
@@ -752,26 +801,32 @@
           <input type="hidden" name="action" value="{% if is_amendment %}submit_amendment{% else %}submit{% endif %}">
           <textarea name="note" rows="3" class="auto"
                     placeholder="Anything the reviewer should know before deciding — for example where a time came from. Not printed on Form 4.">{{ draft_note }}</textarea>
-          {% if show_checks %}
-            <div class="check-msg {% if check_errors %}error{% elif check_warnings %}warning{% else %}ok{% endif %}">
+          {% if confirm_submit %}
+            <div class="check-msg ok">
+              Submit this review? It will be frozen and sent to the FNO.
+            </div>
+          {% elif show_checks %}
+            <div class="check-msg {% if check_errors %}error{% else %}ok{% endif %}">
               {% if check_errors %}
-                {{ check_errors|length }} problem{{ check_errors|length|pluralize }} to fix before submitting.
-              {% elif check_warnings %}
-                {{ check_warnings|length }} warning{{ check_warnings|length|pluralize }} — review them before submitting.
+                {{ check_errors|length }} required clinical answer{{ check_errors|length|pluralize }} missing — fill them before submitting.
               {% else %}
-                No problems found — ready to submit.
+                No required clinical answer is missing.
               {% endif %}
               {% if check_issues %}<a href="#checks" class="view-checks">View all checks</a>{% endif %}
             </div>
           {% endif %}
-          <div class="bar">
+          <div class="bar" id="workspace-submit-bar">
             <button name="check_only" value="yes">Check before submitting</button>
-            {% if show_checks and check_warnings and not check_errors %}
-              <button class="primary" name="confirm" value="yes">Submit anyway</button>
+            {% if confirm_submit %}
+              <button class="primary" name="confirm" value="yes">Submit for review</button>
+              <a class="button" href="{{ request.path }}">Keep editing</a>
             {% else %}
               <button class="primary">{% if is_amendment %}Submit amendment for approval{% else %}Submit for review{% endif %}</button>
+              {% if show_checks and check_errors %}
+                <span class="muted small warn">Fix the required answers above, then submit again.</span>
+              {% endif %}
             {% endif %}
-            <span class="muted small">Checks run before a version is created.</span>
+            <span class="muted small">Checks run at submit; required clinical answers must be complete.</span>
           </div>
         </form>
       </section>
@@ -801,5 +856,10 @@
       <button name="action" value="approve_amendment" class="primary">Approve amendment</button>
     </div>
   </form>
+{% endif %}
+{% if confirm_submit or check_errors %}
+<script>
+  document.getElementById('workspace-submit-bar').scrollIntoView({ block: 'center' });
+</script>
 {% endif %}
 {% endblock %}

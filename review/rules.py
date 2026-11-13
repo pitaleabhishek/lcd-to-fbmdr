@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any, Callable
 
 from .models import Observation, TimePrecision
-from .registry import Field
+from .registry import Field, registry
 from .source_time import (
     current_admission,
     current_death,
@@ -155,6 +155,28 @@ def _need(value, label):
     return None if value in (None, "") else value
 
 
+def _option(key: str, raw):
+    """Return raw only when it is an allowed option for the field."""
+    field = registry.get(key)
+    if field is None or raw in (None, ""):
+        return None
+    return raw if str(raw) in field.options else None
+
+
+def _header(ctx: Context, key: str, label: str):
+    doc = ctx.document
+    if doc is None:
+        return NotComputable("no labour record", "missing")
+    value = (doc.header_json or {}).get(key)
+    if value in (None, ""):
+        return NotComputable(f"{label} not recorded on the labour record", "missing")
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        pass
+    return Value(value, [header_input(doc, label, value, key)])
+
+
 # --- background --------------------------------------------------------------
 
 @rule("f4.background.facility_name.from_facility", "f4.background.facility_name")
@@ -209,6 +231,108 @@ def medico_legal(ctx: Context):
         [fact_input(f"admission:{ctx.admission.pk}", "Medico-legal", ctx.admission.medico_legal,
                     author=ctx.admission.admitted_by)],
     )
+
+
+def _education(raw):
+    text = (raw or "").strip().lower().replace("_", " ").replace("-", " ")
+    if not text:
+        return None
+    if "illit" in text:
+        return "illiterate"
+    if "beyond" in text or "graduate" in text:
+        return "beyond_12th"
+    if "5" in text:
+        return "upto_5th"
+    if "12" in text or "6" in text:
+        return "6th_to_12th"
+    return None
+
+
+def _bpl(raw):
+    text = (raw or "").strip().lower().replace("_", " ")
+    if not text:
+        return None
+    if "not" in text:
+        return "not_bpl"
+    if "self" in text:
+        return "self_certified"
+    if "bpl" in text or "certif" in text:
+        return "bpl_certified"
+    return None
+
+
+@rule("f4.background.facility_type.from_facility", "f4.background.facility_type")
+def facility_type(ctx: Context):
+    f = ctx.review.reporting_facility
+    if not f.level:
+        return NotComputable("facility type not recorded", "missing")
+    return Value(f.level, [fact_input(f"facility:{f.pk}", "Facility type", f.level)])
+
+
+@rule("f4.background.facility_address.from_facility", "f4.background.facility_address")
+def facility_address(ctx: Context):
+    f = ctx.review.reporting_facility
+    if not f.address:
+        return NotComputable("facility address not recorded", "missing")
+    return Value(f.address, [fact_input(f"facility:{f.pk}", "Facility address", f.address)])
+
+
+@rule("f4.background.nodal_name.from_facility", "f4.background.nodal_name")
+def nodal_name(ctx: Context):
+    f = ctx.review.reporting_facility
+    if not f.nodal_name:
+        return NotComputable("nodal person not recorded", "missing")
+    return Value(f.nodal_name, [fact_input(f"facility:{f.pk}", "Nodal person", f.nodal_name)])
+
+
+@rule("f4.background.nodal_contact.from_facility", "f4.background.nodal_contact")
+def nodal_contact(ctx: Context):
+    f = ctx.review.reporting_facility
+    if not f.nodal_phone:
+        return NotComputable("nodal contact not recorded", "missing")
+    return Value(f.nodal_phone, [fact_input(f"facility:{f.pk}", "Nodal contact", f.nodal_phone)])
+
+
+@rule("f4.background.fbmdr_month.from_review", "f4.background.fbmdr_month")
+def fbmdr_month(ctx: Context):
+    at = ctx.review.created_at
+    return Value(at.month, [fact_input(f"review:{ctx.review.pk}", "Review opened", at)])
+
+
+@rule("f4.background.fbmdr_year.from_review", "f4.background.fbmdr_year")
+def fbmdr_year(ctx: Context):
+    at = ctx.review.created_at
+    return Value(at.year, [fact_input(f"review:{ctx.review.pk}", "Review opened", at)])
+
+
+@rule("f4.background.address.from_patient", "f4.background.address")
+def address(ctx: Context):
+    if not ctx.patient.address:
+        return NotComputable("address not recorded", "missing")
+    return Value(ctx.patient.address, [fact_input(f"patient:{ctx.patient.pk}", "Address", ctx.patient.address)])
+
+
+@rule("f4.background.contact.from_patient", "f4.background.contact")
+def contact(ctx: Context):
+    if not ctx.patient.phone:
+        return NotComputable("contact number not recorded", "missing")
+    return Value(ctx.patient.phone, [fact_input(f"patient:{ctx.patient.pk}", "Contact", ctx.patient.phone)])
+
+
+@rule("f4.background.education.from_patient", "f4.background.education")
+def education(ctx: Context):
+    value = _education(ctx.patient.education)
+    if value is None:
+        return NotComputable("education not recorded in a form the form accepts", "missing")
+    return Value(value, [fact_input(f"patient:{ctx.patient.pk}", "Education", ctx.patient.education)])
+
+
+@rule("f4.background.bpl.from_patient", "f4.background.bpl")
+def bpl(ctx: Context):
+    value = _bpl(ctx.patient.bpl)
+    if value is None:
+        return NotComputable("Below Poverty Line status not recorded", "missing")
+    return Value(value, [fact_input(f"patient:{ctx.patient.pk}", "Below Poverty Line", ctx.patient.bpl)])
 
 
 # --- timing ------------------------------------------------------------------
@@ -350,6 +474,135 @@ def para(ctx: Context):
     return Value(value, [header_input(doc, "Parity", value, "parity")])
 
 
+def _pregnancy_count(attr: str, label: str):
+    def fn(ctx: Context):
+        value = getattr(ctx.pregnancy, attr, None)
+        if value is None:
+            return NotComputable(f"{label} not recorded on the ANC card", "missing")
+        return Value(
+            value,
+            [fact_input(f"pregnancy:{ctx.pregnancy.pk}", label, value)],
+        )
+    return fn
+
+
+f4_gravida = rule("f4.admission.gravida.from_pregnancy", "f4.admission.gravida")(
+    _pregnancy_count("gravida", "Gravida")
+)
+f4_abortions = rule("f4.admission.abortions.from_pregnancy", "f4.admission.abortions")(
+    _pregnancy_count("abortions", "Abortions")
+)
+f4_living_children = rule(
+    "f4.admission.living_children.from_pregnancy", "f4.admission.living_children"
+)(_pregnancy_count("living_children", "Living children"))
+
+
+@rule("f4.admission.complaints.from_admission", "f4.admission.complaints")
+def complaints(ctx: Context):
+    a = ctx.admission
+    if not a or not a.complaints:
+        return NotComputable("complaints not recorded at admission", "missing")
+    return Value(a.complaints, [fact_input(f"admission:{a.pk}", "Complaints", a.complaints,
+                                           author=a.admitted_by)])
+
+
+@rule("f4.admission.gestation.from_pregnancy", "f4.admission.gestation")
+def gestation(ctx: Context):
+    weeks = ctx.pregnancy.gestation_weeks
+    if weeks is None:
+        return NotComputable("period of gestation not recorded", "missing")
+    if weeks < 22:
+        value = "before_22"
+    elif weeks < 34:
+        value = "22_34"
+    else:
+        value = "34_plus"
+    return Value(value, [fact_input(f"pregnancy:{int(ctx.pregnancy.pk)}", "Gestation weeks", weeks)])
+
+
+@rule("f4.condition.status.from_admission", "f4.condition.status")
+def condition_status(ctx: Context):
+    a = ctx.admission
+    value = _option("f4.condition.status", a.condition_on_admission if a else None)
+    if value is None:
+        return NotComputable("condition on admission not recorded", "missing")
+    return Value(value, [fact_input(f"admission:{a.pk}", "Condition on admission", value,
+                                    author=a.admitted_by)])
+
+
+# --- antenatal care ----------------------------------------------------------
+
+def _anc(field_key: str, attr: str, label: str):
+    def fn(ctx: Context):
+        raw = getattr(ctx.pregnancy, attr, "")
+        value = _option(field_key, raw)
+        if value is None:
+            return NotComputable(f"{label} not recorded on the ANC card", "missing")
+        return Value(value, [fact_input(f"pregnancy:{ctx.pregnancy.pk}", label, value)])
+    return fn
+
+
+f4_anc_received = rule("f4.antenatal_care.received.from_pregnancy",
+                       "f4.antenatal_care.received")(
+    _anc("f4.antenatal_care.received", "anc_received", "ANC received")
+)
+f4_anc_facility = rule("f4.antenatal_care.facility.from_pregnancy",
+                       "f4.antenatal_care.facility")(
+    _anc("f4.antenatal_care.facility", "anc_facility_type", "ANC facility")
+)
+f4_anc_provider = rule("f4.antenatal_care.provider.from_pregnancy",
+                       "f4.antenatal_care.provider")(
+    _anc("f4.antenatal_care.provider", "anc_provider", "ANC provider")
+)
+f4_anc_counselled = rule("f4.antenatal_care.counselled.from_pregnancy",
+                         "f4.antenatal_care.counselled")(
+    _anc("f4.antenatal_care.counselled", "anc_counselled", "Counselling")
+)
+
+
+@rule("f4.antenatal_care.risks.from_pregnancy", "f4.antenatal_care.risks")
+def anc_risks(ctx: Context):
+    allowed = registry["f4.antenatal_care.risks"].options
+    values = [str(v) for v in (ctx.pregnancy.anc_risks or []) if str(v) in allowed]
+    if not values:
+        return NotComputable("no antenatal risk recorded", "missing")
+    return Value(values, [fact_input(f"pregnancy:{ctx.pregnancy.pk}", "ANC risks",
+                                     ", ".join(values))])
+
+
+# --- abortion ----------------------------------------------------------------
+
+def _abortion(key: str, label: str):
+    def fn(ctx: Context):
+        detail = ctx.pregnancy.abortion_detail or {}
+        value = _option(f"f4.abortion.{key}", detail.get(key))
+        if value is None:
+            return NotComputable(f"{label} not recorded", "missing")
+        return Value(value, [fact_input(f"pregnancy:{ctx.pregnancy.pk}", label, value)])
+    return fn
+
+
+f4_abortion_type = rule("f4.abortion.type.from_pregnancy", "f4.abortion.type")(
+    _abortion("type", "Abortion type")
+)
+f4_abortion_spontaneous = rule("f4.abortion.spontaneous_type.from_pregnancy",
+                               "f4.abortion.spontaneous_type")(
+    _abortion("spontaneous_type", "Abortion completeness")
+)
+f4_abortion_legality = rule("f4.abortion.induced_legality.from_pregnancy",
+                            "f4.abortion.induced_legality")(
+    _abortion("induced_legality", "Induced abortion legality")
+)
+f4_abortion_procedure = rule("f4.abortion.procedure.from_pregnancy",
+                             "f4.abortion.procedure")(
+    _abortion("procedure", "Abortion procedure")
+)
+f4_abortion_post = rule("f4.abortion.post_abortal.from_pregnancy",
+                        "f4.abortion.post_abortal")(
+    _abortion("post_abortal", "Post-abortal period")
+)
+
+
 # --- delivery ----------------------------------------------------------------
 
 @rule("f4.delivery.mode.from_delivery", "f4.delivery.mode")
@@ -372,6 +625,14 @@ def neonatal(ctx: Context):
     b = babies[-1]
     return Value(b.outcome,
                  [fact_input(f"neonate:{b.pk}", "Neonatal outcome", b.outcome, b.assessed_at)])
+
+
+@rule("f4.delivery.postnatal.from_pregnancy", "f4.delivery.postnatal")
+def postnatal(ctx: Context):
+    value = _option("f4.delivery.postnatal", ctx.pregnancy.postnatal_course)
+    if value is None:
+        return NotComputable("postnatal course not recorded", "missing")
+    return Value(value, [fact_input(f"pregnancy:{ctx.pregnancy.pk}", "Postnatal course", value)])
 
 
 # --- interventions: none. The LCG charts oxytocin and fluids, but Form 4's

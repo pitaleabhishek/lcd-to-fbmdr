@@ -65,6 +65,9 @@ class Command(BaseCommand):
             outcome=Pregnancy.Outcome.DELIVERY,
             outcome_at=dt(12, 22, 50),
             gestation_weeks=39,
+            gravida=2,
+            abortions=0,
+            living_children=1,
         )
         admission = Admission.objects.create(
             pregnancy=pregnancy,

@@ -4,8 +4,8 @@ This is the only task list. Do not keep a second list.
 
 `[x]` done. `[ ]` open. `[~]` partial.
 
-Last update: 7 November 2026. 264 tests pass. The app has 99 Form 4 fields and 34
-LCG variables.
+Last update: 13 November 2026. 275 tests pass. The app has 99 Form 4 fields and
+34 LCG variables.
 
 ## Built
 
@@ -49,13 +49,25 @@ LCG variables.
 - [x] Review creation: one form for an existing woman or a new death. One click
   from a labour record. `Review.source_document` is explicit. The app creates a
   new facility when needed. A review without an LCG says so.
-- [x] Checks before submission (version 3). The panel is grouped and plain. It shows
-  after Check or Submit. Errors block. Warnings need one confirmation.
+- [x] Checks before submission (version 3). Only a required clinical judgement
+  blocks the author. Every other finding is frozen with the version and shown to
+  the FNO. The author sees a plain confirmation.
 - [x] One-command setup: `start.sh`, `start.ps1`, `demo_setup` and `docs/setup.md`.
 - [x] Optional shared HTTP Basic auth for a hosted demo.
 - [x] Database audit: removed 4 unused review tables; 32 tables remain (`docs/db-audit.md`).
 - [x] Integrity, confidentiality and DPDP answer. See `docs/dpdp.md` and
   `docs/security.md`.
+- [x] Quick clinical review fed from records: 99 fields mapped to eight documents.
+  76 are document-sourced; 44 are wired and accepted automatically. The page asks
+  ten judgement questions plus the 13-factor checklist. See
+  `docs/quick-sources.md`.
+- [x] Clinician edits override record values. The record candidate is closed
+  silently and the collapsed section marks the value **overridden**.
+- [x] GPLA: parity from the LCG header; gravida, abortions and living children
+  from the ANC card on the pregnancy. Labour record no longer claims delivery
+  facts.
+- [x] Submit asks for one confirmation. Only a required clinical judgement blocks
+  the author; advisory checks are frozen and shown to the FNO.
 
 ## Essential, open
 

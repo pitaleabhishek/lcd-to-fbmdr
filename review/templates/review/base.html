@@ -363,6 +363,13 @@
             color:var(--accent); font-weight:700; }
   .legend { font-size:10.5px; color:var(--muted); margin:4px 0 0; }
   .legend b { color:var(--ink); }
+  .doc-summary { display:flex; flex-wrap:wrap; gap:5px; align-items:center;
+                 font-size:11px; color:var(--muted); margin:4px 0 2px; }
+  .doc-summary > span:first-child { color:var(--ink); margin-right:2px; }
+  .doc-chip { border:1px solid var(--line); background:#f6f9fa; color:var(--ink);
+              border-radius:10px; padding:1px 7px; font-size:10.5px; cursor:default; }
+  .doc-chip.clinician { background:#fff7ea; border-color:#f0d3a8; }
+  .doc-chip b { color:var(--accent); }
   .prop.accepted { border-color:#c9e3d2; background:#f4faf6; }
   .prop.rejected { border-color:#f0d3a8; background:#fffaf2; }
   .progress { height:6px; background:#e6ecef; border-radius:3px; overflow:hidden;
@@ -490,11 +497,16 @@
     width:100%; font:inherit; font-size:16px; padding:8px 10px;
     min-height:44px; border:1px solid var(--line); border-radius:5px;
   }
-  .quick-page textarea { min-height:110px; resize:vertical; }
+  .quick-page textarea { min-height:44px; resize:none; overflow:hidden; }
   .quick-page .fields td:first-child { width:38%; }
   .quick-page .fields td { padding:8px 10px; }
   .quick-page .bar button { min-height:44px; font-size:16px; padding:8px 16px; }
-  .quick-page .bar { margin-top:14px; }
+  .quick-page .bar { margin-top:14px; flex-wrap:nowrap; }
+  .quick-page .confirm-line { white-space:nowrap; }
+  @media (max-width:700px) {
+    .quick-page .bar { flex-wrap:wrap; }
+    .quick-page .confirm-line { white-space:normal; }
+  }
   .quick-page .radio-pill { min-height:38px; padding:7px 13px; }
   .quick-page .statebox { font-size:13px; }
   .quick-page .factor-grid {
@@ -503,6 +515,7 @@
   }
   .quick-page .factor-grid label { display:flex; gap:7px; align-items:flex-start; font-size:15px; }
   .quick-page .multi-list { display:flex; flex-direction:column; gap:7px; font-size:15px; }
+
   @media (max-width:700px) { .quick-page .factor-grid { grid-template-columns:1fr; } }
   .quick-page .form-section > textarea { width:100%; }
 

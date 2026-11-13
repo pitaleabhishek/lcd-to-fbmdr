@@ -20,12 +20,15 @@ in a Facility-Based Maternal Death Review (Form 4). Each value keeps its source.
 ## Current state
 
 - Commit at handoff: see `git log -1`. Commit the amendment work before handoff.
-- Tests: **264 passing**.
+- Tests: **275 passing**.
 - Active registry: 14 sections, 99 Form 4 fields, three block schemas and 34 LCG
   variables.
 - Conditions: version 2. It has 2 section gates and 33 field rules.
-- Checks: version 3. It has 14 check groups. Checks run on Submit.
-- Rules: 17 proposal rules.
+- Checks: version 3. It has 14 check groups. Only a required clinical judgement
+  blocks submit; every other finding is frozen and shown to the FNO.
+- Rules: 44 proposal rules.
+- Documents: eight record sources. 76 fields are document-sourced, 44 are wired
+  to a rule, 23 are clinical judgement. See `docs/quick-sources.md`.
 - Provenance: version 1. The app freezes a snapshot for each value at submit and
   amendment submit. It checks the snapshot at approval.
 - Demo data: Cases A, B, C, D and the Happy case are seeded. Cases B and C are
@@ -61,6 +64,23 @@ Make an encrypted backup:
 ```sh
 BACKUP_PASSPHRASE=... ./scripts/backup-db.sh
 ```
+
+### Deploy workflow
+
+Change the hosted demo first, check it there, then merge the code. The deploy
+target is `nirovia-api1:/home/nirovia/lcgtomsrd`; the web container binds
+`./review` and runs gunicorn on `127.0.0.1:8800`.
+
+```sh
+rsync -av --delete --exclude '__pycache__' --exclude '*.pyc' \
+  review/ nirovia-api1:/home/nirovia/lcgtomsrd/review/
+rsync -av docs/ nirovia-api1:/home/nirovia/lcgtomsrd/docs/
+ssh nirovia-api1 'cd /home/nirovia/lcgtomsrd && \
+  docker compose -f docker-compose.yml -f docker-compose.deploy.yml restart web'
+```
+
+Templates and docs are live through the bind mount; Python changes need the
+restart. Do not sync `.env`. No migrations are needed unless a model changed.
 
 | User | Password | Role |
 |---|---|---|
@@ -121,7 +141,8 @@ docker compose exec web python manage.py demo_setup
 - `review/provenance.py`: per-value snapshot (version 1), hashing and old-version
   fallback.
 - `review/form1.py`: Form 1 mapping, Form 1 fields and occurrence flags.
-- `review/registry.py`: Form 4 sections, fields, blocks and `LEGACY_FIELDS`.
+- `review/registry.py`: Form 4 sections, fields, blocks, `LEGACY_FIELDS` and the
+  eight-document source map (`DOCUMENTS`, `FIELD_DOCUMENT`, `CLINICIAN_KEYS`).
 - `review/registry_lcg.py`: LCG sections and variables.
 - `review/conditions.py`: conditional visibility (version 2) with three-valued logic.
 - `review/checks.py`: pre-submission checks (version 3).
@@ -209,12 +230,27 @@ under the workspace form. Old versions without a snapshot say so. They rebuild
 only from the proposal record and mark it *reconstructed*. Do not read live
 proposals for a version 1 provenance payload. See `docs/provenance.md`.
 
+## Quick clinical review
+
+`/quick` asks only the clinical-judgement fields plus the contributing-factors
+checklist. Record values are accepted automatically on load.
+
+An answered field belongs to whoever answered it. A clinician edit is an
+override: it wins, the record candidate is closed silently, and the collapsed
+section shows the clinician's value marked **overridden**. Do not create a
+conflict prompt and do not block submission for a typed answer. Only a value
+that came from a record is flagged when new evidence supersedes it.
+
 ## Checks
 
-Checks run only when the user presses Submit. Errors block. Warnings need one
-“Submit anyway” confirmation. The panel shows after Submit. The resident note
-survives a blocked submit. The checks version is in the frozen payload and the
-submission audit event.
+Checks run on Check or Submit. Only a required **clinical judgement** blocks the
+author: registry-required fields, ERROR-severity conditional follow-ups and
+their specification fields, filtered to `Field.is_clinician_only`. A missing
+document value is advisory — it is a record gap for the FNO/records team, never a
+reason to stop the clinician. Everything else is frozen with the version under
+`checks` and shown to the FNO as **Checks at submission**. Submit asks for one
+confirmation; advisory notices do not stop it. The resident note survives a
+blocked submit. The checks version is in the frozen payload and the audit event.
 
 The check groups include:
 
@@ -284,6 +320,7 @@ Remaining:
 ## Reference documents
 
 - `docs/setup.md`
+- `docs/quick-sources.md`
 - `docs/db-audit.md`
 - `docs/design.md`
 - `docs/amendments.md`

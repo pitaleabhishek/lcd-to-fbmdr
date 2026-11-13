@@ -56,6 +56,11 @@ class Pregnancy(models.Model):
     outcome_at = models.DateTimeField(null=True, blank=True)
     gestation_weeks = models.PositiveSmallIntegerField(null=True, blank=True)
     gestation_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Obstetric history from the ANC card / registration record. The LCG header
+    # only carries parity, so the other three do not come from the labour chart.
+    gravida = models.PositiveSmallIntegerField(null=True, blank=True)
+    abortions = models.PositiveSmallIntegerField(null=True, blank=True)
+    living_children = models.PositiveSmallIntegerField(null=True, blank=True)
     risk_codes = models.JSONField(default=list, blank=True)
     risk_note = models.TextField(blank=True)
     anc_received = models.CharField(max_length=20, blank=True)

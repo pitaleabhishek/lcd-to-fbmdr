@@ -17,8 +17,8 @@
 </div>
 
 <p class="muted small">
-  Most of this review comes from the labour and hospital records. Only the
-  clinical decisions and exceptions are below.
+  This review is already filled from the records. Only the clinical decisions
+  below need you; the record values are kept under each document for reference.
 </p>
 
 {% if open_return %}
@@ -40,7 +40,7 @@
 {% endif %}
 
 <details class="form-section">
-  <summary>From the record <span class="count">6 values</span></summary>
+  <summary>From the record</summary>
   <table class="fields">
     <tbody>
       <tr>
@@ -89,12 +89,40 @@
   </table>
 </details>
 
+{% for section in record_sections %}
+  <details class="form-section">
+    <summary>{{ section.label }}</summary>
+    <table class="fields">
+      <tbody>
+        {% for row in section.rows %}
+          <tr>
+            <td>{{ row.short_label|default:row.field.label_printed }}</td>
+            <td>
+              {% if row.state == "na" %}
+                <span class="muted">Not applicable</span>
+              {% elif row.state == "overridden" %}
+                {{ row.display }} <span class="chip C">overridden</span>
+              {% else %}
+                {{ row.display }}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted small">
+      Record values from {{ section.label }}. Values you changed are marked
+      overridden.
+    </p>
+  </details>
+{% endfor %}
+
 {% if open_proposals or needs %}
   <div class="statebox">
-    <b>This review still has items for the full form.</b>
+    <b>Some values need a look in the full form.</b>
     {% if open_proposals %}
       <div class="muted small">
-        {{ open_proposals }} proposed value{{ open_proposals|pluralize }} not yet accepted or rejected.
+        {{ open_proposals }} value{{ open_proposals|pluralize }} could not be filled from a record.
       </div>
     {% endif %}
     {% if needs %}
@@ -108,7 +136,7 @@
 
 {% if check_errors %}
   <div class="statebox">
-    <b class="warn">{{ check_errors|length }} item{{ check_errors|length|pluralize }} need attention.</b>
+    <b class="warn">Required clinical answers are missing.</b>
     <ul class="comment-list">
       {% for issue in check_errors %}
         <li>{{ issue.message }}{% if issue.fix %} <span class="muted">{{ issue.fix }}</span>{% endif %}</li>
@@ -117,16 +145,7 @@
   </div>
 {% endif %}
 
-{% if check_warnings %}
-  <div class="statebox">
-    <b>{{ check_warnings|length }} warning{{ check_warnings|length|pluralize }}.</b>
-    <ul class="comment-list">
-      {% for issue in check_warnings %}
-        <li>{{ issue.message }}{% if issue.fix %} <span class="muted">{{ issue.fix }}</span>{% endif %}</li>
-      {% endfor %}
-    </ul>
-  </div>
-{% endif %}
+
 
 <section class="form-section">
   <h2>What needs your decision</h2>
@@ -136,56 +155,32 @@
     <table class="fields">
       <tbody>
       {% for row in rows %}
-        <tr>
-          <td>
-            <div class="label">{{ row.field.label_printed }}</div>
-            {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
-            {% if row.comment %}<div class="check-msg warning">{{ row.comment }}</div>{% endif %}
-          </td>
-          <td>
-            {% if not can_submit %}
-              <div class="value">{{ row.display }}</div>
-            {% elif row.type == "enum" %}
-              <div class="radio-group">
-                {% for option in row.options %}
-                  <label class="radio-pill">
-                    <input type="radio" name="{{ row.key }}" value="{{ option.value }}"
-                           {% if row.current == option.value %}checked{% endif %}>
-                    {{ option.label }}
-                  </label>
-                {% endfor %}
-              </div>
-            {% elif row.type == "multi" %}
-              <div class="multi-list">
-                {% for option in row.options %}
-                  <label>
-                    <input type="checkbox" name="{{ row.key }}" value="{{ option.value }}"
-                           {% if option.value in row.current_list %}checked{% endif %}>
-                    {{ option.label }}
-                  </label>
-                {% endfor %}
-              </div>
-            {% elif row.type == "date" %}
-              <input type="date" name="{{ row.key }}" value="{{ row.current }}">
-            {% elif row.textarea %}
-              <textarea name="{{ row.key }}" rows="{{ row.rows }}" class="val auto">{{ row.current }}</textarea>
-            {% else %}
-              <input type="text" name="{{ row.key }}" value="{{ row.current }}" class="val">
-            {% endif %}
-          </td>
-        </tr>
+        {% include "review/_quick_row.html" %}
       {% endfor %}
       </tbody>
     </table>
 
-    {% if can_submit %}
-      <p class="muted small">
-        Sign-off details are prefilled from the facility and your account.
-        You are signed in as
-        <b>{{ user.get_full_name|default:user.username }}</b>.
-        Edit them if the signing MO is different. The signature itself stays on
-        paper.
-      </p>
+    {% if editable_form %}
+      <details class="form-section">
+        <summary>
+          Sign-off
+          <span class="count">prefilled</span>
+        </summary>
+        <table class="fields">
+          <tbody>
+          {% for row in signoff_rows %}
+            {% include "review/_quick_row.html" %}
+          {% endfor %}
+          </tbody>
+        </table>
+        <p class="muted small">
+          Sign-off details are prefilled from the facility and your account.
+          You are signed in as
+          <b>{{ user.get_full_name|default:user.username }}</b>.
+          Edit them if the signing MO is different. The signature itself stays on
+          paper.
+        </p>
+      </details>
 
       <details class="form-section">
         <summary>
@@ -199,7 +194,7 @@
             <label>
               <input type="checkbox" name="factor" value="{{ factor.key }}"
                      {% if factor.current == "yes" %}checked{% endif %}>
-              {{ factor.label }}
+              {{ factor.short_label|default:factor.label }}
             </label>
           {% endfor %}
         </div>
@@ -211,18 +206,36 @@
         <textarea name="note" rows="2" class="auto"
                   placeholder="Anything the reviewer should know. Not printed on Form 4.">{{ note }}</textarea>
       </div>
-      <div class="bar">
-        {% if check_warnings %}
-          <input type="hidden" name="confirm" value="yes">
-          <button class="primary">Submit anyway</button>
+      <div class="bar" id="quick-submit-bar">
+        {% if can_submit %}
+          {% if confirm_submit %}
+            <span class="muted small confirm-line">
+              Submit this review? It will be frozen and sent to the FNO.
+            </span>
+            <button class="primary" name="confirm_submit" value="yes">Submit review</button>
+            <a class="button" href="{% url 'quick_review' review.pk %}">Keep editing</a>
+          {% else %}
+            <button class="primary">Submit review</button>
+            {% if check_errors %}
+              <span class="muted small warn">
+                Fill the required clinical answers above, then submit again.
+              </span>
+            {% else %}
+              <span class="muted small">Checks run when you submit.</span>
+            {% endif %}
+          {% endif %}
         {% else %}
-          <button class="primary">Submit review</button>
+          <span class="muted small warn">This review still has open record values.</span>
         {% endif %}
-        <span class="muted small">Checks run when you submit.</span>
       </div>
     {% endif %}
   </form>
 </section>
 
 </div>
+{% if confirm_submit or check_errors %}
+<script>
+  document.getElementById('quick-submit-bar').scrollIntoView({ block: 'center' });
+</script>
+{% endif %}
 {% endblock %}

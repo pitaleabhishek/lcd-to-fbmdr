@@ -65,6 +65,22 @@ GROUPS = (
 )
 
 
+def blocks_submission(issue: Issue) -> bool:
+    """Only a required clinical judgement blocks the author's submit.
+
+    A missing document value is a record gap for the reviewer or records team,
+    never a reason to stop the clinician. Required fields that no document can
+    supply (diagnosis, cause chain, conditional clinical causes and their
+    specifications) are the only blockers.
+    """
+    if issue.severity != ERROR:
+        return False
+    if not issue.key.startswith(("missing:", "na_required:", "conflict:")):
+        return False
+    field = registry.get(issue.field)
+    return field is not None and field.is_clinician_only
+
+
 def category_for(key: str) -> str:
     if key.startswith(("missing:", "na_required:")):
         return "missing"
