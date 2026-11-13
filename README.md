@@ -280,7 +280,7 @@ uv run pytest
 uv run pytest -n 0     # one process for debugging
 ```
 
-The suite has **279 passing tests**.
+The suite has **280 passing tests**.
 
 ## Current state
 

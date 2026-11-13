@@ -113,7 +113,12 @@
     · opened by {{ open_amendment.by.username|default:"—" }}</div>
   <div class="muted small">{{ open_amendment.reason }}</div>
   <div class="muted small">The approved Form 4 remains the official record until the amendment is approved.</div>
-  <a class="button" href="{% url 'amendment_workspace' review.pk open_amendment.pk %}">Open amendment</a>
+  <div class="bar">
+    {% if can_author and open_amendment.is_editable %}
+      <a class="button primary-link" href="{% url 'amendment_quick' review.pk open_amendment.pk %}">Continue clinical amendment</a>
+    {% endif %}
+    <a class="button" href="{% url 'amendment_workspace' review.pk open_amendment.pk %}">Full amendment record</a>
+  </div>
 </div>
 {% elif can_start_amendment or can_request_amendment %}
 <div class="statebox amendment-compact">

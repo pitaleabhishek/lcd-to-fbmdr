@@ -4,7 +4,7 @@ This is the only task list. Do not keep a second list.
 
 `[x]` done. `[ ]` open. `[~]` partial.
 
-Last update: 13 November 2026. 279 tests pass. The app has 99 Form 4 fields and
+Last update: 13 November 2026. 280 tests pass. The app has 99 Form 4 fields and
 34 LCG variables.
 
 ## Built

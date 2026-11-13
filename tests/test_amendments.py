@@ -116,6 +116,21 @@ def test_amendment_quick_saves_only_the_staged_copy(client, approved):
     assert amendment.status == Amendment.Status.PROPOSED
 
 
+def test_workspace_links_directly_to_the_clinical_amendment(client, approved):
+    review, resident, fno, version = approved
+    amendment = services.start_amendment(review, resident, "fix the summary")
+
+    client.force_login(resident)
+    page = client.get(f"/review/{review.pk}/").content.decode()
+    assert "Continue clinical amendment" in page
+    assert f"/review/{review.pk}/amend/{amendment.pk}/quick/" in page
+
+    client.force_login(fno)
+    page = client.get(f"/review/{review.pk}/").content.decode()
+    assert "Continue clinical amendment" not in page
+    assert "Full amendment record" in page
+
+
 def test_amendment_quick_is_read_only_for_the_fno(client, approved):
     review, resident, fno, version = approved
     amendment = services.start_amendment(review, resident, "fix the summary")

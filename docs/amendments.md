@@ -58,7 +58,9 @@ shows the same small clinical page as `/quick/`, on the staged amendment scope:
 - **Submit amendment**, with the same one-step confirmation.
 
 Opening `/quick/` on an approved review with an open amendment redirects the
-author there. The FNO sees the page read-only; the full amendment workspace stays
+author there. The review page banner also links straight to it with **Continue
+clinical amendment**, next to **Full amendment record**. The FNO sees the page
+read-only and only gets the full record link; the full amendment workspace stays
 the audit view for provenance, history, checks and block fields.
 
 ## Limitations
