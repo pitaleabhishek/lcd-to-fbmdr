@@ -280,7 +280,7 @@ uv run pytest
 uv run pytest -n 0     # one process for debugging
 ```
 
-The suite has **275 passing tests**.
+The suite has **279 passing tests**.
 
 ## Current state
 
@@ -300,7 +300,8 @@ The suite has **275 passing tests**.
   values stay in the form and are marked **overridden** in the collapsed
   sections. See [`docs/quick-sources.md`](docs/quick-sources.md).
 - Submit, return, resubmit and approve.
-- Amendments with a second approval.
+- Amendments with a second approval, plus a small clinical amendment page for the
+  author; the FNO keeps the full audit workspace.
 - Form 1 from the same review.
 - Printable Form 4 and frozen HTML/JSON output.
 - One-command local setup.

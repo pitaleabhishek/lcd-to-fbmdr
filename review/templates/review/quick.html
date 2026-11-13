@@ -1,24 +1,51 @@
 {% extends "review/base.html" %}
-{% block title %}Clinical review — {{ review.pregnancy.patient.name }}{% endblock %}
+{% block title %}{% if is_amendment %}Amendment{% else %}Clinical review{% endif %} — {{ review.pregnancy.patient.name }}{% endblock %}
 {% block content %}
 <div class="quick-page">
 
 <div class="review-head">
   <div>
-    <h1>Clinical review</h1>
+    <h1>{% if is_amendment %}Amendment{% else %}Clinical review{% endif %}</h1>
     <div class="muted small">
       {{ summary.patient.name }} · {{ summary.patient.age }} ·
       {{ summary.outcome }}
     </div>
   </div>
   <div>
-    <a class="head-link" href="{% url 'workspace' review.pk %}">Full Form 4</a>
+    {% if is_amendment %}
+      <a class="head-link" href="{% url 'amendment_workspace' review.pk amendment.pk %}">Full amendment record</a>
+    {% else %}
+      <a class="head-link" href="{% url 'workspace' review.pk %}">Full Form 4</a>
+    {% endif %}
   </div>
 </div>
 
+{% if is_amendment %}
+  <div class="returnbar amendmentbar">
+    <div class="rb-main">
+      <div class="rb-head">
+        <b>Amendment of version {{ amendment.base_version.version_no }}</b>
+        <span class="muted">· {{ amend_changes_count }} changed field{{ amend_changes_count|pluralize }}</span>
+      </div>
+      <div class="rb-overall">Reason: “{{ amend_reason }}”</div>
+      {% if amend_return_comment %}
+        <div class="rb-overall">Returned: “{{ amend_return_comment }}”</div>
+      {% endif %}
+      <div class="muted small">
+        The approved Form 4 stays official until the FNO approves this amendment.
+      </div>
+    </div>
+  </div>
+{% endif %}
+
 <p class="muted small">
-  This review is already filled from the records. Only the clinical decisions
-  below need you; the record values are kept under each document for reference.
+  {% if is_amendment %}
+    This is the staged amendment. Change only what the correction needs; the
+    record values are kept under each document for reference.
+  {% else %}
+    This review is already filled from the records. Only the clinical decisions
+    below need you; the record values are kept under each document for reference.
+  {% endif %}
 </p>
 
 {% if open_return %}
@@ -105,6 +132,7 @@
               {% else %}
                 {{ row.display }}
               {% endif %}
+              {% if row.changed %}<span class="chip">changed</span>{% endif %}
             </td>
           </tr>
         {% endfor %}
@@ -149,9 +177,9 @@
 
 <section class="form-section">
   <h2>What needs your decision</h2>
-  <form method="post" action="{% url 'quick_review' review.pk %}">
+  <form method="post" action="{% if is_amendment %}{% url 'amendment_quick' review.pk amendment.pk %}{% else %}{% url 'quick_review' review.pk %}{% endif %}">
     {% csrf_token %}
-    <input type="hidden" name="action" value="submit_quick">
+    <input type="hidden" name="action" value="{% if is_amendment %}submit_amendment_quick{% else %}submit_quick{% endif %}">
     <table class="fields">
       <tbody>
       {% for row in rows %}
@@ -210,12 +238,12 @@
         {% if can_submit %}
           {% if confirm_submit %}
             <span class="muted small confirm-line">
-              Submit this review? It will be frozen and sent to the FNO.
+              {% if is_amendment %}Submit this amendment? It will be sent to the FNO for approval.{% else %}Submit this review? It will be frozen and sent to the FNO.{% endif %}
             </span>
-            <button class="primary" name="confirm_submit" value="yes">Submit review</button>
-            <a class="button" href="{% url 'quick_review' review.pk %}">Keep editing</a>
+            <button class="primary" name="confirm_submit" value="yes">{% if is_amendment %}Submit amendment{% else %}Submit review{% endif %}</button>
+            <a class="button" href="{% if is_amendment %}{% url 'amendment_quick' review.pk amendment.pk %}{% else %}{% url 'quick_review' review.pk %}{% endif %}">Keep editing</a>
           {% else %}
-            <button class="primary">Submit review</button>
+            <button class="primary">{% if is_amendment %}Submit amendment{% else %}Submit review{% endif %}</button>
             {% if check_errors %}
               <span class="muted small warn">
                 Fill the required clinical answers above, then submit again.

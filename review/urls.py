@@ -23,6 +23,11 @@ urlpatterns = [
         name="amendment_workspace",
     ),
     path(
+        "review/<int:pk>/amend/<int:amendment_pk>/quick/",
+        views.amendment_quick,
+        name="amendment_quick",
+    ),
+    path(
         "review/<int:pk>/amend/<int:amendment_pk>/output/",
         views.amendment_output,
         name="amendment_output",

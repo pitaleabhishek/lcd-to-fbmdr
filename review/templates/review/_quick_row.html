@@ -1,6 +1,9 @@
 <tr>
   <td>
-    <div class="label">{{ row.short_label|default:row.field.label_printed }}</div>
+    <div class="label">
+      {{ row.short_label|default:row.field.label_printed }}
+      {% if row.changed %}<span class="chip">changed</span>{% endif %}
+    </div>
     {% if row.field.required %}<div class="key"><span class="req">required</span></div>{% endif %}
     {% if row.comment %}<div class="check-msg warning">{{ row.comment }}</div>{% endif %}
   </td>

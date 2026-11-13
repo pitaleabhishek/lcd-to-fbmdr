@@ -4,7 +4,7 @@ This is the only task list. Do not keep a second list.
 
 `[x]` done. `[ ]` open. `[~]` partial.
 
-Last update: 13 November 2026. 275 tests pass. The app has 99 Form 4 fields and
+Last update: 13 November 2026. 279 tests pass. The app has 99 Form 4 fields and
 34 LCG variables.
 
 ## Built
@@ -68,6 +68,9 @@ Last update: 13 November 2026. 275 tests pass. The app has 99 Form 4 fields and
   facts.
 - [x] Submit asks for one confirmation. Only a required clinical judgement blocks
   the author; advisory checks are frozen and shown to the FNO.
+- [x] Clinical amendment page: the author gets the small clinical form on the
+  staged amendment, with reason, changed fields and confirmation. `/quick/`
+  redirects to it. The FNO keeps the full audit workspace.
 
 ## Essential, open
 

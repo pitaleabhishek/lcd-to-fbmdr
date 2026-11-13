@@ -215,10 +215,10 @@ SIGN_OFF_KEYS = (
 QUICK_KEYS = DECISION_KEYS + SIGN_OFF_KEYS
 
 
-def _quick_summary(review: Review) -> dict:
+def _quick_summary(review: Review, amendment=None) -> dict:
     pregnancy = review.pregnancy
     patient = pregnancy.patient
-    items = scope.item_map(review)
+    items = scope.item_map(review, amendment)
 
     def answered(key, fallback=None):
         item = items.get(key)
@@ -289,11 +289,13 @@ def _quick_rows(
     comments: dict | None = None,
     defaults: dict | None = None,
     keys: tuple[str, ...] = DECISION_KEYS,
+    amendment=None,
+    changed_keys: set[str] | None = None,
 ) -> list[dict]:
     comments = comments or {}
     defaults = defaults or {}
-    items = scope.item_map(review)
-    visibility = conditions.visibility(review)
+    items = scope.item_map(review, amendment)
+    visibility = conditions.visibility(review, amendment=amendment)
     rows = []
     for key in keys:
         field = registry[key]
@@ -308,6 +310,7 @@ def _quick_rows(
                 "field": field,
                 "key": key,
                 "short_label": quick_label(field),
+                "changed": field.key in (changed_keys or set()),
                 "current": current,
                 "current_list": (
                     item.value_json
@@ -337,10 +340,10 @@ def _quick_rows(
     return rows
 
 
-def _record_sections(review: Review) -> list[dict]:
+def _record_sections(review: Review, amendment=None, changed_keys: set[str] | None = None) -> list[dict]:
     """Visible, already-answered values grouped by the document that holds them."""
-    items = scope.item_map(review)
-    visibility = conditions.visibility(review)
+    items = scope.item_map(review, amendment)
+    visibility = conditions.visibility(review, amendment=amendment)
     sections = []
     for document, label in DOCUMENTS.items():
         rows = []
@@ -363,6 +366,7 @@ def _record_sections(review: Review) -> list[dict]:
                     {
                         "field": field,
                         "short_label": quick_label(field),
+                        "changed": field.key in (changed_keys or set()),
                         "display": quick_display(field, item.value_json),
                         "state": "recorded" if recorded else "overridden",
                         "origin": item.origin,
@@ -409,6 +413,68 @@ def _document_summary(review: Review, amendment=None) -> dict:
     }
 
 
+def _quick_defaults(request, review: Review) -> dict:
+    facility = review.reporting_facility
+    designation = (
+        "District Health Officer"
+        if request.user.groups.filter(name="FNO").exists()
+        else "Medical Officer"
+    )
+    return {
+        "f4.summary.mo_name": request.user.get_full_name()
+        or request.user.get_username(),
+        "f4.summary.fno_name": facility.nodal_name,
+        "f4.summary.designation": designation,
+        "f4.summary.institution_address": facility.address or facility.name,
+        "f4.summary.signed_on": timezone.localdate().isoformat(),
+    }
+
+
+def _factor_rows(review: Review, amendment=None) -> tuple[list[dict], int]:
+    rows = []
+    for key in FACTOR_KEYS:
+        item = scope.get_item(review, key, amendment)
+        rows.append(
+            {
+                "key": key,
+                "label": registry[key].label_printed,
+                "short_label": quick_label(registry[key]),
+                "current": item.value_json if item else "",
+            }
+        )
+    return rows, sum(1 for row in rows if row["current"] == "yes")
+
+
+def _save_quick_answers(request, review: Review, user, amendment=None) -> None:
+    for key in QUICK_KEYS:
+        if key not in request.POST:
+            continue
+        field = registry[key]
+        if field.type == "multi":
+            values = [value for value in request.POST.getlist(key) if value]
+            if values:
+                services.set_answer(review, key, values, user, amendment=amendment)
+            elif scope.get_item(review, key, amendment) is not None:
+                services.clear_answer(review, key, user, amendment=amendment)
+            continue
+        raw = (request.POST.get(key) or "").strip()
+        if raw == "":
+            if scope.get_item(review, key, amendment) is not None:
+                services.clear_answer(review, key, user, amendment=amendment)
+            continue
+        services.set_answer(review, key, _coerce(field, raw), user, amendment=amendment)
+
+    chosen_factors = set(request.POST.getlist("factor"))
+    for key in FACTOR_KEYS:
+        services.set_answer(
+            review,
+            key,
+            "yes" if key in chosen_factors else "no",
+            user,
+            amendment=amendment,
+        )
+
+
 @login_required
 def quick_review(request, pk: int):
     review = review_for_user(request, pk)
@@ -417,6 +483,12 @@ def quick_review(request, pk: int):
         review.assigned_to_id,
     } - {None}
     editable = review.status in (Review.Status.DRAFT, Review.Status.RETURNED)
+
+    open_amendment = services.open_amendment(review)
+    if can_author and open_amendment is not None and open_amendment.is_editable:
+        return redirect(
+            "amendment_quick", pk=review.pk, amendment_pk=open_amendment.pk
+        )
 
     # Record values are not decisions: accept them before the page is drawn so
     # the clinician never has to accept a proposal by hand.
@@ -445,32 +517,7 @@ def quick_review(request, pk: int):
             messages.error(request, "This review still needs the full form.")
             return redirect("quick_review", pk=review.pk)
 
-        for key in QUICK_KEYS:
-            if key not in request.POST:
-                continue
-            field = registry[key]
-            if field.type == "multi":
-                values = [
-                    value for value in request.POST.getlist(key) if value
-                ]
-                if values:
-                    services.set_answer(review, key, values, request.user)
-                elif scope.get_item(review, key) is not None:
-                    services.clear_answer(review, key, request.user)
-                continue
-            raw = (request.POST.get(key) or "").strip()
-            if raw == "":
-                if scope.get_item(review, key) is not None:
-                    services.clear_answer(review, key, request.user)
-                continue
-            value = _coerce(field, raw)
-            services.set_answer(review, key, value, request.user)
-
-        chosen_factors = set(request.POST.getlist("factor"))
-        for key in FACTOR_KEYS:
-            value = "yes" if key in chosen_factors else "no"
-            services.set_answer(review, key, value, request.user)
-
+        _save_quick_answers(request, review, request.user)
         services.auto_accept_record_values(review, request.user)
         issues = checks.run_checks(review)
         blocking = [issue for issue in issues if checks.blocks_submission(issue)]
@@ -491,35 +538,8 @@ def quick_review(request, pk: int):
             issues = advisory
             confirm_submit = True
 
-    facility = review.reporting_facility
-    designation = (
-        "District Health Officer"
-        if request.user.groups.filter(name="FNO").exists()
-        else "Medical Officer"
-    )
-    defaults = {
-        "f4.summary.mo_name": request.user.get_full_name()
-        or request.user.get_username(),
-        "f4.summary.fno_name": facility.nodal_name,
-        "f4.summary.designation": designation,
-        "f4.summary.institution_address": facility.address or facility.name,
-        "f4.summary.signed_on": timezone.localdate().isoformat(),
-    }
-
-    factor_rows = []
-    for key in FACTOR_KEYS:
-        item = scope.get_item(review, key)
-        factor_rows.append(
-            {
-                "key": key,
-                "label": registry[key].label_printed,
-                "short_label": quick_label(registry[key]),
-                "current": item.value_json if item else "",
-            }
-        )
-    factor_selected = sum(
-        1 for row in factor_rows if row["current"] == "yes"
-    )
+    defaults = _quick_defaults(request, review)
+    factor_rows, factor_selected = _factor_rows(review)
 
     return render(
         request,
@@ -550,6 +570,99 @@ def quick_review(request, pk: int):
             "check_warnings": [i for i in issues if not checks.blocks_submission(i)],
             "note": note,
             "open_return": open_return,
+            "factor_rows": factor_rows,
+            "factor_selected": factor_selected,
+        },
+    )
+
+
+@login_required
+def amendment_quick(request, pk: int, amendment_pk: int):
+    """The clinical amendment page: the same small form, on the staged copy."""
+    review = review_for_user(request, pk)
+    amendment = get_object_or_404(Amendment, pk=amendment_pk, review=review)
+    can_author = request.user.pk in {
+        review.created_by_id,
+        review.assigned_to_id,
+    } - {None}
+    editable_form = (
+        can_author
+        and review.status == Review.Status.APPROVED
+        and amendment.is_editable
+    )
+
+    defaults = _quick_defaults(request, review)
+    note = request.POST.get("note", "") if request.method == "POST" else ""
+    issues = []
+    confirm_submit = False
+    if request.method == "POST" and request.POST.get("action") == "submit_amendment_quick":
+        if not editable_form:
+            messages.error(request, "Only the author can submit this amendment.")
+            return redirect(
+                "amendment_quick", pk=review.pk, amendment_pk=amendment.pk
+            )
+        _save_quick_answers(request, review, request.user, amendment=amendment)
+        visibility = conditions.visibility(review, amendment=amendment)
+        pending = checks.run_checks(review, visibility=visibility, amendment=amendment)
+        blocking = [issue for issue in pending if checks.blocks_submission(issue)]
+        advisory = [issue for issue in pending if not checks.blocks_submission(issue)]
+        if blocking:
+            issues = blocking
+        elif request.POST.get("confirm_submit") == "yes":
+            try:
+                services.submit_amendment(amendment, request.user, note)
+            except ValidationError as exc:
+                messages.error(request, "; ".join(exc.messages))
+            else:
+                messages.success(request, "Amendment sent for approval")
+                return redirect("workspace", pk=review.pk)
+        else:
+            issues = advisory
+            confirm_submit = True
+
+    changes = services.amendment_changes(review, amendment)
+    changed_keys = {change["field"].key for change in changes}
+    factor_rows, factor_selected = _factor_rows(review, amendment)
+
+    return render(
+        request,
+        "review/quick.html",
+        {
+            "review": review,
+            "is_amendment": True,
+            "amendment": amendment,
+            "amend_reason": amendment.reason,
+            "amend_changes_count": len(changes),
+            "amend_return_comment": (
+                amendment.return_comment
+                if amendment.status == Amendment.Status.RETURNED
+                else ""
+            ),
+            "summary": _quick_summary(review, amendment),
+            "rows": _quick_rows(
+                review,
+                None,
+                defaults,
+                DECISION_KEYS,
+                amendment=amendment,
+                changed_keys=changed_keys,
+            ),
+            "signoff_rows": _quick_rows(
+                review,
+                None,
+                defaults,
+                SIGN_OFF_KEYS,
+                amendment=amendment,
+                changed_keys=changed_keys,
+            ),
+            "record_sections": _record_sections(review, amendment, changed_keys),
+            "editable_form": editable_form,
+            "can_submit": editable_form,
+            "confirm_submit": confirm_submit,
+            "check_errors": [i for i in issues if checks.blocks_submission(i)],
+            "check_warnings": [],
+            "note": note,
+            "open_return": None,
             "factor_rows": factor_rows,
             "factor_selected": factor_selected,
         },

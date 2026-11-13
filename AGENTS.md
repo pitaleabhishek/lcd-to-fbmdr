@@ -20,7 +20,7 @@ in a Facility-Based Maternal Death Review (Form 4). Each value keeps its source.
 ## Current state
 
 - Commit at handoff: see `git log -1`. Commit the amendment work before handoff.
-- Tests: **275 passing**.
+- Tests: **279 passing**.
 - Active registry: 14 sections, 99 Form 4 fields, three block schemas and 34 LCG
   variables.
 - Conditions: version 2. It has 2 section gates and 33 field rules.
@@ -127,6 +127,7 @@ docker compose exec web python manage.py demo_setup
 - `/review/<pk>/provenance/<field>/`: per-field provenance. Add `?version=N` for
   an old version.
 - `/review/<pk>/amend/<amendment>/`: amendment workspace.
+- `/review/<pk>/amend/<amendment>/quick/`: clinical amendment page for the author.
 - `/review/<pk>/amend/<amendment>/output/`: pending amendment output. It has a
   DRAFT stamp.
 - `/review/<pk>/history/`: versions, amendments, returns and activity.

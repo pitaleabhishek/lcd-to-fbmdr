@@ -47,6 +47,20 @@ author edits the approved values by hand.
 If the labour record changes during an amendment, the app does not propose a new
 value. The author must edit the value.
 
+## Clinical amendment page
+
+The author does not need the full workspace. `/review/<pk>/amend/<id>/quick/`
+shows the same small clinical page as `/quick/`, on the staged amendment scope:
+
+- the amendment reason and the number of changed fields;
+- the clinical judgement fields and the contributing factors;
+- the collapsed record sections, with changed values marked;
+- **Submit amendment**, with the same one-step confirmation.
+
+Opening `/quick/` on an approved review with an open amendment redirects the
+author there. The FNO sees the page read-only; the full amendment workspace stays
+the audit view for provenance, history, checks and block fields.
+
 ## Limitations
 
 - An amendment has one overall FNO return comment. It has no per-field comments.

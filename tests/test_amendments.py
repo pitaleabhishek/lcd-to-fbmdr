@@ -49,6 +49,86 @@ def _amend(approved, key="f4.delivery.mode", value="caesarean_emergency", reason
     return amendment
 
 
+def test_quick_redirects_the_author_to_the_open_amendment(client, approved):
+    review, resident, fno, version = approved
+    amendment = services.start_amendment(review, resident, "fix the summary")
+    client.force_login(resident)
+
+    response = client.get(f"/review/{review.pk}/quick/")
+
+    assert response.status_code == 302
+    assert response.url == f"/review/{review.pk}/amend/{amendment.pk}/quick/"
+
+
+def test_amendment_quick_is_the_small_clinical_form(client, approved):
+    review, resident, fno, version = approved
+    amendment = services.start_amendment(review, resident, "fix the summary")
+    client.force_login(resident)
+
+    page = client.get(
+        f"/review/{review.pk}/amend/{amendment.pk}/quick/"
+    ).content.decode()
+
+    assert "Amendment of version 1" in page
+    assert "fix the summary" in page
+    assert "Primary diagnosis" in page
+    assert "Submit amendment" in page
+    assert "Full amendment record" in page
+
+
+def test_amendment_quick_saves_only_the_staged_copy(client, approved):
+    review, resident, fno, version = approved
+    amendment = services.start_amendment(review, resident, "fix the summary")
+    client.force_login(resident)
+    url = f"/review/{review.pk}/amend/{amendment.pk}/quick/"
+
+    response = client.post(
+        url,
+        {
+            "action": "submit_amendment_quick",
+            "f4.primary_diagnosis.dx": "Revised diagnosis",
+        },
+    )
+    assert response.status_code == 200
+    assert "Submit this amendment?" in response.content.decode()
+
+    staged = ReviewItem.objects.get(
+        review=review,
+        amendment=amendment,
+        field_key="f4.primary_diagnosis.dx",
+    )
+    assert staged.value_json == "Revised diagnosis"
+    live = scope.get_item(review, "f4.primary_diagnosis.dx")
+    assert live.value_json == "PPH"
+    amendment.refresh_from_db()
+    assert amendment.status == Amendment.Status.DRAFT
+
+    response = client.post(
+        url,
+        {
+            "action": "submit_amendment_quick",
+            "f4.primary_diagnosis.dx": "Revised diagnosis",
+            "confirm_submit": "yes",
+        },
+    )
+    assert response.status_code == 302
+    amendment.refresh_from_db()
+    assert amendment.status == Amendment.Status.PROPOSED
+
+
+def test_amendment_quick_is_read_only_for_the_fno(client, approved):
+    review, resident, fno, version = approved
+    amendment = services.start_amendment(review, resident, "fix the summary")
+    client.force_login(fno)
+
+    page = client.get(
+        f"/review/{review.pk}/amend/{amendment.pk}/quick/"
+    ).content.decode()
+
+    assert "Primary diagnosis" in page
+    assert "Submit amendment" not in page
+
+
 def test_only_an_approved_review_can_be_amended(approved):
     review, resident, fno, version = approved
     review.status = Review.Status.DRAFT

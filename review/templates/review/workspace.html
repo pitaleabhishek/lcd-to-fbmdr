@@ -37,6 +37,9 @@
     {% endif %}
 
     {% if is_amendment %}
+      {% if can_author and amendment.is_editable %}
+        <a class="button primary-link" href="{% url 'amendment_quick' review.pk amendment.pk %}">Clinical amendment</a>
+      {% endif %}
       {% if amendment.is_open %}
         <a class="button" href="{% url 'amendment_output' review.pk amendment.pk %}">Draft output</a>
       {% endif %}
